@@ -1,0 +1,262 @@
+# luaplotlib API
+
+Version: `0.1.0` (MVP). This document describes the public Lua API implemented
+by `luaplotlib.lua` and the modules under `luaplotlib/`.
+
+```lua
+local plt = require("luaplotlib")
+```
+
+The module exposes:
+
+- `plt.figure(opts)` → `Figure`
+- `plt.Figure` — the Figure class table
+- `plt._VERSION` — currently `"0.1.0"`
+
+Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
+
+## Data inputs
+
+The basic path accepts a non-empty, one-based Lua array of finite numbers:
+
+```lua
+local x = { 0, 1, 2, 3 }
+local y = { 0, 1, 4, 9 }
+```
+
+Optional interop also accepts one-dimensional tensor/array objects with
+luatorch-style accessors (`dim`/`numel`/`get`/`totable`/`shape`),
+Torch7-style accessors (`nDimension`/`nElement`/`size`), or common
+`n`/`size`/`shape` + `data` wrappers. Values are copied into a Lua table at
+call time. Multi-dimensional objects are rejected with an error; flatten them
+before plotting.
+
+Category labels for `bar` are ordinary one-based tables containing strings
+and/or finite numbers.
+
+All data values must be finite. Empty data, `NaN`, infinities, and mismatched
+x/y lengths raise errors.
+
+## `plt.figure(opts)`
+
+```lua
+local fig = plt.figure({ width = 800, height = 500, dpi = 100 })
+```
+
+| Option | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `width` | number > 0 | `6.4 * dpi` | SVG canvas width in user units (pixels) |
+| `height` | number > 0 | `4.8 * dpi` | SVG canvas height in user units (pixels) |
+| `dpi` | number > 0 | `100` | Metadata and default-canvas scale |
+
+The default canvas is 640×480 at 100 dpi. `width` and `height` are explicit
+SVG user units; `dpi` does not rescale an explicitly sized canvas. The SVG root
+contains matching `width`, `height`, and `viewBox="0 0 width height"`
+attributes plus `data-dpi`.
+
+A figure that is too small to leave a usable plot area raises an error when
+rendered.
+
+## Figure methods
+
+All configuration/drawing methods return the figure for chaining, except
+`to_svg()` and `savefig()`.
+
+### `fig:plot(x, y, opts)`
+
+Draw a connected line series.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `color` | `#RGB`, `#RRGGBB`, or CSS color name | next palette color |
+| `label` | string | no legend entry |
+| `linewidth` | number ≥ 0 | `2` |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
+| `marker` | `"circle"`, `"o"`, `"point"`, `"dot"`, `true`, or `false` | `false` |
+| `markersize` | number > 0 | `4` |
+| `alpha` | number in [0, 1] | `1` |
+
+A single-point line still renders its point. Unknown options, invalid colors,
+and malformed data raise errors.
+
+### `fig:scatter(x, y, opts)`
+
+Draw one SVG circle per point.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `size` | number > 0 | `4` |
+| `markersize` | number > 0 | alias/precedence after `size` |
+| `s` | number > 0 | additional size alias |
+| `alpha` | number in [0, 1] | `1` |
+| `edgecolor` | color string | no outline |
+| `linewidth` | number ≥ 0 | `1` when an outline is present |
+
+`size`/`markersize`/`s` are a circle **radius in SVG user units**, not
+matplotlib's area-in-points-squared convention. The last listed aliases are
+only used when the earlier ones are absent. Use `color` and `edgecolor`
+deliberately: `color` is the fill.
+
+### `fig:hist(values, opts)`
+
+Draw a histogram as adjacent filled rectangles.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `bins` | integer in [1, 1000] | `10` |
+| `range` | `{ min, max }` with `min < max` | data min/max |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `alpha` | number in [0, 1] | `1` |
+| `edgecolor` | color string | `#ffffff` |
+
+If all values are equal, the default range is padded around that value. Values
+outside an explicit `range` are ignored. Counts are integers, and the automatic
+y-axis includes zero. Empty bins are not emitted as rectangles.
+
+### `fig:bar(labels_or_x, values, opts)`
+
+Draw vertical bars. If `labels_or_x` is a table containing any strings, it is
+treated as categorical labels positioned at 1, 2, 3, … and those labels become
+the x-axis tick labels. If it is numeric, it contains x positions.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `width` | number in [0.01, 1] | `0.8` |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `alpha` | number in [0, 1] | `1` |
+| `edgecolor` | color string | `#ffffff` |
+
+`width` is a fraction of the smallest spacing between x positions (or 1 for a
+single bar / categorical positions). Negative values draw downward from zero.
+The automatic y-axis includes zero. Bars are not grouped or stacked
+automatically.
+
+### Labels and titles
+
+```lua
+fig:title("text")
+fig:xlabel("text")
+fig:ylabel("text")
+```
+
+Arguments must be strings (empty strings are allowed). Text is XML-escaped and
+invalid XML control characters are replaced. The y label is rotated -90°.
+
+### Limits
+
+```lua
+fig:xlim(minimum, maximum)
+fig:ylim(minimum, maximum)
+```
+
+Both values must be finite and `minimum < maximum`. Explicit limits replace
+auto-ranging for that axis. Data outside the limits is clipped to the axes
+rectangle. Tick values are chosen with "nice" linear spacing inside the limits.
+
+### Grid
+
+```lua
+fig:grid(true)
+fig:grid(false)
+fig:grid()       -- same as true
+```
+
+Grid is off by default. Grid lines align with the rendered x and y ticks and are
+drawn behind series.
+
+### Legend
+
+```lua
+fig:legend()
+fig:legend({ loc = "lower left", frame = false })
+```
+
+No options are required.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `loc` | `"upper right"`, `"upper left"`, `"lower right"`, `"lower left"` | `"upper right"` |
+| `frame` | boolean | `true` |
+
+Only series with a non-empty `label` appear. Swatches reflect the series type
+(line, point, or bar). Calling `legend()` with no labeled series produces no
+legend box.
+
+### `fig:to_svg()`
+
+Returns the complete SVG document as a string. There is no I/O. Repeated calls
+on an unchanged figure are deterministic.
+
+### `fig:savefig(path)`
+
+Writes the same SVG returned by `to_svg()` to `path` in binary mode and returns
+the path. It does not create parent directories. Use `to_svg()` if you need the
+string instead. File-open and write failures raise a `luaplotlib:` error.
+
+## Automatic ranging and ticks
+
+- Automatic limits cover all series extents plus a 5% margin.
+- Bars and histograms keep their zero baseline at the axis edge rather than
+  padding into negative space when all values are on one side of zero.
+- Tick spacing is a "nice" multiple: 1, 2, 2.5, or 5 times a power of ten.
+- The number of ticks adapts to the axes size (roughly 3–8 per axis).
+- Tick labels use compact decimal/scientific formatting.
+- Categorical bar positions replace numeric x tick labels.
+- All axes are linear. There are no log, date, or polar axes yet.
+
+## Color cycle
+
+The default color cycle is Matplotlib tab10-inspired:
+
+`#1f77b4`, `#ff7f0e`, `#2ca02c`, `#d62728`, `#9467bd`, `#8c564b`, `#e377c2`,
+`#7f7f7f`, `#bcbd22`, `#17becf`.
+
+Colors can be given as `#RGB`, `#RRGGBB`, or CSS color names. Values that do not
+match these forms raise errors.
+
+## SVG contract
+
+`to_svg()` produces a standalone SVG 1.1 document:
+
+- XML declaration and `xmlns="http://www.w3.org/2000/svg"`
+- Root `width`, `height`, and `viewBox`
+- White background rectangle
+- A clip path limiting series to the axes rectangle
+- Groups with classes such as `figure`, `grid`, `series-layer`, `series-line`,
+  `series-scatter`, `series-hist`, `series-bar`, `axes`, `ticks`, `xlabel`,
+  `ylabel`, `title`, and `legend`
+- No scripts, embedded images, or external references/hrefs
+- User text XML-escaped; invalid control characters replaced with U+FFFD
+- No external fonts; text uses a generic Helvetica/Arial/sans-serif stack
+
+The output is intended for browsers, SVG viewers, and conversion tools. It has
+no raster dependencies and no JavaScript.
+
+## Errors
+
+Errors are raised as Lua errors with a `luaplotlib:` prefix. Invalid input
+includes, but is not limited to:
+
+- non-positive/non-finite figure dimensions or dpi
+- unknown option keys
+- invalid colors, line styles, markers, alpha, or legend locations
+- empty/non-numeric/multi-dimensional data
+- mismatched x/y or labels/values lengths
+- `NaN`/infinite values
+- reversed or empty axis limits
+- writing to a nonexistent directory
+
+## Limitations
+
+- SVG only; no interactive display yet.
+- No logarithmic/date axes, 3-D plots, images, annotations, error bars,
+  subplots, or stacked/grouped bars.
+- Basic fixed/adaptive margins; crowded category labels can overlap.
+- One color per series; per-bar color arrays are not supported.
+- Only one categorical x-axis mapping is used per figure.
+- Tensor/array interop is heuristic and reader-only; optional integrations are
+  not required to use the library.

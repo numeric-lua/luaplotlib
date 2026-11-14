@@ -1,0 +1,13 @@
+# Generated example and test SVGs.
+/examples/output/
+/tests/output/
+
+# Scratch output from local experiments.
+/scratch/
+*.svg
+*.tmp
+
+# Editor and OS noise.
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,157 @@
+# luaplotlib
+
+**A small, pure-Lua, matplotlib-inspired plotting library with an SVG backend.**
+
+luaplotlib turns numeric data into standalone, dependency-free SVG files. It is
+designed for the LuaJIT/numeric-lua ecosystem, but the basic path accepts plain
+Lua tables and has no required runtime dependencies: no Lua rocks, no C
+libraries, no GUI toolkit, and no network access.
+
+```lua
+local plt = require("luaplotlib")
+
+local x, y = {}, {}
+for i = 1, 120 do
+  x[i] = (i - 1) * 2 * math.pi / 119
+  y[i] = math.sin(x[i])
+end
+
+local fig = plt.figure({ width = 800, height = 500 })
+fig:plot(x, y, { label = "sin(x)" })
+fig:title("Sine wave")
+fig:xlabel("x")
+fig:ylabel("sin(x)")
+fig:grid(true)
+fig:legend()
+fig:savefig("line.svg")
+```
+
+## Requirements
+
+- LuaJIT 2.1 (the primary target). The library uses only standard Lua 5.1/LuaJIT
+  features and has also been smoke-tested with PUC Lua 5.5.
+- No external Lua rocks, C modules, Python packages, or fonts are needed.
+- A browser or converter is only needed to *view* the SVG; luaplotlib itself
+  never renders or displays images interactively.
+
+## Install / LUA_PATH
+
+This repository is a staging checkout for the future
+`numeric-lua/luaplotlib` repository. To use it from the checkout, add the
+repository root to `LUA_PATH`:
+
+```sh
+# run these from the repository root
+export LUA_PATH="$PWD/?.lua;$PWD/?/init.lua;;"
+
+luajit examples/line.lua
+luajit examples/histogram.lua
+```
+
+The trailing `;;` preserves the interpreter's default module path. The same
+tree can be copied or symlinked to any directory on `LUA_PATH`; there is no
+build step.
+
+The examples write SVGs to `examples/output/`, which is gitignored.
+
+## Quick start
+
+Save this as `quick.lua` in the repository root, or adapt the examples:
+
+```lua
+local plt = require("luaplotlib")
+
+local x, y1, y2 = {}, {}, {}
+for i = 1, 101 do
+  x[i] = (i - 1) / 10
+  y1[i] = math.sin(x[i])
+  y2[i] = math.cos(x[i])
+end
+
+local fig = plt.figure({ width = 720, height = 480, dpi = 100 })
+fig:plot(x, y1, { label = "sin", color = "#1f77b4" })
+fig:plot(x, y2, { label = "cos", color = "#ff7f0e", linestyle = "dashed" })
+fig:scatter({ 0, 1, 2 }, { 0, 0.84, 0.91 }, { color = "#d62728", label = "samples" })
+fig:title("Line and scatter")
+fig:xlabel("x")
+fig:ylabel("value")
+fig:grid(true)
+fig:legend()
+fig:savefig("quick.svg")
+```
+
+The SVG can also be kept in memory:
+
+```lua
+local svg = fig:to_svg()
+```
+
+## What works (MVP)
+
+- `figure({width, height, dpi})` and `fig:to_svg()` / `fig:savefig(path)`
+- Line plots with colors, dashes, markers, labels, and alpha
+- Scatter plots rendered as SVG circles
+- Histograms with configurable bins and ranges
+- Vertical bars with numeric positions or categorical labels
+- Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
+- Explicit `xlim` / `ylim`, optional grid, titles, axis labels, and legends
+- XML-escaped text, no scripts, no external references, standalone SVG 1.1
+- Plain Lua tables, plus optional duck-typed 1-D tensor/array inputs
+  (luatorch/numlua style); neither library is required
+
+See [docs/api.md](docs/api.md) for the full API and option tables.
+
+## Tests
+
+The suite is dependency-free and checks the generated SVG as text. It does not
+need luatorch, numlua, xmllint, Python, or an image library.
+
+```sh
+./scripts/test.sh
+# equivalent:
+luajit tests/run.lua
+# or:
+make test
+```
+
+To run the examples through the Makefile:
+
+```sh
+make examples
+# examples/output/line.svg
+# examples/output/histogram.svg
+```
+
+Generated output and scratch files are ignored. There are no committed SVGs.
+
+## Status
+
+Early MVP (`0.1.0`). The SVG backend, line/scatter/histogram/bar rendering,
+axis machinery, legend, tests, and examples are functional. The repository is
+staged for `numeric-lua/luaplotlib`; it has not been released or published.
+
+## Limitations
+
+- **SVG only.** There is no interactive window, HTML widget, PNG/PDF output, or
+  display server integration yet.
+- **Linear axes only.** Logarithmic axes, date axes, twin axes, and polar plots
+  are not implemented.
+- **No advanced chart types.** Images, contour plots, 3-D plots, error bars,
+  annotations, subplots, and stacked/grouped bars are not implemented.
+- **Basic layout.** Margins are fixed/adaptive rather than a full layout engine;
+  many long categorical labels can overlap.
+- **One color per bar series.** Colors are not split per bar, and categorical
+  series with different label sets share one categorical x-axis.
+- **Heuristic tensor interop.** luatorch/numlua-style one-dimensional objects
+  are detected from accessor methods (`dim`, `numel`, `get`, `totable`,
+  `nDimension`, `nElement`, `size`, etc.). Multi-dimensional data must be
+  flattened by the caller.
+- **DPI is mostly metadata.** `dpi` determines the default 6.4 x 4.8 inch canvas
+  and is emitted as `data-dpi`; explicit `width`/`height` are SVG user units and
+  are not rescaled.
+- **No font embedding.** SVG text uses a generic Helvetica/Arial/sans-serif
+  stack and depends on the viewer's fonts.
+
+## License
+
+BSD-3-Clause. See [LICENSE](LICENSE).
