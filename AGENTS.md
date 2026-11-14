@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Local instructions for coding agents working in the `luaplotlib` staging
-checkout. The organization-wide rules in the parent `.numeric-lua/AGENTS.md`
-still apply, but this file has the repository-specific details.
+Local instructions for coding agents working in `luaplotlib`. The
+organization-wide rules in the parent `../AGENTS.md` still apply, but this file
+has the repository-specific details.
 
 ## Scope
 
@@ -33,8 +33,7 @@ suite must never require luatorch, numlua, xmllint, Python, or image tools.
 ## Rules
 
 - **Do not run `git commit`, `git push`, `git tag`, or any release/publish
-  command.** This is a staging checkout. Leave changes uncommitted for the
-  coordinator to review.
+  command** unless the coordinator asks. Leave changes uncommitted for review.
 - **Do not create the GitHub organization, open pull requests, publish a rock,
   create a release, or change repository visibility.** Those are coordinator
   actions.

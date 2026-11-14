@@ -36,9 +36,8 @@ fig:savefig("line.svg")
 
 ## Install / LUA_PATH
 
-This repository is a staging checkout for the future
-`numeric-lua/luaplotlib` repository. To use it from the checkout, add the
-repository root to `LUA_PATH`:
+This repository is `numeric-lua/luaplotlib`. To use it from the checkout, add
+the repository root to `LUA_PATH`:
 
 ```sh
 # run these from the repository root
