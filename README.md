@@ -154,3 +154,19 @@ staged for `numeric-lua/luaplotlib`; it has not been released or published.
 ## License
 
 BSD-3-Clause. See [LICENSE](LICENSE).
+
+
+## Renderer-agnostic scene export
+
+`luaplotlib.scene.from_figure(figure)` (also `figure:to_scene()`) converts a
+figure into plain JSON-compatible tables for non-SVG backends:
+
+```lua
+local figure = luaplotlib.figure()
+figure:plot({1, 2, 3}, {2, 4, 3}, { label = "line" })
+local scene = figure:to_scene()
+-- scene.series, scene.xlim, scene.ylim, scene.title, ...
+```
+
+The scene contains series geometry, styles, axes labels, explicit limits, and
+category ticks.  It does not depend on LÖVR or any graphics toolkit.

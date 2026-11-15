@@ -260,3 +260,31 @@ includes, but is not limited to:
 - Only one categorical x-axis mapping is used per figure.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
   not required to use the library.
+
+
+## Scene export
+
+### `luaplotlib.scene.from_figure(figure)`
+
+Returns a renderer-agnostic scene table:
+
+```lua
+{
+  version = 1,
+  type = "luaplotlib",
+  width = 640, height = 480, dpi = 100,
+  title = "...", xlabel = "...", ylabel = "...",
+  xlim = { min, max }, ylim = { min, max },
+  grid = false, legend = false,
+  category_ticks = nil,
+  series = {
+    { kind = "line", x = {...}, y = {...}, style = {...} },
+    { kind = "scatter", x = {...}, y = {...}, style = {...} },
+    { kind = "bar", x = {...}, y = {...}, width = 0.8 },
+    { kind = "hist", edges = {...}, counts = {...} },
+  },
+}
+```
+
+`Figure:to_scene()` is a convenience wrapper.  Limits default to the data range
+with 5% padding, or the explicit `xlim`/`ylim` values.

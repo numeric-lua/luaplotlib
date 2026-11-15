@@ -450,6 +450,10 @@ function Figure:legend(opts)
   return self
 end
 
+function Figure:to_scene()
+  return require("luaplotlib.scene").from_figure(self)
+end
+
 function Figure:to_svg()
   -- Required lazily so that the renderer can evolve without a require cycle.
   local render = require("luaplotlib.render")

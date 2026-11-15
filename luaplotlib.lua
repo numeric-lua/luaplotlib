@@ -4,11 +4,13 @@
 -- this module does not load luatorch, numlua, C libraries, or a GUI toolkit.
 
 local Figure = require("luaplotlib.figure")
+local Scene = require("luaplotlib.scene")
 
 local M = {
   _NAME = "luaplotlib",
   _VERSION = "0.1.0",
   Figure = Figure,
+  scene = Scene,
 }
 
 -- Create a new figure.

@@ -185,6 +185,7 @@ local test_files = {
   "test_api.lua",
   "test_series.lua",
   "test_svg.lua",
+  "test_scene.lua",
   "test_errors.lua",
 }
 
