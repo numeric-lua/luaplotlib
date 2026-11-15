@@ -70,8 +70,26 @@ local LEGEND_LOCATIONS = {
   ["lower left"] = true,
 }
 
+local SCALES = {
+  linear = true,
+  log = true,
+}
+
 local function fail(message)
   util.fail(message, 3)
+end
+
+local function checked_scale(value, name, allow_default)
+  if value == nil then
+    if allow_default then
+      return "linear"
+    end
+    fail(name .. " requires 'linear' or 'log'")
+  end
+  if type(value) ~= "string" or not SCALES[value] then
+    fail(name .. " must be 'linear' or 'log', got " .. tostring(value))
+  end
+  return value
 end
 
 local function checked_style(self, opts, context)
@@ -124,6 +142,8 @@ function Figure.new(opts)
     width = true,
     height = true,
     dpi = true,
+    xscale = true,
+    yscale = true,
   }, "figure")
 
   local dpi = DEFAULT_DPI
@@ -156,6 +176,8 @@ function Figure.new(opts)
     _ylabel = nil,
     _xlim = nil,
     _ylim = nil,
+    _xscale = checked_scale(opts.xscale, "figure xscale", true),
+    _yscale = checked_scale(opts.yscale, "figure yscale", true),
     _grid = false,
     _legend_requested = false,
     _legend_opts = { loc = "upper right", frame = true },
@@ -414,6 +436,20 @@ function Figure:ylim(minimum, maximum)
     fail("ylim minimum must be less than maximum")
   end
   self._ylim = { minimum, maximum }
+  return self
+end
+
+-- Select the x-axis scale. Valid values are "linear" (the default) and "log".
+-- Log scales require strictly positive data, which is checked when rendering.
+function Figure:xscale(scale)
+  self._xscale = checked_scale(scale, "xscale")
+  return self
+end
+
+-- Select the y-axis scale. Valid values are "linear" (the default) and "log".
+-- Log scales require strictly positive data, which is checked when rendering.
+function Figure:yscale(scale)
+  self._yscale = checked_scale(scale, "yscale")
   return self
 end
 

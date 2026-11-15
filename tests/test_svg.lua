@@ -71,6 +71,76 @@ test("axes render spines, tick marks, and numeric tick labels", function()
   assert_well_formed_svg(svg)
 end)
 
+local function tick_group(svg, axis)
+  local opening = '<g class="ticks ' .. axis .. '-ticks">'
+  local start = svg:find(opening, 1, true)
+  assert_true(start ~= nil, "missing " .. axis .. " tick group")
+  local finish = svg:find("</g>", start, true)
+  assert_true(finish ~= nil, "unterminated " .. axis .. " tick group")
+  return svg:sub(start, finish)
+end
+
+local function tick_labels(group)
+  local labels = {}
+  for label in group:gmatch('class="tick%-label"[^>]*>([^<]+)</text>') do
+    labels[#labels + 1] = label
+  end
+  return labels
+end
+
+test("logarithmic x axis renders decade ticks", function()
+  local fig = plt.figure({ width = 800, height = 500 })
+  fig:plot({ 1, 10, 100, 1000 }, { 1, 2, 3, 4 })
+  fig:xscale("log")
+  local svg = fig:to_svg()
+
+  assert_contains(svg, 'data-xscale="log"')
+  assert_contains(svg, 'data-yscale="linear"')
+  local labels = tick_labels(tick_group(svg, "x"))
+  assert_equal(table.concat(labels, ","), "1,10,100,1000")
+  assert_well_formed_svg(svg)
+end)
+
+test("logarithmic y axis renders decade ticks", function()
+  local fig = plt.figure({ width = 800, height = 500 })
+  fig:plot({ 1, 2, 3, 4 }, { 1, 10, 100, 1000 })
+  fig:yscale("log")
+  local svg = fig:to_svg()
+
+  assert_contains(svg, 'data-xscale="linear"')
+  assert_contains(svg, 'data-yscale="log"')
+  local labels = tick_labels(tick_group(svg, "y"))
+  assert_equal(table.concat(labels, ","), "1,10,100,1000")
+  assert_well_formed_svg(svg)
+end)
+
+test("log axes can be selected in figure options and used together", function()
+  local fig = plt.figure({ width = 800, height = 500, xscale = "log", yscale = "log" })
+  fig:plot({ 1, 10, 100 }, { 1, 100, 10000 }, { label = "power" })
+  fig:grid(true)
+  fig:legend()
+  local svg = fig:to_svg()
+
+  assert_contains(svg, 'data-xscale="log" data-yscale="log"')
+  assert_equal(table.concat(tick_labels(tick_group(svg, "x")), ","), "1,10,100")
+  assert_equal(table.concat(tick_labels(tick_group(svg, "y")), ","),
+    "1,10,100,1000,10000")
+  assert_contains(svg, '<g class="grid"')
+  assert_contains(svg, '<g class="legend">')
+  assert_well_formed_svg(svg)
+end)
+
+test("log x bars with positive positions clip derived edges at the axis", function()
+  local fig = plt.figure({ width = 800, height = 500 })
+  fig:bar({ 1, 10, 100 }, { 1, 2, 3 }, { width = 0.5 })
+  fig:xscale("log")
+  local svg = fig:to_svg()
+
+  assert_equal(count_occurrences(svg, '<rect class="bar"'), 3)
+  assert_equal(table.concat(tick_labels(tick_group(svg, "x")), ","), "1,10,100")
+  assert_well_formed_svg(svg)
+end)
+
 test("titles and axis labels use dedicated classes", function()
   local fig = plt.figure()
   fig:plot({ 1, 2 }, { 1, 2 })

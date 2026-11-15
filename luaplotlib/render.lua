@@ -40,45 +40,96 @@ local function layout(fig)
   }
 end
 
-local function data_extents(fig)
+-- Collect data extents in axis coordinates. Linear axes use the raw values;
+-- log axes use log10(value) and reject non-positive values with a clear error.
+local function data_extents(fig, xscale, yscale)
   local min_x, max_x, min_y, max_y
   local baseline_y = false
   local any = false
+  local has_x, has_y = false, false
+  local x_log = xscale == "log"
+  local y_log = yscale == "log"
 
-  local function include_x(value)
+  local function check_positive(value, axis, series_index, point_index, role)
+    if value <= 0 then
+      util.fail(string.format(
+        "%s axis uses a log scale but %s %d has non-positive value %s at point %d; " ..
+        "log scales require strictly positive values",
+        axis, role, series_index, util.fmt_tick(value), point_index), 3)
+    end
+  end
+
+  local function include_x(value, series_index, point_index, role)
+    if x_log then
+      check_positive(value, "x", series_index, point_index, role)
+      value = util.log10(value)
+    end
     any = true
+    has_x = true
     if min_x == nil or value < min_x then min_x = value end
     if max_x == nil or value > max_x then max_x = value end
   end
 
-  local function include_y(value)
+  local function include_y(value, series_index, point_index, role)
+    if y_log then
+      check_positive(value, "y", series_index, point_index, role)
+      value = util.log10(value)
+    end
     any = true
+    has_y = true
     if min_y == nil or value < min_y then min_y = value end
     if max_y == nil or value > max_y then max_y = value end
   end
 
-  for _, series in ipairs(fig._series) do
+  for series_index, series in ipairs(fig._series) do
     if series.kind == "line" or series.kind == "scatter" then
       for i = 1, #series.x do
-        include_x(series.x[i])
-        include_y(series.y[i])
+        include_x(series.x[i], series_index, i, "series")
+        include_y(series.y[i], series_index, i, "series")
       end
     elseif series.kind == "hist" then
-      baseline_y = true
-      include_x(series.edges[1])
-      include_x(series.edges[#series.edges])
-      include_y(0)
-      for i = 1, #series.counts do
-        include_y(series.counts[i])
+      include_x(series.edges[1], series_index, 1, "histogram edge")
+      include_x(series.edges[#series.edges], series_index, #series.edges,
+        "histogram edge")
+      if y_log then
+        -- Zero-count bins are not drawn, so they do not define a log range.
+        for i = 1, #series.counts do
+          local count = series.counts[i]
+          if count > 0 then
+            include_y(count, series_index, i, "histogram count")
+          elseif count < 0 then
+            check_positive(count, "y", series_index, i, "histogram count")
+          end
+        end
+      else
+        baseline_y = true
+        include_y(0, series_index, 1, "histogram baseline")
+        for i = 1, #series.counts do
+          include_y(series.counts[i], series_index, i, "histogram count")
+        end
       end
     elseif series.kind == "bar" then
-      baseline_y = true
       local half = series.width / 2
       for i = 1, #series.x do
-        include_x(series.x[i] - half)
-        include_x(series.x[i] + half)
-        include_y(0)
-        include_y(series.y[i])
+        local left = series.x[i] - half
+        local right = series.x[i] + half
+        if x_log then
+          -- The bar position is data and must be positive. Its left edge is
+          -- derived geometry, so it may be clipped to the axis instead of
+          -- rejecting an otherwise valid positive position.
+          include_x(series.x[i], series_index, i, "bar x")
+          if left > 0 then
+            include_x(left, series_index, i, "bar edge")
+          end
+          include_x(right, series_index, i, "bar edge")
+        else
+          include_x(left, series_index, i, "bar edge")
+          include_x(right, series_index, i, "bar edge")
+        end
+        if not y_log then
+          include_y(0, series_index, i, "bar baseline")
+        end
+        include_y(series.y[i], series_index, i, "bar value")
       end
     end
   end
@@ -92,10 +143,12 @@ local function data_extents(fig)
     min_y = min_y,
     max_y = max_y,
     baseline_y = baseline_y,
+    has_x = has_x,
+    has_y = has_y,
   }
 end
 
-local function auto_limits(lo, hi, target, zero_baseline)
+local function auto_range(lo, hi, zero_baseline)
   local raw_lo, raw_hi = lo, hi
   if raw_hi < raw_lo then
     raw_lo, raw_hi = raw_hi, raw_lo
@@ -103,7 +156,7 @@ local function auto_limits(lo, hi, target, zero_baseline)
 
   if raw_lo == raw_hi then
     if zero_baseline and raw_lo == 0 then
-      return 0, 1, ticks.generate(0, 1, target)
+      return 0, 1
     end
     local pad = math.abs(raw_lo) * 0.1
     if pad == 0 then pad = 1 end
@@ -120,7 +173,76 @@ local function auto_limits(lo, hi, target, zero_baseline)
   if not (hi > lo) then
     lo, hi = raw_lo - 1, raw_hi + 1
   end
+  return lo, hi
+end
+
+local function auto_limits(lo, hi, target, zero_baseline)
+  lo, hi = auto_range(lo, hi, zero_baseline)
   return lo, hi, ticks.generate(lo, hi, target)
+end
+
+-- Build the view for one axis. Extents are already in axis (transformed)
+-- coordinates; explicit limits are in data coordinates.
+local function make_axis(axis_name, scale, explicit, extents_min, extents_max, target,
+    zero_baseline, default_lo, default_hi)
+  local is_log = scale == "log"
+  local to_axis
+  local from_axis
+  if is_log then
+    to_axis = function(value) return util.log10(value) end
+    from_axis = function(value) return 10 ^ value end
+  else
+    to_axis = function(value) return value end
+    from_axis = function(value) return value end
+  end
+
+  local minimum, maximum, tick_values
+  if explicit ~= nil then
+    local lo, hi = explicit[1], explicit[2]
+    if is_log then
+      if lo <= 0 then
+        util.fail(axis_name .. " minimum must be positive for a log axis, got " ..
+          util.fmt_tick(lo), 3)
+      end
+      if hi <= 0 then
+        util.fail(axis_name .. " maximum must be positive for a log axis, got " ..
+          util.fmt_tick(hi), 3)
+      end
+    end
+    minimum, maximum = to_axis(lo), to_axis(hi)
+    if is_log then
+      tick_values = ticks.generate_log(lo, hi, target)
+    else
+      tick_values = ticks.generate(lo, hi, target)
+    end
+  elseif extents_min ~= nil then
+    if is_log then
+      minimum, maximum = auto_range(extents_min, extents_max, false)
+      tick_values = ticks.generate_log(from_axis(minimum), from_axis(maximum), target)
+    else
+      minimum, maximum, tick_values =
+        auto_limits(extents_min, extents_max, target, zero_baseline)
+    end
+  else
+    if is_log then
+      minimum, maximum = 0, 1
+      tick_values = ticks.generate_log(1, 10, target)
+    else
+      minimum, maximum = default_lo, default_hi
+      tick_values = ticks.generate(minimum, maximum, target)
+    end
+  end
+
+  return {
+    scale = scale,
+    minimum = minimum,
+    maximum = maximum,
+    to_axis = to_axis,
+    from_axis = from_axis,
+    ticks = tick_values,
+    data_minimum = from_axis(minimum),
+    data_maximum = from_axis(maximum),
+  }
 end
 
 local function tick_count(plot_width, plot_height)
@@ -297,7 +419,7 @@ local function render_scatter(series, map_x, map_y, buf)
   buf[#buf + 1] = '  </g>'
 end
 
-local function render_hist(series, map_x, map_y, buf)
+local function render_hist(series, map_x, map_y, baseline, buf)
   local style = series.style
   local opacity = ""
   if style.alpha < 1 then
@@ -311,7 +433,6 @@ local function render_hist(series, map_x, map_y, buf)
   end
 
   buf[#buf + 1] = string.format('  <g class="series series-hist"%s>', label)
-  local baseline = map_y(0)
   for i = 1, #series.counts do
     local count = series.counts[i]
     if count > 0 then
@@ -327,7 +448,7 @@ local function render_hist(series, map_x, map_y, buf)
   buf[#buf + 1] = '  </g>'
 end
 
-local function render_bar(series, map_x, map_y, buf)
+local function render_bar(series, map_x, map_y, baseline, buf)
   local style = series.style
   local opacity = ""
   if style.alpha < 1 then
@@ -341,7 +462,6 @@ local function render_bar(series, map_x, map_y, buf)
   end
 
   buf[#buf + 1] = string.format('  <g class="series series-bar"%s>', label)
-  local baseline = map_y(0)
   for i = 1, #series.x do
     local value = series.y[i]
     local x1 = map_x(series.x[i] - series.width / 2)
@@ -359,30 +479,23 @@ end
 
 function M.to_svg(fig)
   local geom = layout(fig)
-  local extents = data_extents(fig)
+  local xscale = fig._xscale or "linear"
+  local yscale = fig._yscale or "linear"
+  local extents = data_extents(fig, xscale, yscale)
   local x_target, y_target = tick_count(geom.plot_width, geom.plot_height)
 
-  local xmin, xmax, ymin, ymax, xticks, yticks
-  if fig._xlim then
-    xmin, xmax = fig._xlim[1], fig._xlim[2]
-    xticks = ticks.generate(xmin, xmax, x_target)
-  elseif extents then
-    xmin, xmax, xticks = auto_limits(extents.min_x, extents.max_x, x_target, false)
-  else
-    xmin, xmax = 0, 1
-    xticks = ticks.generate(xmin, xmax, x_target)
-  end
+  local xaxis = make_axis("xlim", xscale, fig._xlim,
+    extents and extents.has_x and extents.min_x or nil,
+    extents and extents.has_x and extents.max_x or nil,
+    x_target, false, 0, 1)
+  local yaxis = make_axis("ylim", yscale, fig._ylim,
+    extents and extents.has_y and extents.min_y or nil,
+    extents and extents.has_y and extents.max_y or nil,
+    y_target, extents and extents.baseline_y or false, 0, 1)
 
-  if fig._ylim then
-    ymin, ymax = fig._ylim[1], fig._ylim[2]
-    yticks = ticks.generate(ymin, ymax, y_target)
-  elseif extents then
-    ymin, ymax, yticks = auto_limits(extents.min_y, extents.max_y, y_target,
-      extents.baseline_y)
-  else
-    ymin, ymax = 0, 1
-    yticks = ticks.generate(ymin, ymax, y_target)
-  end
+  local xmin, xmax = xaxis.data_minimum, xaxis.data_maximum
+  local xticks = xaxis.ticks
+  local yticks = yaxis.ticks
 
   local categories = find_category_ticks(fig, xmin, xmax)
   local x_display = {}
@@ -400,11 +513,27 @@ function M.to_svg(fig)
   end
 
   local function map_x(value)
-    return geom.left + (value - xmin) / (xmax - xmin) * geom.plot_width
+    -- Bar edges derived from a positive position can cross zero. Clamp that
+    -- geometry to the left edge of a log plot instead of taking log10(<= 0).
+    if xscale == "log" and value <= 0 then
+      return geom.left
+    end
+    local transformed = xaxis.to_axis(value)
+    return geom.left +
+      (transformed - xaxis.minimum) / (xaxis.maximum - xaxis.minimum) * geom.plot_width
   end
 
   local function map_y(value)
-    return geom.bottom - (value - ymin) / (ymax - ymin) * geom.plot_height
+    local transformed = yaxis.to_axis(value)
+    return geom.bottom -
+      (transformed - yaxis.minimum) / (yaxis.maximum - yaxis.minimum) * geom.plot_height
+  end
+
+  -- A log y axis has no zero baseline; bars and histogram bins grow from the
+  -- bottom of the visible plot area instead.
+  local y_baseline = geom.bottom
+  if yscale ~= "log" then
+    y_baseline = map_y(0)
   end
 
   local buf = {}
@@ -418,9 +547,10 @@ function M.to_svg(fig)
   local clip_id = "luaplotlib-plot-clip-" .. tostring(fig):gsub("%W", "")
 
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s">',
+  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-xscale="%s" data-yscale="%s">',
     util.fmt(fig.width), util.fmt(fig.height),
-    util.fmt(fig.width), util.fmt(fig.height), util.fmt(fig.dpi))
+    util.fmt(fig.width), util.fmt(fig.height), util.fmt(fig.dpi),
+    util.escape_xml(xscale), util.escape_xml(yscale))
   add(' <title>' .. util.escape_xml(fig._title or "luaplotlib figure") .. '</title>')
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   printf(' <rect class="background" x="0" y="0" width="%s" height="%s" fill="#ffffff"/>',
@@ -454,9 +584,9 @@ function M.to_svg(fig)
     elseif series.kind == "scatter" then
       render_scatter(series, map_x, map_y, buf)
     elseif series.kind == "hist" then
-      render_hist(series, map_x, map_y, buf)
+      render_hist(series, map_x, map_y, y_baseline, buf)
     elseif series.kind == "bar" then
-      render_bar(series, map_x, map_y, buf)
+      render_bar(series, map_x, map_y, y_baseline, buf)
     end
   end
   add('  </g>')

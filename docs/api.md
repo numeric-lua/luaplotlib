@@ -48,6 +48,8 @@ local fig = plt.figure({ width = 800, height = 500, dpi = 100 })
 | `width` | number > 0 | `6.4 * dpi` | SVG canvas width in user units (pixels) |
 | `height` | number > 0 | `4.8 * dpi` | SVG canvas height in user units (pixels) |
 | `dpi` | number > 0 | `100` | Metadata and default-canvas scale |
+| `xscale` | `"linear"` or `"log"` | `"linear"` | X-axis scale |
+| `yscale` | `"linear"` or `"log"` | `"linear"` | Y-axis scale |
 
 The default canvas is 640×480 at 100 dpi. `width` and `height` are explicit
 SVG user units; `dpi` does not rescale an explicitly sized canvas. The SVG root
@@ -155,7 +157,32 @@ fig:ylim(minimum, maximum)
 
 Both values must be finite and `minimum < maximum`. Explicit limits replace
 auto-ranging for that axis. Data outside the limits is clipped to the axes
-rectangle. Tick values are chosen with "nice" linear spacing inside the limits.
+rectangle. Tick values are chosen with "nice" linear spacing inside the limits,
+or with logarithmic decade ticks when that axis uses a log scale. Log limits
+must be strictly positive.
+
+### Axis scales
+
+```lua
+fig:xscale("log")
+fig:yscale("log")
+fig:xscale("linear")   -- restore the default
+fig:yscale("linear")
+```
+
+| Method | Type | Default |
+| --- | --- | --- |
+| `xscale` | `"linear"` or `"log"` | `"linear"` |
+| `yscale` | `"linear"` or `"log"` | `"linear"` |
+
+The same values can be supplied in `plt.figure({ xscale = "log", yscale = "log" })`.
+Logarithmic axes are base 10. They require strictly positive data on the scaled
+axis; zero, negative, `NaN`, and infinite values raise a `luaplotlib:` error at
+render time. For `xscale = "log"`, bar positions and histogram edges must also
+be positive; a bar's derived left edge is clipped to the axis if it would cross
+zero. On a log y axis, zero-count histogram bins are omitted rather than treated
+as data, and bars grow from the bottom of the visible plot area because zero is
+not representable.
 
 ### Grid
 
@@ -202,11 +229,15 @@ string instead. File-open and write failures raise a `luaplotlib:` error.
 - Automatic limits cover all series extents plus a 5% margin.
 - Bars and histograms keep their zero baseline at the axis edge rather than
   padding into negative space when all values are on one side of zero.
-- Tick spacing is a "nice" multiple: 1, 2, 2.5, or 5 times a power of ten.
+- Linear tick spacing is a "nice" multiple: 1, 2, 2.5, or 5 times a power of ten.
+- Log axes range in base-10 space and prefer decade ticks (`0.1`, `1`, `10`,
+  `100`, …). Narrow ranges fall back to 1/2/2.5/5 mantissas, and very large
+  spans are thinned so labels do not collide.
 - The number of ticks adapts to the axes size (roughly 3–8 per axis).
 - Tick labels use compact decimal/scientific formatting.
 - Categorical bar positions replace numeric x tick labels.
-- All axes are linear. There are no log, date, or polar axes yet.
+- Linear and base-10 logarithmic x/y axes are supported. There are no date,
+  twin, or polar axes yet.
 
 ## Color cycle
 
@@ -223,7 +254,8 @@ match these forms raise errors.
 `to_svg()` produces a standalone SVG 1.1 document:
 
 - XML declaration and `xmlns="http://www.w3.org/2000/svg"`
-- Root `width`, `height`, and `viewBox`
+- Root `width`, `height`, and `viewBox`, plus `data-dpi`, `data-xscale`, and
+  `data-yscale` metadata
 - White background rectangle
 - A clip path limiting series to the axes rectangle
 - Groups with classes such as `figure`, `grid`, `series-layer`, `series-line`,
@@ -244,6 +276,8 @@ includes, but is not limited to:
 - non-positive/non-finite figure dimensions or dpi
 - unknown option keys
 - invalid colors, line styles, markers, alpha, or legend locations
+- invalid axis scale names (anything other than `"linear"` or `"log"`)
+- non-positive data or limits on a logarithmic axis
 - empty/non-numeric/multi-dimensional data
 - mismatched x/y or labels/values lengths
 - `NaN`/infinite values
@@ -253,8 +287,8 @@ includes, but is not limited to:
 ## Limitations
 
 - SVG only; no interactive display yet.
-- No logarithmic/date axes, 3-D plots, images, annotations, error bars,
-  subplots, or stacked/grouped bars.
+- No date axes, 3-D plots, images, annotations, error bars, subplots, or
+  stacked/grouped bars.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - One color per series; per-bar color arrays are not supported.
 - Only one categorical x-axis mapping is used per figure.
@@ -274,6 +308,7 @@ Returns a renderer-agnostic scene table:
   type = "luaplotlib",
   width = 640, height = 480, dpi = 100,
   title = "...", xlabel = "...", ylabel = "...",
+  xscale = "linear", yscale = "linear",
   xlim = { min, max }, ylim = { min, max },
   grid = false, legend = false,
   category_ticks = nil,
@@ -287,4 +322,5 @@ Returns a renderer-agnostic scene table:
 ```
 
 `Figure:to_scene()` is a convenience wrapper.  Limits default to the data range
-with 5% padding, or the explicit `xlim`/`ylim` values.
+with 5% padding, or the explicit `xlim`/`ylim` values. Log-axis limits are
+padded in log space and remain positive.

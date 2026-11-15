@@ -5,6 +5,8 @@
 -- plain Lua table that another backend (LÖVR, a rasterizer, an interactive
 -- canvas, ...) can render without depending on luaplotlib internals.
 --
+local util = require("luaplotlib.util")
+
 local M = {}
 
 local function copy_array(source)
@@ -40,6 +42,19 @@ local function expand(minimum, maximum)
   return minimum - pad, maximum + pad
 end
 
+-- Log limits are padded multiplicatively so they stay strictly positive.
+local function expand_log(minimum, maximum)
+  local minimum_log = util.log10(minimum)
+  local maximum_log = util.log10(maximum)
+  local pad
+  if minimum_log == maximum_log then
+    pad = 0.05
+  else
+    pad = (maximum_log - minimum_log) * 0.05
+  end
+  return 10 ^ (minimum_log - pad), 10 ^ (maximum_log + pad)
+end
+
 local function update_xy_range(state, series)
   for index = 1, #series.x do
     local x, y = series.x[index], series.y[index]
@@ -63,6 +78,8 @@ function M.from_figure(figure)
     title = figure._title,
     xlabel = figure._xlabel,
     ylabel = figure._ylabel,
+    xscale = figure._xscale or "linear",
+    yscale = figure._yscale or "linear",
     grid = figure._grid and true or false,
     legend = figure._legend_requested and true or false,
     category_ticks = nil,
@@ -113,14 +130,22 @@ function M.from_figure(figure)
   if figure._xlim then
     scene.xlim = { figure._xlim[1], figure._xlim[2] }
   elseif state.xmin ~= nil then
-    scene.xlim = { expand(state.xmin, state.xmax) }
+    if scene.xscale == "log" and state.xmin > 0 and state.xmax > 0 then
+      scene.xlim = { expand_log(state.xmin, state.xmax) }
+    else
+      scene.xlim = { expand(state.xmin, state.xmax) }
+    end
   else
     scene.xlim = { 0, 1 }
   end
   if figure._ylim then
     scene.ylim = { figure._ylim[1], figure._ylim[2] }
   elseif state.ymin ~= nil then
-    scene.ylim = { expand(state.ymin, state.ymax) }
+    if scene.yscale == "log" and state.ymin > 0 and state.ymax > 0 then
+      scene.ylim = { expand_log(state.ymin, state.ymax) }
+    else
+      scene.ylim = { expand(state.ymin, state.ymax) }
+    end
   else
     scene.ylim = { 0, 1 }
   end

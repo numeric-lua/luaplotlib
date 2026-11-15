@@ -85,13 +85,30 @@ The SVG can also be kept in memory:
 local svg = fig:to_svg()
 ```
 
+Logarithmic axes use base-10 scaling and automatically generate decade ticks:
+
+```lua
+local fig = plt.figure({ width = 720, height = 480 })
+fig:plot({ 1, 10, 100, 1000 }, { 1, 100, 10000, 1000000 })
+fig:xscale("log")
+fig:yscale("log")
+fig:grid(true)
+fig:savefig("log.svg")
+```
+
+Log axes require strictly positive values; zero or negative data raises a
+`luaplotlib:` error when the figure is rendered. The scales can also be set in
+the figure options: `plt.figure({ xscale = "log", yscale = "log" })`.
+
 ## What works (MVP)
 
-- `figure({width, height, dpi})` and `fig:to_svg()` / `fig:savefig(path)`
+- `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
+  `fig:savefig(path)`
 - Line plots with colors, dashes, markers, labels, and alpha
 - Scatter plots rendered as SVG circles
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels
+- Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional grid, titles, axis labels, and legends
 - XML-escaped text, no scripts, no external references, standalone SVG 1.1
@@ -126,15 +143,16 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 ## Status
 
 Early MVP (`0.1.0`). The SVG backend, line/scatter/histogram/bar rendering,
-axis machinery, legend, tests, and examples are functional. The repository is
-staged for `numeric-lua/luaplotlib`; it has not been released or published.
+linear/log axis machinery, legend, tests, and examples are functional. The
+repository is staged for `numeric-lua/luaplotlib`; it has not been released or
+published.
 
 ## Limitations
 
 - **SVG only.** There is no interactive window, HTML widget, PNG/PDF output, or
   display server integration yet.
-- **Linear axes only.** Logarithmic axes, date axes, twin axes, and polar plots
-  are not implemented.
+- **Linear and log axes only.** Date axes, twin axes, and polar plots are not
+  implemented.
 - **No advanced chart types.** Images, contour plots, 3-D plots, error bars,
   annotations, subplots, and stacked/grouped bars are not implemented.
 - **Basic layout.** Margins are fixed/adaptive rather than a full layout engine;
@@ -168,5 +186,5 @@ local scene = figure:to_scene()
 -- scene.series, scene.xlim, scene.ylim, scene.title, ...
 ```
 
-The scene contains series geometry, styles, axes labels, explicit limits, and
-category ticks.  It does not depend on LÖVR or any graphics toolkit.
+The scene contains series geometry, styles, axes labels, scales, explicit
+limits, and category ticks.  It does not depend on LÖVR or any graphics toolkit.

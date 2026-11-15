@@ -14,6 +14,12 @@ end
 
 M.is_finite = finite
 
+-- Base-10 logarithm implemented via math.log so the result is available on
+-- every supported Lua version (math.log10 is not present everywhere).
+function M.log10(value)
+  return math.log(value) / math.log(10)
+end
+
 function M.check_number(value, name, min, max)
   if type(value) ~= "number" then
     fail(name .. " must be a number, got " .. type(value), 3)
