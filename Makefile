@@ -13,6 +13,7 @@ examples:
 	@$(LUA) examples/line.lua
 	@$(LUA) examples/histogram.lua
 	@$(LUA) examples/errorbar.lua
+	@$(LUA) examples/annotations.lua
 
 clean:
 	@rm -rf -- examples/output tests/output

@@ -46,6 +46,7 @@ export LUA_PATH="$PWD/?.lua;$PWD/?/init.lua;;"
 luajit examples/line.lua
 luajit examples/histogram.lua
 luajit examples/errorbar.lua
+luajit examples/annotations.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -107,6 +108,19 @@ Log axes require strictly positive values; zero or negative data raises a
 `luaplotlib:` error when the figure is rendered. The scales can also be set in
 the figure options: `plt.figure({ xscale = "log", yscale = "log" })`.
 
+Annotations use data coordinates and can include a leader arrow:
+
+```lua
+fig:annotate("local maximum", 2.5, 4.1, {
+  xytext = { 3.5, 5.0 },
+  align = "center",
+  arrow = { color = "#d62728", linewidth = 1.5, head = 8 },
+})
+```
+
+The label is drawn above the series and clipped to the plot area. Pass
+`arrow = true` for the default leader style, or omit `arrow` for plain text.
+
 ## What works (MVP)
 
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
@@ -115,6 +129,7 @@ the figure options: `plt.figure({ xscale = "log", yscale = "log" })`.
 - Scatter plots rendered as SVG circles
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels
+- Text annotations with optional leader arrows at data coordinates
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional grid, titles, axis labels, and legends
@@ -143,16 +158,18 @@ To run the examples through the Makefile:
 make examples
 # examples/output/line.svg
 # examples/output/histogram.svg
+# examples/output/errorbar.svg
+# examples/output/annotations.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-Early MVP (`0.2.0`). The SVG backend, line/scatter/histogram/bar/error-bar rendering,
-linear/log axis machinery, legend, tests, and examples are functional. The
-repository is staged for `numeric-lua/luaplotlib`; it has not been released or
-published.
+Early MVP (`0.2.0`). The SVG backend, line/scatter/histogram/bar/error-bar and
+annotation rendering, linear/log axis machinery, legend, tests, and examples are
+functional. The repository is staged for `numeric-lua/luaplotlib`; it has not
+been released or published.
 
 ## Limitations
 
@@ -160,8 +177,8 @@ published.
   display server integration yet.
 - **Linear and log axes only.** Date axes, twin axes, and polar plots are not
   implemented.
-- **No advanced chart types.** Images, contour plots, 3-D plots, annotations,
-  subplots, and stacked/grouped bars are not implemented.
+- **No advanced chart types.** Images, contour plots, 3-D plots, subplots, and
+  stacked/grouped bars are not implemented.
 - **Basic layout.** Margins are fixed/adaptive rather than a full layout engine;
   many long categorical labels can overlap.
 - **One color per bar series.** Colors are not split per bar, and categorical
@@ -194,4 +211,5 @@ local scene = figure:to_scene()
 ```
 
 The scene contains series geometry, styles, axes labels, scales, explicit
-limits, and category ticks.  It does not depend on LÖVR or any graphics toolkit.
+limits, category ticks, and annotation geometry/styles.  It does not depend on
+LÖVR or any graphics toolkit.

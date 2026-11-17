@@ -536,6 +536,90 @@ local function render_bar(series, map_x, map_y, baseline, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local ANNOTATION_ANCHORS = {
+  left = "start",
+  center = "middle",
+  right = "end",
+}
+
+local function check_annotation_positive(value, axis, annotation)
+  if value <= 0 then
+    util.fail(string.format(
+      "%s axis uses a log scale but annotation %q has non-positive %s value %s; " ..
+      "log scales require strictly positive values",
+      axis, annotation.text or "", axis, util.fmt_tick(value)), 3)
+  end
+end
+
+local function render_annotation(annotation, index, map_x, map_y, xscale, yscale, buf)
+  local xscale_is_log = xscale == "log"
+  local yscale_is_log = yscale == "log"
+  if xscale_is_log then
+    check_annotation_positive(annotation.x, "x", annotation)
+    if annotation.xytext ~= nil then
+      check_annotation_positive(annotation.xytext[1], "x", annotation)
+    end
+  end
+  if yscale_is_log then
+    check_annotation_positive(annotation.y, "y", annotation)
+    if annotation.xytext ~= nil then
+      check_annotation_positive(annotation.xytext[2], "y", annotation)
+    end
+  end
+
+  local target_x = map_x(annotation.x)
+  local target_y = map_y(annotation.y)
+  local text_x, text_y
+  if annotation.xytext ~= nil then
+    text_x = map_x(annotation.xytext[1])
+    text_y = map_y(annotation.xytext[2])
+  elseif annotation.arrow ~= nil then
+    -- With no explicit text position, offset the label so the leader line is
+    -- visible instead of collapsing to a zero-length segment.
+    text_x, text_y = target_x + 12, target_y - 12
+  else
+    text_x, text_y = target_x, target_y
+  end
+
+  local color = annotation.color or TEXT_COLOR
+  local fontsize = annotation.fontsize or 12
+  local align = annotation.align or "left"
+  local anchor = ANNOTATION_ANCHORS[align] or "start"
+
+  buf[#buf + 1] = string.format('   <g class="annotation" data-index="%d">', index)
+  if annotation.arrow ~= nil then
+    local dx = target_x - text_x
+    local dy = target_y - text_y
+    local length = math.sqrt(dx * dx + dy * dy)
+    if length > 0.0005 then
+      local arrow = annotation.arrow
+      buf[#buf + 1] = string.format(
+        '    <line class="annotation-arrow" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s" stroke-linecap="round"/>',
+        util.fmt(text_x), util.fmt(text_y), util.fmt(target_x), util.fmt(target_y),
+        arrow.color or color, util.fmt(arrow.linewidth or 1.5))
+      local head = arrow.head or 8
+      if head > 0 then
+        if head > length then head = length end
+        local ux, uy = dx / length, dy / length
+        local base_x, base_y = target_x - ux * head, target_y - uy * head
+        local half = head * 0.5
+        local px, py = -uy * half, ux * half
+        buf[#buf + 1] = string.format(
+          '    <polygon class="annotation-arrow-head" points="%s,%s %s,%s %s,%s" fill="%s"/>',
+          util.fmt(target_x), util.fmt(target_y),
+          util.fmt(base_x + px), util.fmt(base_y + py),
+          util.fmt(base_x - px), util.fmt(base_y - py),
+          arrow.color or color)
+      end
+    end
+  end
+  buf[#buf + 1] = string.format(
+    '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s">%s</text>',
+    util.fmt(text_x), util.fmt(text_y), util.fmt(fontsize), color, anchor, align,
+    util.escape_xml(annotation.text))
+  buf[#buf + 1] = '   </g>'
+end
+
 function M.to_svg(fig)
   local geom = layout(fig)
   local xscale = fig._xscale or "linear"
@@ -651,6 +735,14 @@ function M.to_svg(fig)
     end
   end
   add('  </g>')
+
+  if #(fig._annotations or {}) > 0 then
+    add('  <g class="annotation-layer" clip-path="url(#' .. clip_id .. ')">')
+    for index, annotation in ipairs(fig._annotations) do
+      render_annotation(annotation, index, map_x, map_y, xscale, yscale, buf)
+    end
+    add('  </g>')
+  end
 
   add('  <g class="axes">')
   printf('   <path class="spine" d="M %s %s L %s %s L %s %s" fill="none" stroke="%s" stroke-width="1"/>',

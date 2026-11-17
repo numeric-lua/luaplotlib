@@ -171,6 +171,46 @@ fig:ylabel("text")
 Arguments must be strings (empty strings are allowed). Text is XML-escaped and
 invalid XML control characters are replaced. The y label is rotated -90°.
 
+### Annotations and arrows
+
+```lua
+fig:annotate("peak", 2.5, 4.1)
+fig:annotate("peak", 2.5, 4.1, {
+  xytext = { 3.5, 5.0 },
+  color = "#444444",
+  fontsize = 13,
+  align = "center",
+  arrow = { color = "#d62728", linewidth = 1.5, head = 8 },
+})
+```
+
+Add a text label anchored at data coordinates `(x, y)`. With no `xytext`, the
+text is drawn at the anchor. With `xytext = { tx, ty }`, the text is drawn at
+that data position instead and can be connected to `(x, y)` with an arrow.
+Annotations are rendered above the series and clipped to the plot rectangle.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `xytext` | `{ x, y }` data coordinates | same as `(x, y)`; offset up-right when `arrow` is set |
+| `color` | color string | `#222222` |
+| `fontsize` | number > 0, in SVG user units | `12` |
+| `align` | `"left"`, `"center"`, or `"right"` | `"left"` |
+| `arrow` | boolean or options table | no arrow |
+
+`arrow = true` draws a leader line from the text to `(x, y)` using the
+annotation color. It also accepts a table with `color`, `linewidth` (or
+`width`), and `head` (or `headsize`) values; `head` is the arrowhead length in
+SVG user units and defaults to `8`. Set `arrow = false` or omit it for plain
+text. If `arrow` is enabled without `xytext`, the label is offset slightly
+up-right so the leader line is visible.
+
+Annotation coordinates use the same data space and log transformations as
+series. On a logarithmic axis, both the annotated point and any `xytext`
+coordinates must be strictly positive. Annotations do not affect automatic axis
+ranging; use `xlim`/`ylim` if a label needs to sit outside the data extents.
+Unknown options, invalid colors/alignment/font sizes, and malformed `xytext` or
+`arrow` tables raise a `luaplotlib:` error.
+
 ### Limits
 
 ```lua
@@ -280,10 +320,11 @@ match these forms raise errors.
 - Root `width`, `height`, and `viewBox`, plus `data-dpi`, `data-xscale`, and
   `data-yscale` metadata
 - White background rectangle
-- A clip path limiting series to the axes rectangle
+- A clip path limiting series and annotations to the axes rectangle
 - Groups with classes such as `figure`, `grid`, `series-layer`, `series-line`,
-  `series-scatter`, `series-hist`, `series-bar`, `axes`, `ticks`, `xlabel`,
-  `ylabel`, `title`, and `legend`
+  `series-scatter`, `series-hist`, `series-bar`, `annotation-layer`,
+  `annotation`, `annotation-text`, `annotation-arrow`, `axes`, `ticks`,
+  `xlabel`, `ylabel`, `title`, and `legend`
 - No scripts, embedded images, or external references/hrefs
 - User text XML-escaped; invalid control characters replaced with U+FFFD
 - No external fonts; text uses a generic Helvetica/Arial/sans-serif stack
@@ -310,8 +351,7 @@ includes, but is not limited to:
 ## Limitations
 
 - SVG only; no interactive display yet.
-- No date axes, 3-D plots, images, annotations, subplots, or
-  stacked/grouped bars.
+- No date axes, 3-D plots, images, subplots, or stacked/grouped bars.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - One color per series; per-bar color arrays are not supported.
 - Only one categorical x-axis mapping is used per figure.
@@ -341,9 +381,20 @@ Returns a renderer-agnostic scene table:
     { kind = "bar", x = {...}, y = {...}, width = 0.8 },
     { kind = "hist", edges = {...}, counts = {...} },
   },
+  annotations = {
+    {
+      kind = "annotation", text = "peak", x = 2.5, y = 4.1,
+      xytext = { 3.5, 5.0, x = 3.5, y = 5.0 },
+      color = "#444444", fontsize = 13, align = "center",
+      style = { color = "#444444", fontsize = 13, align = "center" },
+      arrow = { enabled = true, color = "#444444", linewidth = 1.5, head = 8 },
+    },
+  },
 }
 ```
 
 `Figure:to_scene()` is a convenience wrapper.  Limits default to the data range
 with 5% padding, or the explicit `xlim`/`ylim` values. Log-axis limits are
-padded in log space and remain positive.
+padded in log space and remain positive. Annotations retain data coordinates
+and style so another backend can apply its own coordinate transform; they do not
+affect the exported limits.

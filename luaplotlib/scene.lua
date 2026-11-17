@@ -68,6 +68,41 @@ local function update_xy_range(state, series)
   end
 end
 
+local function copy_annotation(annotation)
+  local copy = {
+    kind = "annotation",
+    text = annotation.text,
+    x = annotation.x,
+    y = annotation.y,
+    color = annotation.color,
+    fontsize = annotation.fontsize,
+    align = annotation.align,
+    style = {
+      color = annotation.color,
+      fontsize = annotation.fontsize,
+      align = annotation.align,
+    },
+  }
+
+  if annotation.xytext ~= nil then
+    local x, y = annotation.xytext[1], annotation.xytext[2]
+    -- The numeric pair keeps the shape consistent with xlim/ylim; the named
+    -- fields are a convenience for backends that prefer point tables.
+    copy.xytext = { x, y, x = x, y = y }
+  end
+
+  if annotation.arrow ~= nil then
+    copy.arrow = {
+      enabled = true,
+      color = annotation.arrow.color,
+      linewidth = annotation.arrow.linewidth,
+      head = annotation.arrow.head,
+    }
+  end
+
+  return copy
+end
+
 function M.from_figure(figure)
   if type(figure) ~= "table" then
     error("scene.from_figure expects a Figure", 2)
@@ -87,6 +122,7 @@ function M.from_figure(figure)
     legend = figure._legend_requested and true or false,
     category_ticks = nil,
     series = {},
+    annotations = {},
   }
 
   local state = {}
@@ -144,6 +180,10 @@ function M.from_figure(figure)
       end
     end
     scene.series[#scene.series + 1] = copy
+  end
+
+  for _, annotation in ipairs(figure._annotations or {}) do
+    scene.annotations[#scene.annotations + 1] = copy_annotation(annotation)
   end
 
   if figure._xlim then

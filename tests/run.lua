@@ -186,6 +186,7 @@ local test_files = {
   "test_series.lua",
   "test_svg.lua",
   "test_scene.lua",
+  "test_annotations.lua",
   "test_errors.lua",
 }
 

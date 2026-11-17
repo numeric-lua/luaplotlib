@@ -62,6 +62,33 @@ local ERRORBAR_OPTIONS = {
   ecolor = true,
 }
 
+local ANNOTATE_OPTIONS = {
+  xytext = true,
+  color = true,
+  fontsize = true,
+  align = true,
+  arrow = true,
+}
+
+local ARROW_OPTIONS = {
+  color = true,
+  linewidth = true,
+  width = true,
+  head = true,
+  headsize = true,
+}
+
+local ANNOTATION_ALIGNS = {
+  left = true,
+  center = true,
+  right = true,
+}
+
+local DEFAULT_ANNOTATION_COLOR = "#222222"
+local DEFAULT_ANNOTATION_FONTSIZE = 12
+local DEFAULT_ARROW_LINEWIDTH = 1.5
+local DEFAULT_ARROW_HEAD = 8
+
 local MARKERS = {
   circle = true,
   o = true,
@@ -150,6 +177,76 @@ local function checked_marker(value, context)
   return value
 end
 
+local function checked_xytext(value)
+  if value == nil then
+    return nil
+  end
+  if type(value) ~= "table" then
+    fail("annotate xytext must be a {x, y} table")
+  end
+
+  local x, y = value[1], value[2]
+  if x == nil and y == nil and (value.x ~= nil or value.y ~= nil) then
+    x, y = value.x, value.y
+  end
+  if value[3] ~= nil or (value[1] ~= nil and value[2] == nil) then
+    fail("annotate xytext must contain exactly two coordinates")
+  end
+  if x == nil then
+    fail("annotate xytext requires an x coordinate")
+  end
+  if y == nil then
+    fail("annotate xytext requires a y coordinate")
+  end
+
+  return {
+    util.check_number(x, "annotate xytext x"),
+    util.check_number(y, "annotate xytext y"),
+  }
+end
+
+local function checked_arrow(value, color)
+  if value == nil or value == false then
+    return nil
+  end
+  if value == true then
+    return {
+      color = color,
+      linewidth = DEFAULT_ARROW_LINEWIDTH,
+      head = DEFAULT_ARROW_HEAD,
+    }
+  end
+  if type(value) ~= "table" then
+    fail("annotate arrow must be a boolean or an options table")
+  end
+
+  value = util.check_options(value, ARROW_OPTIONS, "annotate arrow")
+  local arrow_color = color
+  if value.color ~= nil then
+    arrow_color = util.check_color(value.color, "annotate arrow color")
+  end
+
+  local linewidth = DEFAULT_ARROW_LINEWIDTH
+  local width = value.linewidth
+  if width == nil then width = value.width end
+  if width ~= nil then
+    linewidth = util.check_number(width, "annotate arrow linewidth", 0)
+  end
+
+  local head = DEFAULT_ARROW_HEAD
+  local head_value = value.head
+  if head_value == nil then head_value = value.headsize end
+  if head_value ~= nil then
+    head = util.check_number(head_value, "annotate arrow head", 0)
+  end
+
+  return {
+    color = arrow_color,
+    linewidth = linewidth,
+    head = head,
+  }
+end
+
 function Figure.new(opts)
   opts = util.check_options(opts, {
     width = true,
@@ -183,6 +280,7 @@ function Figure.new(opts)
     height = height,
     dpi = dpi,
     _series = {},
+    _annotations = {},
     _color_serial = 0,
     _title = nil,
     _xlabel = nil,
@@ -497,6 +595,49 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
     yerr = lower,
     xerr = horizontal,
     style = style,
+  }
+  return self
+end
+
+-- Add a text annotation anchored at data coordinates (x, y). If xytext is
+-- supplied, the text is drawn there and an optional arrow points from the text
+-- to (x, y). Options are validated eagerly; axis-scale checks happen at render
+-- time, when the axes are known.
+function Figure:annotate(text, x, y, opts)
+  util.check_string(text, "annotate text", true)
+  if y == nil then
+    fail("annotate requires text, x, and y")
+  end
+  x = util.check_number(x, "annotate x")
+  y = util.check_number(y, "annotate y")
+
+  opts = util.check_options(opts, ANNOTATE_OPTIONS, "annotate")
+  local xytext = checked_xytext(opts.xytext)
+
+  local color = DEFAULT_ANNOTATION_COLOR
+  if opts.color ~= nil then
+    color = util.check_color(opts.color, "annotate color")
+  end
+
+  local fontsize = DEFAULT_ANNOTATION_FONTSIZE
+  if opts.fontsize ~= nil then
+    fontsize = util.check_number(opts.fontsize, "annotate fontsize", 0.1)
+  end
+
+  local align = opts.align or "left"
+  if type(align) ~= "string" or not ANNOTATION_ALIGNS[align] then
+    fail("annotate align must be one of left, center, or right")
+  end
+
+  self._annotations[#self._annotations + 1] = {
+    text = text,
+    x = x,
+    y = y,
+    xytext = xytext,
+    color = color,
+    fontsize = fontsize,
+    align = align,
+    arrow = checked_arrow(opts.arrow, color),
   }
   return self
 end
