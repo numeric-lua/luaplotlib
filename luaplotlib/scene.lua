@@ -29,6 +29,9 @@ local function copy_style(style)
     markersize = style.markersize,
     radius = style.radius,
     width_fraction = style.width_fraction,
+    capsize = style.capsize,
+    elinewidth = style.elinewidth,
+    ecolor = style.ecolor,
   }
 end
 
@@ -96,6 +99,22 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       update_xy_range(state, copy)
+    elseif series.kind == "errorbar" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      copy.yerr = copy_array(series.yerr)
+      if series.xerr then copy.xerr = copy_array(series.xerr) end
+      for index = 1, #copy.x do
+        local x, y = copy.x[index], copy.y[index]
+        local xerr = copy.xerr and copy.xerr[index] or 0
+        local yerr = copy.yerr[index]
+        local left, right = x - xerr, x + xerr
+        local lower, upper = y - yerr, y + yerr
+        if state.xmin == nil or left < state.xmin then state.xmin = left end
+        if state.xmax == nil or right > state.xmax then state.xmax = right end
+        if state.ymin == nil or lower < state.ymin then state.ymin = lower end
+        if state.ymax == nil or upper > state.ymax then state.ymax = upper end
+      end
     elseif series.kind == "bar" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)

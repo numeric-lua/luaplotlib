@@ -161,3 +161,13 @@ test("methods fail on absent figure state without crashing the process", functio
   local fig = plt.figure()
   bad(function() fig:savefig(TEST_OUTPUT_DIR) end, "directory as file")
 end)
+
+test("errorbar rejects malformed errors", function()
+  local fig = plt.figure()
+  bad(function() fig:errorbar({ 1 }, { 1 }, nil) end, "missing yerr")
+  bad(function() fig:errorbar({ 1, 2 }, { 1, 2 }, { 1 }) end,
+    "yerr length mismatch")
+  bad(function() fig:errorbar({ 1 }, { 1 }, -1) end, "negative yerr")
+  bad(function() fig:errorbar({ 1 }, { 1 }, { 1 }, { 2, 3 }) end,
+    "xerr length mismatch")
+end)

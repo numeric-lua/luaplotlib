@@ -45,11 +45,18 @@ export LUA_PATH="$PWD/?.lua;$PWD/?/init.lua;;"
 
 luajit examples/line.lua
 luajit examples/histogram.lua
+luajit examples/errorbar.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
 tree can be copied or symlinked to any directory on `LUA_PATH`; there is no
 build step.
+
+Install from LuaRocks:
+
+```sh
+luarocks --lua-version=5.1 install luaplotlib
+```
 
 The examples write SVGs to `examples/output/`, which is gitignored.
 
@@ -142,7 +149,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-Early MVP (`0.1.0`). The SVG backend, line/scatter/histogram/bar rendering,
+Early MVP (`0.2.0`). The SVG backend, line/scatter/histogram/bar/error-bar rendering,
 linear/log axis machinery, legend, tests, and examples are functional. The
 repository is staged for `numeric-lua/luaplotlib`; it has not been released or
 published.
@@ -153,8 +160,8 @@ published.
   display server integration yet.
 - **Linear and log axes only.** Date axes, twin axes, and polar plots are not
   implemented.
-- **No advanced chart types.** Images, contour plots, 3-D plots, error bars,
-  annotations, subplots, and stacked/grouped bars are not implemented.
+- **No advanced chart types.** Images, contour plots, 3-D plots, annotations,
+  subplots, and stacked/grouped bars are not implemented.
 - **Basic layout.** Margins are fixed/adaptive rather than a full layout engine;
   many long categorical labels can overlap.
 - **One color per bar series.** Colors are not split per bar, and categorical

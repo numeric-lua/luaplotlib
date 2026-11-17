@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `0.1.0` (MVP). This document describes the public Lua API implemented
+Version: `0.2.0` (MVP). This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -11,7 +11,7 @@ The module exposes:
 
 - `plt.figure(opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"0.1.0"`
+- `plt._VERSION` — currently `"0.2.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -80,6 +80,29 @@ Draw a connected line series.
 
 A single-point line still renders its point. Unknown options, invalid colors,
 and malformed data raise errors.
+
+### `fig:errorbar(x, y, yerr[, xerr][, opts])`
+
+Draw a connected line and markers with symmetric vertical error bars, plus
+optional horizontal error bars.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `linewidth` | number ≥ 0 | `1.5` |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
+| `marker` | marker name, `true`, or `false` | `"circle"` |
+| `markersize` | number > 0 | `4` |
+| `alpha` | number in [0, 1] | `1` |
+| `capsize` | number ≥ 0, in SVG user units | `4` |
+| `elinewidth` | number ≥ 0 | `1` |
+| `ecolor` | color string | same as `color` |
+
+`yerr` is required; `xerr` is optional. Either can be a single non-negative
+number applied to every point, or an array with one non-negative value per
+point. The four-argument form is accepted when the fourth argument is an
+options table with string keys.
 
 ### `fig:scatter(x, y, opts)`
 
@@ -287,7 +310,7 @@ includes, but is not limited to:
 ## Limitations
 
 - SVG only; no interactive display yet.
-- No date axes, 3-D plots, images, annotations, error bars, subplots, or
+- No date axes, 3-D plots, images, annotations, subplots, or
   stacked/grouped bars.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - One color per series; per-bar color arrays are not supported.

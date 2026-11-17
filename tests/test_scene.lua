@@ -68,3 +68,21 @@ test("exports axis scales and keeps log limits positive", function()
   assert_true(exported.xlim[1] > 0 and exported.xlim[2] >= 100)
   assert_true(exported.ylim[1] > 0 and exported.ylim[2] >= 10000)
 end)
+
+test("exports error bars and includes their extents", function()
+  local figure = luaplotlib.figure()
+  figure:errorbar({ 2, 4 }, { 10, 20 }, { 1, 2 }, { 0.5, 1 }, {
+    label = "errors", color = "#123456",
+  })
+  local exported = figure:to_scene()
+  local series = exported.series[1]
+  assert_equal(series.kind, "errorbar")
+  assert_equal(series.yerr[2], 2)
+  assert_equal(series.xerr[1], 0.5)
+  assert_equal(series.style.capsize, 4)
+  assert_equal(series.style.ecolor, "#123456")
+  assert_true(exported.xlim[1] < 1.5)
+  assert_true(exported.xlim[2] > 5)
+  assert_true(exported.ylim[1] < 9)
+  assert_true(exported.ylim[2] > 22)
+end)

@@ -108,6 +108,16 @@ local function data_extents(fig, xscale, yscale)
           include_y(series.counts[i], series_index, i, "histogram count")
         end
       end
+    elseif series.kind == "errorbar" then
+      for i = 1, #series.x do
+        local x, y = series.x[i], series.y[i]
+        local xerr = series.xerr and series.xerr[i] or 0
+        local yerr = series.yerr[i]
+        include_x(x - xerr, series_index, i, "errorbar x")
+        include_x(x + xerr, series_index, i, "errorbar x")
+        include_y(y - yerr, series_index, i, "errorbar y")
+        include_y(y + yerr, series_index, i, "errorbar y")
+      end
     elseif series.kind == "bar" then
       local half = series.width / 2
       for i = 1, #series.x do
@@ -419,6 +429,55 @@ local function render_scatter(series, map_x, map_y, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function render_errorbar(series, map_x, map_y, buf)
+  local style = series.style
+  local cap = style.capsize or 4
+  local width = style.elinewidth or 1
+  local color = style.ecolor or style.color
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', attribute(style.label))
+  end
+  buf[#buf + 1] = string.format('  <g class="series series-errorbar"%s>', label)
+  for i = 1, #series.x do
+    local x = map_x(series.x[i])
+    local y = series.y[i]
+    local top = map_y(y + series.yerr[i])
+    local bottom = map_y(y - series.yerr[i])
+    buf[#buf + 1] = string.format(
+      '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+      util.fmt(x), util.fmt(top), util.fmt(x), util.fmt(bottom), color,
+      util.fmt(width))
+    buf[#buf + 1] = string.format(
+      '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+      util.fmt(x - cap), util.fmt(top), util.fmt(x + cap), util.fmt(top),
+      color, util.fmt(width))
+    buf[#buf + 1] = string.format(
+      '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+      util.fmt(x - cap), util.fmt(bottom), util.fmt(x + cap), util.fmt(bottom),
+      color, util.fmt(width))
+    if series.xerr then
+      local left = map_x(series.x[i] - series.xerr[i])
+      local right = map_x(series.x[i] + series.xerr[i])
+      local center = map_y(y)
+      buf[#buf + 1] = string.format(
+        '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(left), util.fmt(center), util.fmt(right), util.fmt(center),
+        color, util.fmt(width))
+      buf[#buf + 1] = string.format(
+        '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(left), util.fmt(center - cap), util.fmt(left),
+        util.fmt(center + cap), color, util.fmt(width))
+      buf[#buf + 1] = string.format(
+        '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(right), util.fmt(center - cap), util.fmt(right),
+        util.fmt(center + cap), color, util.fmt(width))
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+  render_line(series, map_x, map_y, buf)
+end
+
 local function render_hist(series, map_x, map_y, baseline, buf)
   local style = series.style
   local opacity = ""
@@ -587,6 +646,8 @@ function M.to_svg(fig)
       render_hist(series, map_x, map_y, y_baseline, buf)
     elseif series.kind == "bar" then
       render_bar(series, map_x, map_y, y_baseline, buf)
+    elseif series.kind == "errorbar" then
+      render_errorbar(series, map_x, map_y, buf)
     end
   end
   add('  </g>')

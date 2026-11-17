@@ -183,3 +183,31 @@ test("empty figures still render a valid default axis", function()
   assert_contains(svg, '>1</text>')
   assert_well_formed_svg(svg)
 end)
+
+test("errorbar renders bars, caps, line, and markers", function()
+  local fig = plt.figure({ width = 480, height = 320 })
+  fig:errorbar({ 1, 2, 3 }, { 2, 4, 3 }, { 0.25, 0.5, 0.75 }, {
+    label = "measurement", color = "#336699", capsize = 6,
+  })
+  local svg = fig:to_svg()
+  assert_well_formed_svg(svg)
+  assert_contains(svg, 'class="series series-errorbar"')
+  assert_contains(svg, 'class="errorbar"')
+  assert_contains(svg, 'class="errorbar-cap"')
+  assert_equal(count_occurrences(svg, 'class="errorbar-cap"'), 6)
+  assert_contains(svg, 'class="series series-line"')
+  assert_contains(svg, 'class="marker"')
+  assert_contains(svg, 'stroke="#336699"')
+end)
+
+test("errorbar accepts scalar yerr and horizontal xerr", function()
+  local fig = plt.figure({ width = 480, height = 320 })
+  fig:errorbar({ 1, 2 }, { 3, 4 }, 0.5, { 0.1, 0.2 }, {
+    label = "errors", marker = false, linestyle = "none",
+  })
+  local svg = fig:to_svg()
+  assert_well_formed_svg(svg)
+  assert_equal(count_occurrences(svg, 'class="errorbar-cap"'), 8)
+  assert_not_contains(svg, 'class="marker"')
+  assert_contains(svg, "data-label")
+end)

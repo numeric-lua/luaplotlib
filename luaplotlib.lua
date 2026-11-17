@@ -8,7 +8,7 @@ local Scene = require("luaplotlib.scene")
 
 local M = {
   _NAME = "luaplotlib",
-  _VERSION = "0.1.0",
+  _VERSION = "0.2.0",
   Figure = Figure,
   scene = Scene,
 }

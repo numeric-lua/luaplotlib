@@ -49,6 +49,19 @@ local BAR_OPTIONS = {
   edgecolor = true,
 }
 
+local ERRORBAR_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  linestyle = true,
+  marker = true,
+  markersize = true,
+  alpha = true,
+  capsize = true,
+  elinewidth = true,
+  ecolor = true,
+}
+
 local MARKERS = {
   circle = true,
   o = true,
@@ -390,6 +403,99 @@ function Figure:bar(labels_or_x, values, opts)
     y = yv,
     width = bar_width,
     category = kind == "categories",
+    style = style,
+  }
+  return self
+end
+
+function Figure:errorbar(x, y, yerr, xerr, opts)
+  -- Allow the common four-argument form: errorbar(x, y, yerr, opts).
+  if opts == nil and type(xerr) == "table" then
+    local has_string_key = false
+    for key in pairs(xerr) do
+      if type(key) == "string" then has_string_key = true; break end
+    end
+    if has_string_key then
+      opts, xerr = xerr, nil
+    end
+  end
+  opts = util.check_options(opts, ERRORBAR_OPTIONS, "errorbar")
+  local xv = data.sequence(x, "errorbar x")
+  local yv = data.sequence(y, "errorbar y")
+  if #xv ~= #yv then
+    fail(string.format("errorbar x and y must have the same length (%d ~= %d)",
+      #xv, #yv))
+  end
+  if yerr == nil then fail("errorbar requires yerr") end
+
+  local function errors(value, name)
+    local result
+    if type(value) == "number" then
+      result = {}
+      for index = 1, #xv do result[index] = value end
+    else
+      result = data.sequence(value, name)
+    end
+    if #result ~= #xv then
+      fail(string.format("%s must have the same length as x and y (%d ~= %d)",
+        name, #result, #xv))
+    end
+    for index, error in ipairs(result) do
+      if error < 0 then
+        fail(string.format("%s[%d] must be non-negative", name, index))
+      end
+    end
+    return result
+  end
+
+  local lower = errors(yerr, "errorbar yerr")
+  local horizontal = nil
+  if xerr ~= nil then
+    horizontal = errors(xerr, "errorbar xerr")
+  end
+
+  local linewidth = 1.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "errorbar linewidth", 0)
+  end
+  local linestyle = opts.linestyle or "solid"
+  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+    fail("errorbar linestyle must be one of solid, dashed, dotted, or none")
+  end
+  local marker = checked_marker(opts.marker == nil and "circle" or opts.marker,
+    "errorbar")
+  local markersize = 4
+  if opts.markersize ~= nil then
+    markersize = util.check_number(opts.markersize, "errorbar markersize", 0.1)
+  end
+  local capsize = 4
+  if opts.capsize ~= nil then
+    capsize = util.check_number(opts.capsize, "errorbar capsize", 0)
+  end
+  local elinewidth = 1
+  if opts.elinewidth ~= nil then
+    elinewidth = util.check_number(opts.elinewidth, "errorbar elinewidth", 0)
+  end
+
+  local style = checked_style(self, opts, "errorbar")
+  style.linewidth = linewidth
+  style.linestyle = linestyle
+  style.marker = marker
+  style.markersize = markersize
+  style.capsize = capsize
+  style.elinewidth = elinewidth
+  if opts.ecolor ~= nil then
+    style.ecolor = util.check_color(opts.ecolor, "errorbar ecolor")
+  else
+    style.ecolor = style.color
+  end
+
+  self._series[#self._series + 1] = {
+    kind = "errorbar",
+    x = xv,
+    y = yv,
+    yerr = lower,
+    xerr = horizontal,
     style = style,
   }
   return self
