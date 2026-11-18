@@ -81,6 +81,22 @@ test("bar rejects malformed data and options", function()
   bad(function() fig:bar({ "a" }, { 1 }, { width = 1.5 }) end, "width > 1")
   bad(function() fig:bar({ "a" }, { 1 }, { color = "bad color!" }) end,
     "invalid bar color")
+  bad(function() fig:bar({ "a", "b" }, { { 1, 2 }, { 3 } }) end,
+    "series length mismatch")
+  bad(function() fig:bar({ "a", "b" }, { { 1 }, { 2 }, { 3, 4 } }) end,
+    "third series length mismatch")
+  bad(function() fig:bar({ "a", "b" }, { { 1, 2 }, { 3, 4 } },
+    { labels = { "only one" } }) end, "series labels length mismatch")
+  bad(function() fig:bar({ "a", "b" }, { { 1, 2 }, { 3, 4 } },
+    { label = "ambiguous" }) end, "single label with several series")
+  bad(function() fig:bar({ "a" }, { { 1 } }, { stacked = "yes" }) end,
+    "non-boolean stacked")
+  bad(function() fig:bar({ "a" }, { { 1 } }, { grouped = 1 }) end,
+    "non-boolean grouped")
+  bad(function() fig:bar({ "a" }, { { 1 } }, { stacked = true, grouped = true }) end,
+    "stacked and grouped together")
+  bad(function() fig:bar({ "a" }, { { 1 } }, { colors = {} }) end,
+    "series colors length mismatch")
 end)
 
 test("axis limit validation and bad control arguments", function()

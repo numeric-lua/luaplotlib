@@ -44,9 +44,14 @@ local HIST_OPTIONS = {
 local BAR_OPTIONS = {
   color = true,
   label = true,
+  labels = true,
+  series_labels = true,
+  colors = true,
   width = true,
   alpha = true,
   edgecolor = true,
+  stacked = true,
+  grouped = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -438,12 +443,146 @@ function Figure:hist(values, opts)
   return self
 end
 
-function Figure:bar(labels_or_x, values, opts)
-  opts = util.check_options(opts, BAR_OPTIONS, "bar")
-  if values == nil then
+-- A table is treated as bar options only when every key is a supported option.
+-- Series tables use numeric keys, and series descriptors use keys such as
+-- values/label/color, so both remain distinguishable from a trailing opts table.
+local function bar_options_table(value)
+  if type(value) ~= "table" or data.is_tensor_like(value) then
+    return false
+  end
+  for key in pairs(value) do
+    if type(key) ~= "string" or not BAR_OPTIONS[key] then
+      return false
+    end
+  end
+  return true
+end
+
+-- True when a single bar values argument contains several series rather than
+-- one numeric sequence. Both arrays of series and label -> series maps work.
+local function bar_series_container(value)
+  if type(value) ~= "table" or data.is_tensor_like(value) then
+    return false
+  end
+  if #value > 0 then
+    local first = value[1]
+    return type(first) == "table" or type(first) == "userdata"
+  end
+  if next(value) == nil then
+    return false
+  end
+  -- Array wrappers such as { data = {...}, n = ... } are one sequence.
+  if value.data ~= nil or value.n ~= nil or value.size ~= nil
+      or value.shape ~= nil or value.ndim ~= nil then
+    return false
+  end
+  -- A single descriptor such as { values = {...}, label = "..." }.
+  if value.values ~= nil or value.y ~= nil then
+    return false
+  end
+  for _, item in pairs(value) do
+    if type(item) ~= "table" and type(item) ~= "userdata" then
+      return false
+    end
+  end
+  return true
+end
+
+local function checked_series_labels(value, name, count)
+  if type(value) ~= "table" then
+    fail(name .. " must be a table of series labels")
+  end
+  if #value ~= count then
+    fail(string.format("%s must match the number of value series (%d ~= %d)",
+      name, #value, count))
+  end
+  local labels = {}
+  for i = 1, count do
+    labels[i] = util.check_string(value[i], string.format("%s[%d]", name, i), true)
+  end
+  return labels
+end
+
+-- Values may be one numeric sequence (the original API), a list of sequences,
+-- a list of { values = ..., label = ... } descriptors, or a label -> sequence
+-- map. A trailing options table is shared by every series.
+function Figure:bar(labels_or_x, values, opts, ...)
+  local raw_args = {}
+  if values ~= nil then raw_args[#raw_args + 1] = values end
+  if opts ~= nil then raw_args[#raw_args + 1] = opts end
+  local extra_count = select("#", ...)
+  for i = 1, extra_count do
+    local extra = select(i, ...)
+    if extra ~= nil then raw_args[#raw_args + 1] = extra end
+  end
+  if #raw_args == 0 then
     fail("bar requires values as its second argument")
   end
-  local yv = data.sequence(values, "bar values")
+
+  opts = nil
+  if #raw_args > 1 then
+    local last = raw_args[#raw_args]
+    if type(last) == "table" then
+      if bar_options_table(last) then
+        opts = table.remove(raw_args)
+      end
+    elseif type(last) ~= "userdata" and #raw_args == 2 then
+      -- Preserve the original error for a non-table third options argument.
+      opts = table.remove(raw_args)
+    end
+  end
+  opts = util.check_options(opts, BAR_OPTIONS, "bar")
+
+  local raw_series = {}
+  local fallback_labels
+  if #raw_args > 1 then
+    raw_series = raw_args
+  else
+    local value = raw_args[1]
+    if bar_series_container(value) then
+      if #value > 0 then
+        for i = 1, #value do raw_series[i] = value[i] end
+      else
+        local keys = {}
+        for key in pairs(value) do keys[#keys + 1] = key end
+        table.sort(keys, function(a, b)
+          return tostring(a) < tostring(b)
+        end)
+        fallback_labels = {}
+        for i, key in ipairs(keys) do
+          raw_series[i] = value[key]
+          fallback_labels[i] = tostring(key)
+        end
+      end
+    else
+      raw_series[1] = value
+    end
+  end
+
+  local series_values = {}
+  local series_meta = {}
+  for i, raw in ipairs(raw_series) do
+    local source = raw
+    local meta = { label = fallback_labels and fallback_labels[i] or nil }
+    if type(raw) == "table" and not data.is_tensor_like(raw) then
+      local descriptor_values = raw.values
+      if descriptor_values == nil then descriptor_values = raw.y end
+      if descriptor_values ~= nil then
+        source = descriptor_values
+        if raw.label ~= nil then meta.label = raw.label end
+        meta.color = raw.color
+        meta.edgecolor = raw.edgecolor
+        meta.alpha = raw.alpha
+      end
+    end
+    local name = "bar values"
+    if #raw_series > 1 then
+      name = string.format("bar values[%d]", i)
+    end
+    series_values[i] = data.sequence(source, name)
+    series_meta[i] = meta
+  end
+  local series_count = #series_values
 
   local kind, xv
   if type(labels_or_x) == "table" and #labels_or_x > 0 then
@@ -452,9 +591,65 @@ function Figure:bar(labels_or_x, values, opts)
     kind = "numeric"
     xv = data.sequence(labels_or_x, "bar x")
   end
-  if #xv ~= #yv then
-    fail(string.format("bar labels/x and values must have the same length (%d ~= %d)",
-      #xv, #yv))
+
+  for i = 1, series_count do
+    local yv = series_values[i]
+    if #xv ~= #yv then
+      fail(string.format(
+        "bar labels/x and values must have the same length (%d ~= %d)",
+        #xv, #yv))
+    end
+  end
+
+  if opts.stacked ~= nil then
+    util.check_boolean(opts.stacked, "bar stacked")
+  end
+  if opts.grouped ~= nil then
+    util.check_boolean(opts.grouped, "bar grouped")
+  end
+  if opts.stacked and opts.grouped then
+    fail("bar stacked and grouped cannot both be true")
+  end
+
+  local label_list
+  local raw_labels = opts.labels
+  if raw_labels == nil then raw_labels = opts.series_labels end
+  if raw_labels == nil and type(opts.label) == "table" then
+    raw_labels = opts.label
+  end
+  if raw_labels ~= nil then
+    label_list = checked_series_labels(raw_labels, "bar labels", series_count)
+  end
+  if series_count > 1 and opts.label ~= nil and type(opts.label) ~= "table"
+      and label_list == nil then
+    fail("bar label is ambiguous for multiple series; use labels instead")
+  end
+
+  local color_list
+  local raw_colors = opts.colors
+  if raw_colors == nil and type(opts.color) == "table" then
+    raw_colors = opts.color
+  end
+  if raw_colors ~= nil then
+    if type(raw_colors) ~= "table" then
+      fail("bar colors must be a table of per-series colors")
+    end
+    if #raw_colors ~= series_count then
+      fail(string.format(
+        "bar colors must match the number of value series (%d ~= %d)",
+        #raw_colors, series_count))
+    end
+    color_list = {}
+    for i = 1, series_count do
+      color_list[i] = util.check_color(raw_colors[i],
+        string.format("bar colors[%d]", i))
+    end
+  end
+  local global_color
+  if type(opts.color) == "string" then
+    global_color = opts.color
+  elseif opts.color ~= nil and type(opts.color) ~= "table" then
+    util.check_color(opts.color, "bar color")
   end
 
   local width_fraction = 0.8
@@ -483,10 +678,70 @@ function Figure:bar(labels_or_x, values, opts)
       spacing = delta
     end
   end
-  local bar_width = (spacing or 1) * width_fraction
 
-  local style = checked_style(self, opts, "bar")
-  style.width_fraction = width_fraction
+  local mode
+  if opts.stacked then
+    mode = "stacked"
+  elseif opts.grouped or series_count > 1 then
+    mode = "grouped"
+  else
+    mode = "single"
+  end
+
+  local group_width = (spacing or 1) * width_fraction
+  local bar_width = group_width
+  if mode == "grouped" and series_count > 1 then
+    bar_width = group_width / series_count
+  end
+
+  local styles = {}
+  for i = 1, series_count do
+    local meta = series_meta[i]
+    local color = meta.color
+    if color == nil and color_list ~= nil then color = color_list[i] end
+    if color == nil then color = global_color end
+    local label
+    if label_list ~= nil then
+      label = label_list[i]
+    elseif meta.label ~= nil then
+      label = meta.label
+    elseif series_count == 1 then
+      label = opts.label
+    end
+    local style = checked_style(self, {
+      color = color,
+      label = label,
+      alpha = meta.alpha ~= nil and meta.alpha or opts.alpha,
+      edgecolor = meta.edgecolor ~= nil and meta.edgecolor or opts.edgecolor,
+    }, "bar")
+    style.width_fraction = width_fraction
+    styles[i] = style
+  end
+
+  local stacked_bottoms
+  if mode == "stacked" then
+    local positive, negative = {}, {}
+    for i = 1, #positions do
+      positive[i] = 0
+      negative[i] = 0
+    end
+    stacked_bottoms = {}
+    for series_index = 1, series_count do
+      local bottoms = {}
+      local yv = series_values[series_index]
+      for i = 1, #positions do
+        local value = yv[i]
+        if value >= 0 then
+          bottoms[i] = positive[i]
+          positive[i] = positive[i] + value
+        else
+          bottoms[i] = negative[i]
+          negative[i] = negative[i] + value
+        end
+      end
+      stacked_bottoms[series_index] = bottoms
+    end
+  end
 
   if kind == "categories" then
     self._category_ticks = {}
@@ -495,14 +750,28 @@ function Figure:bar(labels_or_x, values, opts)
     end
   end
 
-  self._series[#self._series + 1] = {
-    kind = "bar",
-    x = positions,
-    y = yv,
-    width = bar_width,
-    category = kind == "categories",
-    style = style,
-  }
+  for i = 1, series_count do
+    local entry = {
+      kind = "bar",
+      x = positions,
+      y = series_values[i],
+      width = bar_width,
+      category = kind == "categories",
+      style = styles[i],
+      mode = mode,
+      series_index = i,
+      series_count = series_count,
+    }
+    if mode == "grouped" then
+      entry.offset = 0
+      if series_count > 1 then
+        entry.offset = (i - (series_count + 1) / 2) * bar_width
+      end
+    elseif mode == "stacked" then
+      entry.bottom = stacked_bottoms[i]
+    end
+    self._series[#self._series + 1] = entry
+  end
   return self
 end
 

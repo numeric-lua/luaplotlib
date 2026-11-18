@@ -120,14 +120,16 @@ local function data_extents(fig, xscale, yscale)
       end
     elseif series.kind == "bar" then
       local half = series.width / 2
+      local offset = series.offset or 0
       for i = 1, #series.x do
-        local left = series.x[i] - half
-        local right = series.x[i] + half
+        local center = series.x[i] + offset
+        local left = center - half
+        local right = center + half
         if x_log then
           -- The bar position is data and must be positive. Its left edge is
           -- derived geometry, so it may be clipped to the axis instead of
           -- rejecting an otherwise valid positive position.
-          include_x(series.x[i], series_index, i, "bar x")
+          include_x(center, series_index, i, "bar x")
           if left > 0 then
             include_x(left, series_index, i, "bar edge")
           end
@@ -136,10 +138,27 @@ local function data_extents(fig, xscale, yscale)
           include_x(left, series_index, i, "bar edge")
           include_x(right, series_index, i, "bar edge")
         end
-        if not y_log then
-          include_y(0, series_index, i, "bar baseline")
+        if series.bottom ~= nil then
+          -- Stacked bars occupy the interval [bottom, bottom + value]. Positive
+          -- and negative stacks are accumulated separately by the figure.
+          local bottom = series.bottom[i]
+          local top = bottom + series.y[i]
+          if not y_log then
+            include_y(0, series_index, i, "bar baseline")
+            include_y(bottom, series_index, i, "bar stack")
+            include_y(top, series_index, i, "bar stack top")
+          else
+            if bottom > 0 then
+              include_y(bottom, series_index, i, "bar stack")
+            end
+            include_y(top, series_index, i, "bar stack top")
+          end
+        else
+          if not y_log then
+            include_y(0, series_index, i, "bar baseline")
+          end
+          include_y(series.y[i], series_index, i, "bar value")
         end
-        include_y(series.y[i], series_index, i, "bar value")
       end
     end
   end
@@ -507,7 +526,7 @@ local function render_hist(series, map_x, map_y, baseline, buf)
   buf[#buf + 1] = '  </g>'
 end
 
-local function render_bar(series, map_x, map_y, baseline, buf)
+local function render_bar(series, map_x, map_y, baseline, yscale, buf)
   local style = series.style
   local opacity = ""
   if style.alpha < 1 then
@@ -520,14 +539,28 @@ local function render_bar(series, map_x, map_y, baseline, buf)
     label = string.format(' data-label="%s"', attribute(style.label))
   end
 
+  local offset = series.offset or 0
   buf[#buf + 1] = string.format('  <g class="series series-bar"%s>', label)
   for i = 1, #series.x do
     local value = series.y[i]
-    local x1 = map_x(series.x[i] - series.width / 2)
-    local x2 = map_x(series.x[i] + series.width / 2)
-    local value_y = map_y(value)
-    local top = math.min(baseline, value_y)
-    local height = math.abs(baseline - value_y)
+    local x1 = map_x(series.x[i] + offset - series.width / 2)
+    local x2 = map_x(series.x[i] + offset + series.width / 2)
+    local base_y
+    local value_y
+    if series.bottom ~= nil then
+      local bottom = series.bottom[i]
+      if yscale == "log" and bottom <= 0 then
+        base_y = baseline
+      else
+        base_y = map_y(bottom)
+      end
+      value_y = map_y(bottom + value)
+    else
+      base_y = baseline
+      value_y = map_y(value)
+    end
+    local top = math.min(base_y, value_y)
+    local height = math.abs(base_y - value_y)
     buf[#buf + 1] = string.format(
       '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
@@ -729,7 +762,7 @@ function M.to_svg(fig)
     elseif series.kind == "hist" then
       render_hist(series, map_x, map_y, y_baseline, buf)
     elseif series.kind == "bar" then
-      render_bar(series, map_x, map_y, y_baseline, buf)
+      render_bar(series, map_x, map_y, y_baseline, yscale, buf)
     elseif series.kind == "errorbar" then
       render_errorbar(series, map_x, map_y, buf)
     end

@@ -47,6 +47,7 @@ luajit examples/line.lua
 luajit examples/histogram.lua
 luajit examples/errorbar.lua
 luajit examples/annotations.lua
+luajit examples/bars.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -121,6 +122,28 @@ fig:annotate("local maximum", 2.5, 4.1, {
 The label is drawn above the series and clipped to the plot area. Pass
 `arrow = true` for the default leader style, or omit `arrow` for plain text.
 
+Bars accept several value series in one call. Grouped bars share category
+centers, while stacked bars accumulate positive and negative values separately:
+
+```lua
+local quarters = { "Q1", "Q2", "Q3", "Q4" }
+local fig = plt.figure()
+fig:bar(quarters, {
+  { 14, 18, 16, 22 },
+  { 9, 11, 13, 12 },
+}, { labels = { "Product", "Services" }, grouped = true })
+
+local stacked = plt.figure()
+stacked:bar(quarters, {
+  { 14, 18, 16, 22 },
+  { 9, 11, 13, 12 },
+  { 2, -3, -2, 4 },
+}, { labels = { "Product", "Services", "Adjustment" }, stacked = true })
+```
+
+`labels` (or a `label` in each series descriptor) adds one legend entry per
+series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
+
 ## What works (MVP)
 
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
@@ -128,7 +151,8 @@ The label is drawn above the series and clipped to the plot area. Pass
 - Line plots with colors, dashes, markers, labels, and alpha
 - Scatter plots rendered as SVG circles
 - Histograms with configurable bins and ranges
-- Vertical bars with numeric positions or categorical labels
+- Vertical bars with numeric positions or categorical labels, including
+  multi-series grouped and stacked bars
 - Text annotations with optional leader arrows at data coordinates
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
@@ -160,6 +184,8 @@ make examples
 # examples/output/histogram.svg
 # examples/output/errorbar.svg
 # examples/output/annotations.svg
+# examples/output/bars-grouped.svg
+# examples/output/bars-stacked.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
@@ -177,8 +203,8 @@ been released or published.
   display server integration yet.
 - **Linear and log axes only.** Date axes, twin axes, and polar plots are not
   implemented.
-- **No advanced chart types.** Images, contour plots, 3-D plots, subplots, and
-  stacked/grouped bars are not implemented.
+- **No advanced chart types.** Images, contour plots, 3-D plots, and subplots are
+  not implemented.
 - **Basic layout.** Margins are fixed/adaptive rather than a full layout engine;
   many long categorical labels can overlap.
 - **One color per bar series.** Colors are not split per bar, and categorical

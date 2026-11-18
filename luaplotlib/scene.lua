@@ -152,18 +152,59 @@ function M.from_figure(figure)
         if state.ymax == nil or upper > state.ymax then state.ymax = upper end
       end
     elseif series.kind == "bar" then
+      local mode = series.mode or "single"
+      local offset = series.offset or 0
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       copy.width = series.width
       copy.category = series.category
+      copy.mode = mode
+      copy.grouped = mode == "grouped"
+      copy.stacked = mode == "stacked"
+      if series.offset ~= nil then
+        -- Keep the category centers in x and expose the grouped offset
+        -- separately so non-SVG backends can reproduce the layout themselves.
+        copy.offset = series.offset
+        copy.x_offset = series.offset
+        copy.offsets = {}
+        for index = 1, #copy.x do copy.offsets[index] = series.offset end
+      end
+      if series.bottom ~= nil then
+        copy.bottom = copy_array(series.bottom)
+        copy.stack = copy_array(series.bottom)
+        copy.top = {}
+        for index = 1, #copy.x do
+          copy.top[index] = copy.bottom[index] + copy.y[index]
+        end
+      end
+      local include_zero = mode ~= "single" and scene.yscale ~= "log"
       for index = 1, #copy.x do
-        local x = copy.x[index]
+        local x = copy.x[index] + offset
         local y = copy.y[index]
         local left, right = x - copy.width / 2, x + copy.width / 2
         if state.xmin == nil or left < state.xmin then state.xmin = left end
         if state.xmax == nil or right > state.xmax then state.xmax = right end
-        if state.ymin == nil or y < state.ymin then state.ymin = y end
-        if state.ymax == nil or y > state.ymax then state.ymax = y end
+        if copy.bottom ~= nil then
+          local bottom = copy.bottom[index]
+          local top = copy.top[index]
+          if include_zero then
+            if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
+            if state.ymax == nil or 0 > state.ymax then state.ymax = 0 end
+          end
+          if scene.yscale ~= "log" or bottom > 0 then
+            if state.ymin == nil or bottom < state.ymin then state.ymin = bottom end
+            if state.ymax == nil or bottom > state.ymax then state.ymax = bottom end
+          end
+          if state.ymin == nil or top < state.ymin then state.ymin = top end
+          if state.ymax == nil or top > state.ymax then state.ymax = top end
+        else
+          if include_zero then
+            if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
+            if state.ymax == nil or 0 > state.ymax then state.ymax = 0 end
+          end
+          if state.ymin == nil or y < state.ymin then state.ymin = y end
+          if state.ymax == nil or y > state.ymax then state.ymax = y end
+        end
       end
     elseif series.kind == "hist" then
       copy.edges = copy_array(series.edges)

@@ -32,6 +32,64 @@ test("exports bar and hist geometry", function()
   assert_true(exported.xlim[2] >= 3)
 end)
 
+test("exports grouped offsets while preserving category centers", function()
+  local figure = luaplotlib.figure()
+  figure:bar({ "a", "b" }, {
+    { 2, 4 },
+    { 3, 1 },
+  }, { labels = { "left", "right" } })
+  local exported = figure:to_scene()
+  assert_equal(#exported.series, 2)
+  local left, right = exported.series[1], exported.series[2]
+  assert_equal(left.mode, "grouped")
+  assert_equal(right.mode, "grouped")
+  assert_true(left.offset < 0 and right.offset > 0)
+  assert_equal(left.x[1], 1)
+  assert_equal(right.x[1], 1)
+  assert_equal(left.offsets[2], left.offset)
+  assert_equal(left.width, 0.4)
+  assert_equal(left.style.label, "left")
+  assert_equal(right.style.label, "right")
+end)
+
+test("exports stacked bottoms, total heights, and negative stacks", function()
+  local figure = luaplotlib.figure()
+  figure:bar({ "a", "b" }, {
+    { 2, 3 },
+    { 4, -1 },
+  }, { stacked = true, labels = { "first", "second" } })
+  local exported = figure:to_scene()
+  local first, second = exported.series[1], exported.series[2]
+  assert_equal(first.mode, "stacked")
+  assert_equal(first.stacked, true)
+  assert_equal(first.bottom[1], 0)
+  assert_equal(first.bottom[2], 0)
+  assert_equal(second.bottom[1], 2)
+  assert_equal(second.bottom[2], 0)
+  assert_equal(second.top[1], 6)
+  assert_equal(second.top[2], -1)
+  assert_true(exported.ylim[1] < -1)
+  assert_true(exported.ylim[2] > 6)
+
+  local negative = luaplotlib.figure()
+  negative:bar({ "a" }, {
+    { 2 },
+    { 3 },
+    { -4 },
+    { -1 },
+  }, { stacked = true })
+  local stacks = negative:to_scene().series
+  assert_equal(stacks[2].bottom[1], 2)
+  assert_equal(stacks[2].top[1], 5)
+  assert_equal(stacks[3].bottom[1], 0)
+  assert_equal(stacks[3].top[1], -4)
+  assert_equal(stacks[4].bottom[1], -4)
+  assert_equal(stacks[4].top[1], -5)
+  local ylim = negative:to_scene().ylim
+  assert_true(ylim[1] < -5)
+  assert_true(ylim[2] > 5)
+end)
+
 test("honors explicit limits and does not mutate the figure", function()
   local figure = luaplotlib.figure():xlim(0, 10):ylim(-2, 2)
   figure:plot({ 1, 2 }, { -1, 1 })

@@ -147,18 +147,46 @@ Draw vertical bars. If `labels_or_x` is a table containing any strings, it is
 treated as categorical labels positioned at 1, 2, 3, … and those labels become
 the x-axis tick labels. If it is numeric, it contains x positions.
 
+`values` can be one numeric sequence, a list of numeric sequences, a list of
+series descriptors, or a label -> sequence map. A descriptor has the form
+`{ values = {...}, label = "...", color = "...", edgecolor = "...", alpha = ... }`.
+All series must have the same length as `labels_or_x`. Additional value series
+may also be passed as separate arguments before the options table.
+
+```lua
+fig:bar({ "Q1", "Q2" }, {
+  { 12, 15 },
+  { 8, 11 },
+}, {
+  labels = { "North", "South" },
+  grouped = true,
+})
+```
+
 | Option | Type | Default |
 | --- | --- | --- |
 | `width` | number in [0.01, 1] | `0.8` |
 | `color` | color string | next palette color |
+| `colors` | table of color strings, one per series | palette colors |
 | `label` | string | no legend entry |
+| `labels` | table of strings, one per series | descriptor labels or none |
 | `alpha` | number in [0, 1] | `1` |
 | `edgecolor` | color string | `#ffffff` |
+| `grouped` | boolean | `true` for multiple series |
+| `stacked` | boolean | `false` |
 
 `width` is a fraction of the smallest spacing between x positions (or 1 for a
-single bar / categorical positions). Negative values draw downward from zero.
-The automatic y-axis includes zero. Bars are not grouped or stacked
-automatically.
+single bar / categorical position). In grouped mode that width is shared by all
+series in a group, so every group stays centered on its category position. In
+stacked mode positive and negative values accumulate separately from zero.
+`stacked = true` and `grouped = true` are mutually exclusive. `label` applies to
+a single series; use `labels` (or descriptor labels) for multiple series. The
+`labels` and `colors` tables must have exactly one entry per value series.
+
+Negative values draw downward from zero. The automatic x extent includes grouped
+offsets, and the automatic y extent includes stacked bottoms and total heights.
+The y-axis includes zero. Category ticks are emitted once per call, even when the
+call contains several series.
 
 ### Labels and titles
 
@@ -351,7 +379,7 @@ includes, but is not limited to:
 ## Limitations
 
 - SVG only; no interactive display yet.
-- No date axes, 3-D plots, images, subplots, or stacked/grouped bars.
+- No date axes, 3-D plots, images, or subplots.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - One color per series; per-bar color arrays are not supported.
 - Only one categorical x-axis mapping is used per figure.
@@ -379,6 +407,12 @@ Returns a renderer-agnostic scene table:
     { kind = "line", x = {...}, y = {...}, style = {...} },
     { kind = "scatter", x = {...}, y = {...}, style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8 },
+    -- Grouped bars keep category centers in x and add a per-series offset:
+    { kind = "bar", x = {...}, y = {...}, width = 0.4, mode = "grouped",
+      grouped = true, offset = -0.2, offsets = {...} },
+    -- Stacked bars add the bottom/top interval for every bar:
+    { kind = "bar", x = {...}, y = {...}, width = 0.8, mode = "stacked",
+      stacked = true, bottom = {...}, top = {...}, stack = {...} },
     { kind = "hist", edges = {...}, counts = {...} },
   },
   annotations = {
@@ -397,4 +431,7 @@ Returns a renderer-agnostic scene table:
 with 5% padding, or the explicit `xlim`/`ylim` values. Log-axis limits are
 padded in log space and remain positive. Annotations retain data coordinates
 and style so another backend can apply its own coordinate transform; they do not
-affect the exported limits.
+affect the exported limits. Bar series always keep category centers in `x`.
+Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
+series expose the per-bar `bottom`, `top`, and `stack` arrays so a backend does
+not have to infer the layout from the rendered SVG.

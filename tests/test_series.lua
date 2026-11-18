@@ -128,6 +128,53 @@ test("numeric bars, negative values, and explicit bar width work", function()
   assert_well_formed_svg(svg)
 end)
 
+test("grouped bars share category ticks and carry one legend label per series", function()
+  local fig = plt.figure()
+  fig:bar({ "alpha", "beta" }, {
+    { 2, 4 },
+    { 3, 1 },
+  }, {
+    labels = { "left", "right" },
+  })
+  fig:legend()
+  local svg = fig:to_svg()
+  assert_equal(count_occurrences(svg, '<rect class="bar"'), 4)
+  assert_contains(svg, '>alpha</text>')
+  assert_contains(svg, '>beta</text>')
+  assert_contains(svg, 'data-label="left"')
+  assert_contains(svg, 'data-label="right"')
+  assert_contains(svg, '>left</text>')
+  assert_contains(svg, '>right</text>')
+  assert_well_formed_svg(svg)
+end)
+
+test("stacked bars accept descriptor series and custom colors", function()
+  local fig = plt.figure()
+  fig:bar({ "a", "b" }, {
+    { values = { 2, 3 }, label = "first" },
+    { values = { 4, -1 }, label = "second", color = "#123456" },
+  }, { stacked = true })
+  local svg = fig:to_svg()
+  assert_equal(count_occurrences(svg, '<rect class="bar"'), 4)
+  assert_contains(svg, 'data-label="first"')
+  assert_contains(svg, 'data-label="second"')
+  assert_contains(svg, 'fill="#123456"')
+  assert_well_formed_svg(svg)
+end)
+
+test("bar accepts separate value series arguments", function()
+  local fig = plt.figure()
+  fig:bar({ "a", "b" }, { 2, 4 }, { 3, 1 }, {
+    label = { "first", "second" },
+    grouped = true,
+  })
+  local svg = fig:to_svg()
+  assert_equal(count_occurrences(svg, '<rect class="bar"'), 4)
+  assert_contains(svg, 'data-label="first"')
+  assert_contains(svg, 'data-label="second"')
+  assert_well_formed_svg(svg)
+end)
+
 test("explicit limits control the ticks", function()
   local fig = plt.figure()
   fig:plot({ 1, 2 }, { 3, 4 })
