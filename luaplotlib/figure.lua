@@ -979,6 +979,40 @@ end
 -- Horizontal bars for a single numeric series.  Category labels are placed on
 -- the y axis; values extend horizontally from zero.
 -- Pie/donut chart.  Values must be non-negative and sum to a positive total.
+-- Basic 3-D projection: isometric-style x/y with a z offset.  This is a
+-- projected 2-D plot, not a full 3-D axes implementation.
+function Figure:plot3(x, y, z, opts)
+  local xv = data.sequence(x, "plot3 x")
+  local yv = data.sequence(y, "plot3 y")
+  local zv = data.sequence(z, "plot3 z")
+  if #xv ~= #yv or #xv ~= #zv then
+    fail("plot3 x, y, and z must have the same length")
+  end
+  local px, py = {}, {}
+  for i = 1, #xv do
+    px[i] = xv[i] + 0.5 * zv[i]
+    py[i] = yv[i] + 0.5 * zv[i]
+  end
+  self._projection3d = true
+  return self:plot(px, py, opts)
+end
+
+function Figure:scatter3(x, y, z, opts)
+  local xv = data.sequence(x, "scatter3 x")
+  local yv = data.sequence(y, "scatter3 y")
+  local zv = data.sequence(z, "scatter3 z")
+  if #xv ~= #yv or #xv ~= #zv then
+    fail("scatter3 x, y, and z must have the same length")
+  end
+  local px, py = {}, {}
+  for i = 1, #xv do
+    px[i] = xv[i] + 0.5 * zv[i]
+    py[i] = yv[i] + 0.5 * zv[i]
+  end
+  self._projection3d = true
+  return self:scatter(px, py, opts)
+end
+
 function Figure:fill_between(x, y1, y2, opts)
   opts = util.check_options(opts, FILL_OPTIONS, "fill_between")
   local xv = data.sequence(x, "fill_between x")

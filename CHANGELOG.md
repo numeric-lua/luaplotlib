@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0
+
+- basic projected 3-D line/scatter (`plot3`, `scatter3`);
+- 112 tests.
+
 ## 2.2.0
 
 - automatic shared x/y limits in subplots (`sharex`, `sharey`);
