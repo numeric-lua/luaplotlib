@@ -328,6 +328,7 @@ function Figure.new(opts)
     _color_serial = 0,
     _title = nil,
     _twin = nil,
+    _twiny = nil,
     _xlabel = nil,
     _ylabel = nil,
     _xlim = nil,
@@ -880,6 +881,25 @@ function Figure:twinx()
   }, Figure)
   self._twin = twin
   return twin
+end
+
+-- Create a secondary x axis sharing the y axis.  The returned object supports
+-- the normal series methods and its own xlim/xscale/xlabel; it renders on the
+-- top side.
+function Figure:twiny()
+  if self._twiny ~= nil then return self._twiny end
+  local twiny = setmetatable({
+    _parent = self,
+    _series = {},
+    _color_serial = 0,
+    _xscale = "linear",
+    _xlim = nil,
+    _xlabel = nil,
+    _xtick_format = nil,
+    _xdate_format = nil,
+  }, Figure)
+  self._twiny = twiny
+  return twiny
 end
 
 function Figure:xdate(format)

@@ -296,6 +296,12 @@ Create a secondary y axis sharing the x axis. The returned object supports
 `plot`, `scatter`, `errorbar`, and `bar`, plus `ylim`, `yscale`, and `ylabel`.
 It renders on the right with independent ticks and a right-side label.
 
+### `fig:twiny()`
+
+Create a secondary x axis sharing the y axis. The returned object supports
+`plot`, `scatter`, and `errorbar`, plus `xlim`, `xscale`, `xlabel`, and
+`xtick_format`. It renders on the top with independent ticks and label.
+
 ### Limits
 
 ```lua

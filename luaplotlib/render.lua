@@ -24,6 +24,7 @@ local function layout(fig)
   if fig._colorbar then right = right - 62 end
   if fig._twin then right = right - 58 end
   local top = math.min(48, math.max(24, height * 0.10))
+  if fig._twiny then top = top + 52 end
   local bottom = height - math.min(66, math.max(36, height * 0.16))
 
   if right - left < 20 or bottom - top < 20 then
@@ -909,6 +910,23 @@ function M.to_svg(fig)
   local yscale = fig._yscale or "linear"
   local extents = data_extents(fig, xscale, yscale)
   local twin = fig._twin
+  local twiny = fig._twiny
+  local twiny_extents = twiny and data_extents(twiny,
+    twiny._xscale or "linear", yscale) or nil
+  if twiny_extents ~= nil then
+    if extents == nil then extents = twiny_extents
+    else
+      if twiny_extents.has_y then
+        extents.has_y = true
+        if extents.min_y == nil or twiny_extents.min_y < extents.min_y then
+          extents.min_y = twiny_extents.min_y
+        end
+        if extents.max_y == nil or twiny_extents.max_y > extents.max_y then
+          extents.max_y = twiny_extents.max_y
+        end
+      end
+    end
+  end
   local twin_extents = twin and data_extents(twin, xscale,
     twin._yscale or "linear") or nil
   if twin_extents ~= nil then
@@ -936,6 +954,15 @@ function M.to_svg(fig)
     extents and extents.has_y and extents.min_y or nil,
     extents and extents.has_y and extents.max_y or nil,
     y_target, extents and extents.baseline_y or false, 0, 1)
+
+  local twiny_xaxis
+  if twiny ~= nil then
+    twiny_xaxis = make_axis("twin xlim", twiny._xscale or "linear",
+      twiny._xlim,
+      twiny_extents and twiny_extents.has_x and twiny_extents.min_x or nil,
+      twiny_extents and twiny_extents.has_x and twiny_extents.max_x or nil,
+      x_target, false, 0, 1)
+  end
 
   local twin_yaxis
   if twin ~= nil then
@@ -1024,6 +1051,15 @@ function M.to_svg(fig)
     local transformed = xaxis.to_axis(value)
     return geom.left +
       (transformed - xaxis.minimum) / (xaxis.maximum - xaxis.minimum) * geom.plot_width
+  end
+
+  local function map_x2(value)
+    if (twiny._xscale or "linear") == "log" and value <= 0 then
+      return geom.left
+    end
+    local transformed = twiny_xaxis.to_axis(value)
+    return geom.left + (transformed - twiny_xaxis.minimum) /
+      (twiny_xaxis.maximum - twiny_xaxis.minimum) * geom.plot_width
   end
 
   local function map_y(value)
@@ -1129,6 +1165,20 @@ function M.to_svg(fig)
     add('  </g>')
   end
 
+  if twiny ~= nil then
+    add('  <g class="series-layer twiny-series" clip-path="url(#' .. clip_id .. ')">')
+    for _, series in ipairs(twiny._series) do
+      if series.kind == "line" then
+        render_line(series, map_x2, map_y, buf)
+      elseif series.kind == "scatter" then
+        render_scatter(series, map_x2, map_y, buf)
+      elseif series.kind == "errorbar" then
+        render_errorbar(series, map_x2, map_y, buf)
+      end
+    end
+    add('  </g>')
+  end
+
   if #(fig._annotations or {}) > 0 then
     add('  <g class="annotation-layer" clip-path="url(#' .. clip_id .. ')">')
     for index, annotation in ipairs(fig._annotations) do
@@ -1157,6 +1207,29 @@ function M.to_svg(fig)
       printf('   <text class="ylabel" x="%s" y="%s" font-size="13" fill="%s" text-anchor="middle" transform="rotate(90 %s %s)">%s</text>',
         util.fmt(x), util.fmt(center_y), TEXT_COLOR, util.fmt(x),
         util.fmt(center_y), util.escape_xml(twin._ylabel))
+    end
+    add('  </g>')
+  end
+
+  if twiny ~= nil then
+    add('  <g class="twiny-axis">')
+    printf('   <path class="spine" d="M %s %s L %s %s" fill="none" stroke="%s" stroke-width="1"/>',
+      util.fmt(geom.left), util.fmt(geom.top), util.fmt(geom.right),
+      util.fmt(geom.top), AXIS_COLOR)
+    for _, value in ipairs(twiny_xaxis.ticks) do
+      local x = map_x2(value)
+      printf('   <line class="tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+        util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.top - 5),
+        AXIS_COLOR)
+      local label = format_value(value, twiny._xtick_format)
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="middle">%s</text>',
+        util.fmt(x), util.fmt(geom.top - 9), TEXT_COLOR,
+        util.escape_xml(label))
+    end
+    if twiny._xlabel ~= nil then
+      printf('   <text class="xlabel" x="%s" y="%s" font-size="13" fill="%s" text-anchor="middle">%s</text>',
+        util.fmt(geom.left + geom.plot_width / 2), util.fmt(14),
+        TEXT_COLOR, util.escape_xml(twiny._xlabel))
     end
     add('  </g>')
   end

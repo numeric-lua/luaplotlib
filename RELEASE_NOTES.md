@@ -1,19 +1,17 @@
-# luaplotlib 1.1.0
+# luaplotlib 1.2.0
 
 Pure-Lua, matplotlib-inspired SVG/HTML plotting.
 
 ## Highlights
 
-- pie charts with labels, custom colors, percentage labels, start angle, and
-  radius control;
-- donut charts with configurable inner radius;
-- optional pie legend;
-- pie/donut scene export;
-- 103 tests.
+- secondary x axis through `fig:twiny()`;
+- independent top-axis limits, scale, label, and tick formatting;
+- twin-x line/scatter/error-bar series;
+- scene export metadata for the secondary x axis;
+- 104 tests.
 
-The 1.0 surface remains: line/scatter/histogram/bar/barh/error-bar/box/heatmap/
-contour plots, linear/log/date/twin axes, subplots, custom ticks, SVG/HTML, and
-scene export.
+The 1.1 surface remains: pie/donut, barh, twin y axes, subplots, heatmaps,
+boxplots, contours, custom ticks, date axes, SVG/HTML, and scene export.
 
 ## Install
 

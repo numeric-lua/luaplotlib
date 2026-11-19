@@ -353,6 +353,29 @@ function M.from_figure(figure)
     end
   end
 
+  if figure._twiny ~= nil then
+    local twiny = figure._twiny
+    scene.twiny = {
+      xlabel = twiny._xlabel,
+      xscale = twiny._xscale or "linear",
+      xlim = twiny._xlim and { twiny._xlim[1], twiny._xlim[2] } or nil,
+      series = {},
+    }
+    for _, series in ipairs(twiny._series or {}) do
+      local copy = { kind = series.kind, style = copy_style(series.style or {}) }
+      if series.kind == "line" or series.kind == "scatter" then
+        copy.x = copy_array(series.x)
+        copy.y = copy_array(series.y)
+      elseif series.kind == "errorbar" then
+        copy.x = copy_array(series.x)
+        copy.y = copy_array(series.y)
+        copy.yerr = copy_array(series.yerr)
+        if series.xerr then copy.xerr = copy_array(series.xerr) end
+      end
+      scene.twiny.series[#scene.twiny.series + 1] = copy
+    end
+  end
+
   if figure._category_ticks then
     scene.category_ticks = {}
     for index, tick in ipairs(figure._category_ticks) do

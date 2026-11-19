@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- secondary x axis via `fig:twiny()` with top ticks, label, and independent
+  limits/scale;
+- twiny line/scatter/error-bar series and scene metadata;
+- 104 tests.
+
 ## 1.1.0
 
 - pie and donut charts with labels, colors, percentages, start angle, radius,
