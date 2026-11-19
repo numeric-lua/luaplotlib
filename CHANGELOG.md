@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.0
+
+- subplot-level grid/facecolor propagation and first-axes plot/scatter delegates;
+- 110 tests.
+
 ## 2.0.0
 
 - configurable grid color/width/linestyle;

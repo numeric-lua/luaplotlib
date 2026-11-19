@@ -1,6 +1,5 @@
-# luaplotlib 2.0.0
+# luaplotlib 2.1.0
 
-- configurable grid styling;
-- figure facecolor;
-- SVG role/ARIA labels;
-- 109 tests.
+- subplot grid/facecolor propagation;
+- subplot first-axes plot/scatter convenience;
+- 110 tests.

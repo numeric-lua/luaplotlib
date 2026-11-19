@@ -80,6 +80,7 @@ function SubplotFigure.new(rows, cols, opts)
     _title = title,
     _gap = gap, _margin = margin, _top = top,
     _cell_width = cell_width, _cell_height = cell_height,
+    _facecolor = "#ffffff",
   }, SubplotFigure)
 end
 
@@ -90,6 +91,31 @@ function SubplotFigure:title(text)
 end
 
 SubplotFigure.suptitle = SubplotFigure.title
+
+function SubplotFigure:grid(enabled, opts)
+  for row = 1, self.rows do
+    for col = 1, self.cols do self.axes[row][col]:grid(enabled, opts) end
+  end
+  return self
+end
+
+function SubplotFigure:facecolor(color)
+  self._facecolor = util.check_color(color, "subplots facecolor")
+  for row = 1, self.rows do
+    for col = 1, self.cols do self.axes[row][col]:facecolor(color) end
+  end
+  return self
+end
+
+function SubplotFigure:plot(...)
+  self.axes[1][1]:plot(...)
+  return self
+end
+
+function SubplotFigure:scatter(...)
+  self.axes[1][1]:scatter(...)
+  return self
+end
 
 function SubplotFigure:axes_at(row, col)
   row = check_count(row, "subplot row")
@@ -151,8 +177,8 @@ function SubplotFigure:to_svg()
     util.fmt(self.width), util.fmt(self.height), util.fmt(self.width),
     util.fmt(self.height), util.fmt(self.dpi), self.rows, self.cols)
   buffers[#buffers + 1] = string.format(
-    ' <rect class="figure-background" width="%s" height="%s" fill="#ffffff"/>',
-    util.fmt(self.width), util.fmt(self.height))
+    ' <rect class="figure-background" width="%s" height="%s" fill="%s"/>',
+    util.fmt(self.width), util.fmt(self.height), self._facecolor or "#ffffff")
   if self._title ~= nil then
     buffers[#buffers + 1] = string.format(
       ' <text class="suptitle" x="%s" y="%s" font-size="20" fill="#222222" ' ..
