@@ -192,10 +192,9 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-Early MVP (`0.2.0`). The SVG backend, line/scatter/histogram/bar/error-bar and
-annotation rendering, linear/log axis machinery, legend, tests, and examples are
-functional. The repository is staged for `numeric-lua/luaplotlib`; it has not
-been released or published.
+`0.3.0`. The SVG backend, line/scatter/histogram/bar/error-bar and annotation
+rendering, linear/log axis machinery, legend, scene export, tests, and examples
+are functional. Subplots remain the next major milestone.
 
 ## Limitations
 
