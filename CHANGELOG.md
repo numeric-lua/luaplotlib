@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.3.0
+
+- 3-D surface/mesh wireframes;
+- 116 tests.
+
 ## 4.2.0
 
 - 3-D axis ticks, x/y/z labels, view control, explicit limits, and depth-sorted series;

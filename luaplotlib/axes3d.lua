@@ -51,6 +51,31 @@ function Axes3D:xlim(lo, hi) self._xlim = { lo, hi }; return self end
 function Axes3D:ylim(lo, hi) self._ylim = { lo, hi }; return self end
 function Axes3D:zlim(lo, hi) self._zlim = { lo, hi }; return self end
 
+function Axes3D:surface(x, y, z, opts)
+  local data = require("luaplotlib.data")
+  local rows, cols, zz = data.matrix(z, "surface z")
+  local xx = x
+  local yy = y
+  if type(x) ~= "table" or type(x[1]) ~= "table" then
+    xx = {}
+    for r = 1, rows do xx[r] = {}; for c = 1, cols do xx[r][c] = x[r] or r end end
+  end
+  if type(y) ~= "table" or type(y[1]) ~= "table" then
+    yy = {}
+    for r = 1, rows do yy[r] = {}; for c = 1, cols do yy[r][c] = y[c] or c end end
+  end
+  opts = opts or {}
+  self._series[#self._series + 1] = {
+    kind = "surface", x = xx, y = yy, z = zz, rows = rows, cols = cols,
+    color = opts.color or "#1f77b4", label = opts.label,
+  }
+  return self
+end
+
+function Axes3D:mesh(x, y, z, opts)
+  return self:surface(x, y, z, opts)
+end
+
 function Axes3D:title(text) self._title = text; return self end
 function Axes3D:xlabel(text) self._xlabel = text; return self end
 function Axes3D:ylabel(text) self._ylabel = text; return self end
@@ -60,10 +85,18 @@ local function bounds(axes)
   local b = { minx = math.huge, maxx = -math.huge, miny = math.huge,
     maxy = -math.huge, minz = math.huge, maxz = -math.huge }
   for _, s in ipairs(axes._series) do
+    if s.kind == "surface" then
+      for r = 1, s.rows do for c = 1, s.cols do
+        b.minx = math.min(b.minx, s.x[r][c]); b.maxx = math.max(b.maxx, s.x[r][c])
+        b.miny = math.min(b.miny, s.y[r][c]); b.maxy = math.max(b.maxy, s.y[r][c])
+        b.minz = math.min(b.minz, s.z[r][c]); b.maxz = math.max(b.maxz, s.z[r][c])
+      end end
+    else
     for i = 1, #s.x do
       b.minx = math.min(b.minx, s.x[i]); b.maxx = math.max(b.maxx, s.x[i])
       b.miny = math.min(b.miny, s.y[i]); b.maxy = math.max(b.maxy, s.y[i])
       b.minz = math.min(b.minz, s.z[i]); b.maxz = math.max(b.maxz, s.z[i])
+    end
     end
   end
   if b.minx == math.huge then
@@ -132,6 +165,23 @@ function Axes3D:to_svg()
   end)
   for _, s in ipairs(ordered) do
     add('<g class="series series-'..s.kind..'">')
+    if s.kind == "surface" then
+      for r = 1, s.rows do
+        for c = 1, s.cols - 1 do
+          local x1,y1 = project(s.x[r][c], s.y[r][c], s.z[r][c])
+          local x2,y2 = project(s.x[r][c+1], s.y[r][c+1], s.z[r][c+1])
+          add(string.format('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',x1,y1,x2,y2,s.color))
+        end
+      end
+      for c = 1, s.cols do
+        for r = 1, s.rows - 1 do
+          local x1,y1 = project(s.x[r][c], s.y[r][c], s.z[r][c])
+          local x2,y2 = project(s.x[r+1][c], s.y[r+1][c], s.z[r+1][c])
+          add(string.format('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',x1,y1,x2,y2,s.color))
+        end
+      end
+      add('</g>')
+    else
     for i=1,#s.x do
       local px,py=project(s.x[i],s.y[i],s.z[i])
       if s.kind=="scatter" then
@@ -142,6 +192,7 @@ function Axes3D:to_svg()
       end
     end
     add('</g>')
+  end
   end
   local function tick(value, lo, hi)
     local p = (value - lo) / (hi - lo)
