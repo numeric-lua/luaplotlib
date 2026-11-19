@@ -1,5 +1,7 @@
-# luaplotlib 4.1.0
+# luaplotlib 4.2.0
 
-- true 3-D axes via `plt.figure3d`;
-- orthographic box projection, line/scatter, title, and x label;
-- 114 tests.
+- 3-D axis ticks for x/y/z;
+- x/y/z labels and explicit limits;
+- `view(elev, azim)` control;
+- depth-sorted series drawing;
+- 115 tests.

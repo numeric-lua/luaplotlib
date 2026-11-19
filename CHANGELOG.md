@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.2.0
+
+- 3-D axis ticks, x/y/z labels, view control, explicit limits, and depth-sorted series;
+- 115 tests.
+
 ## 4.1.0
 
 - true 3-D axes (`plt.figure3d`) with orthographic box projection, line/scatter, title, and axis labels;

@@ -14,7 +14,7 @@ function Axes3D.new(opts)
   return setmetatable({
     width = opts.width or 720, height = opts.height or 520, dpi = opts.dpi or 100,
     elev = opts.elev or 30, azim = opts.azim or -60,
-    title = nil, xlabel = "x", ylabel = "y", zlabel = "z",
+    title = nil, _xlabel = "x", _ylabel = "y", _zlabel = "z",
     _series = {}, _xlim = nil, _ylim = nil, _zlim = nil,
   }, Axes3D)
 end
@@ -38,6 +38,18 @@ function Axes3D:scatter(x, y, z, opts)
     z = zv, color = opts.color or "#ff7f0e", label = opts.label }
   return self
 end
+
+function Axes3D:view(elev, azim)
+  if type(elev) ~= "number" or type(azim) ~= "number" then
+    error("view expects numeric elev and azim")
+  end
+  self.elev, self.azim = elev, azim
+  return self
+end
+
+function Axes3D:xlim(lo, hi) self._xlim = { lo, hi }; return self end
+function Axes3D:ylim(lo, hi) self._ylim = { lo, hi }; return self end
+function Axes3D:zlim(lo, hi) self._zlim = { lo, hi }; return self end
 
 function Axes3D:title(text) self._title = text; return self end
 function Axes3D:xlabel(text) self._xlabel = text; return self end
@@ -64,8 +76,10 @@ local function bounds(axes)
   end
   b.minx, b.maxx = axes._xlim and axes._xlim[1] or pad(b.minx, b.maxx),
     axes._xlim and axes._xlim[2] or pad(b.maxx, b.maxx)
-  b.miny, b.maxy = pad(b.miny, b.maxy)
-  b.minz, b.maxz = pad(b.minz, b.maxz)
+  b.miny, b.maxy = axes._ylim and axes._ylim[1] or pad(b.miny, b.maxy),
+    axes._ylim and axes._ylim[2] or pad(b.miny, b.maxy)
+  b.minz, b.maxz = axes._zlim and axes._zlim[1] or pad(b.minz, b.maxz),
+    axes._zlim and axes._zlim[2] or pad(b.minz, b.maxz)
   return b
 end
 
@@ -106,7 +120,17 @@ function Axes3D:to_svg()
     add(string.format('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke-width="1"/>',x1,y1,x2,y2))
   end
   add('</g>')
-  for _, s in ipairs(self._series) do
+  local ordered = {}
+  for _, s in ipairs(self._series) do ordered[#ordered+1] = s end
+  table.sort(ordered, function(a, b)
+    local function depth(s)
+      local total = 0
+      for i=1,#s.z do total = total + s.z[i] end
+      return total / #s.z
+    end
+    return depth(a) < depth(b)
+  end)
+  for _, s in ipairs(ordered) do
     add('<g class="series series-'..s.kind..'">')
     for i=1,#s.x do
       local px,py=project(s.x[i],s.y[i],s.z[i])
@@ -119,7 +143,40 @@ function Axes3D:to_svg()
     end
     add('</g>')
   end
-  add(string.format('<text x="%s" y="%s" font-size="12" text-anchor="middle">%s</text>',cx,self.height-24,util.escape_xml(self._xlabel or "x")))
+  local function tick(value, lo, hi)
+    local p = (value - lo) / (hi - lo)
+    if p < 0 then p = 0 elseif p > 1 then p = 1 end
+    return p
+  end
+  local function ticks_for(lo, hi)
+    local result = {}
+    for i = 0, 4 do result[#result+1] = lo + (hi - lo) * i / 4 end
+    return result
+  end
+  add('<g class="axes3d-ticks" font-size="10" fill="#333333" stroke="#333333">')
+  for _, value in ipairs(ticks_for(b.minx, b.maxx)) do
+    local p = tick(value, b.minx, b.maxx)
+    local x1, y1 = project(value, b.miny, b.minz)
+    local x2, y2 = project(value, b.miny - (b.maxy-b.miny)*0.04, b.minz)
+    add(string.format('<line x1="%s" y1="%s" x2="%s" y2="%s"/>',x1,y1,x2,y2))
+    add(string.format('<text x="%s" y="%s" text-anchor="middle" stroke="none">%s</text>',x2,y2+12,util.fmt_tick(value)))
+  end
+  for _, value in ipairs(ticks_for(b.miny, b.maxy)) do
+    local x1, y1 = project(b.minx, value, b.minz)
+    local x2, y2 = project(b.minx - (b.maxx-b.minx)*0.04, value, b.minz)
+    add(string.format('<line x1="%s" y1="%s" x2="%s" y2="%s"/>',x1,y1,x2,y2))
+    add(string.format('<text x="%s" y="%s" text-anchor="end" stroke="none">%s</text>',x2-4,y2+4,util.fmt_tick(value)))
+  end
+  for _, value in ipairs(ticks_for(b.minz, b.maxz)) do
+    local x1, y1 = project(b.minx, b.miny, value)
+    local x2, y2 = project(b.minx, b.miny - (b.maxy-b.miny)*0.04, value)
+    add(string.format('<line x1="%s" y1="%s" x2="%s" y2="%s"/>',x1,y1,x2,y2))
+    add(string.format('<text x="%s" y="%s" text-anchor="middle" stroke="none">%s</text>',x2,y2+12,util.fmt_tick(value)))
+  end
+  add('</g>')
+  add(string.format('<text class="xlabel" x="%s" y="%s" font-size="12" text-anchor="middle">%s</text>',cx,self.height-46,util.escape_xml(self._xlabel or "x")))
+  add(string.format('<text class="ylabel" x="%s" y="%s" font-size="12" text-anchor="middle">%s</text>',cx-180,self.height-70,util.escape_xml(self._ylabel or "y")))
+  add(string.format('<text class="zlabel" x="%s" y="%s" font-size="12" text-anchor="middle">%s</text>',cx+180,self.height-70,util.escape_xml(self._zlabel or "z")))
   add('</svg>')
   return table.concat(out,"\n").."\n"
 end
