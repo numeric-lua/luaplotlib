@@ -1,0 +1,36 @@
+local plt = require("luaplotlib")
+
+test("renders pie slices, labels, and legend", function()
+  local fig = plt.figure({ width = 700, height = 460 })
+  fig:pie({ 2, 3, 5 }, {
+    labels = { "A", "B", "C" }, autopct = "%.0f%%", startangle = 90,
+  })
+  local svg = fig:to_svg()
+  assert_equal(select(2, svg:gsub('class="pie%-slice"', "")), 3)
+  assert_contains(svg, 'class="pie-percent"')
+  assert_contains(svg, '>A<')
+  assert_contains(svg, '>B<')
+  assert_contains(svg, '>C<')
+  assert_contains(svg, 'data-pie="true"')
+  local path = (TMPDIR or "/tmp") .. "/luaplotlib-pie.svg"
+  assert_equal(fig:savefig(path), path)
+  os.remove(path)
+end)
+
+test("renders a donut with an inner radius", function()
+  local fig = plt.figure()
+  fig:donut({ 1, 1 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'class="pie-inner"')
+  assert_equal(select(2, svg:gsub('class="pie%-slice"', "")), 2)
+end)
+
+test("pie validates values and labels", function()
+  local fig = plt.figure()
+  assert_error("non%-negative", function() fig:pie({ 1, -1 }) end)
+  assert_error("positive total", function() fig:pie({ 0, 0 }) end)
+  assert_error("match", function() fig:pie({ 1, 2 }, { labels = { "one" } }) end)
+  assert_error("one entry per value", function()
+    fig:pie({ 1, 2 }, { colors = { "#fff" } })
+  end)
+end)

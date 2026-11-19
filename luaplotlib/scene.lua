@@ -125,6 +125,22 @@ function M.from_figure(figure)
     annotations = {},
   }
 
+  if figure._pie ~= nil then
+    scene.pie = {
+      radius = figure._pie.radius,
+      inner_radius = figure._pie.inner_radius,
+      slices = {},
+    }
+    for index, slice in ipairs(figure._pie.slices) do
+      scene.pie.slices[index] = {
+        value = slice.value, percent = slice.percent,
+        start_angle = slice.start_angle, end_angle = slice.end_angle,
+        color = slice.color, label = slice.label,
+      }
+    end
+    return scene
+  end
+
   local state = {}
   for _, series in ipairs(figure._series or {}) do
     local copy = {

@@ -56,6 +56,17 @@ local BAR_OPTIONS = {
   show_values = true,
 }
 
+local PIE_OPTIONS = {
+  labels = true,
+  colors = true,
+  color = true,
+  startangle = true,
+  autopct = true,
+  radius = true,
+  inner_radius = true,
+  legend = true,
+}
+
 local BARH_OPTIONS = {
   color = true,
   label = true,
@@ -913,6 +924,82 @@ end
 
 -- Horizontal bars for a single numeric series.  Category labels are placed on
 -- the y axis; values extend horizontally from zero.
+-- Pie/donut chart.  Values must be non-negative and sum to a positive total.
+function Figure:pie(values, opts)
+  opts = util.check_options(opts, PIE_OPTIONS, "pie")
+  local values_v = data.sequence(values, "pie values")
+  if #values_v == 0 then fail("pie values must be non-empty") end
+  local total = 0
+  for _, value in ipairs(values_v) do
+    if value < 0 then fail("pie values must be non-negative") end
+    total = total + value
+  end
+  if total <= 0 then fail("pie values must have a positive total") end
+  local labels = nil
+  if opts.labels ~= nil then
+    labels = data.labels(opts.labels, "pie labels")
+    if #labels ~= #values_v then
+      fail("pie labels must match the number of values")
+    end
+  end
+  local colors_list = {}
+  if opts.colors ~= nil then
+    if type(opts.colors) ~= "table" or #opts.colors ~= #values_v then
+      fail("pie colors must have one entry per value")
+    end
+    for i = 1, #opts.colors do
+      colors_list[i] = util.check_color(opts.colors[i], "pie colors[" .. i .. "]")
+    end
+  else
+    for i = 1, #values_v do colors_list[i] = colors.next(i - 1) end
+  end
+  local startangle = opts.startangle
+  if startangle == nil then startangle = 90 end
+  startangle = util.check_number(startangle, "pie startangle")
+  local radius = opts.radius
+  if radius == nil then radius = 0.34 end
+  radius = util.check_number(radius, "pie radius", 0.05, 0.5)
+  local inner = opts.inner_radius
+  if inner == nil then inner = 0 end
+  inner = util.check_number(inner, "pie inner_radius", 0, 0.95)
+  local autopct = opts.autopct
+  if autopct == nil then autopct = false end
+  if autopct ~= false and autopct ~= true and type(autopct) ~= "string" then
+    fail("pie autopct must be false, true, or a format string")
+  end
+  local legend = opts.legend
+  if legend == nil then legend = true end
+  util.check_boolean(legend, "pie legend")
+  local slices = {}
+  local angle = startangle
+  for index, value in ipairs(values_v) do
+    local sweep = 360 * value / total
+    slices[index] = {
+      value = value,
+      percent = 100 * value / total,
+      start_angle = angle,
+      end_angle = angle - sweep,
+      color = colors_list[index],
+      label = labels and labels[index] or ("slice " .. index),
+    }
+    angle = angle - sweep
+  end
+  self._pie = {
+    slices = slices, radius = radius, inner_radius = inner,
+    autopct = autopct, legend = legend,
+  }
+  return self
+end
+
+function Figure:donut(values, opts)
+  opts = opts or {}
+  if type(opts) ~= "table" then fail("donut options must be a table") end
+  local copy = {}
+  for key, value in pairs(opts) do copy[key] = value end
+  if copy.inner_radius == nil then copy.inner_radius = 0.55 end
+  return self:pie(values, copy)
+end
+
 function Figure:barh(labels_or_y, values, opts)
   opts = util.check_options(opts, BARH_OPTIONS, "barh")
   local values_v = data.sequence(values, "barh values")

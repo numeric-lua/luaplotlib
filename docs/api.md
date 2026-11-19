@@ -81,6 +81,12 @@ Draw a connected line series.
 A single-point line still renders its point. Unknown options, invalid colors,
 and malformed data raise errors.
 
+### `fig:pie(values[, opts])` / `fig:donut(values[, opts])`
+
+Pie and donut charts. Values must be non-negative with a positive total.
+Options include `labels`, `colors`, `startangle`, `radius`, `inner_radius`,
+`autopct`, and `legend`. `donut` defaults `inner_radius` to 0.55.
+
 ### `fig:barh(labels_or_y, values, opts)`
 
 Horizontal bars for a single numeric series. Category labels are placed on the

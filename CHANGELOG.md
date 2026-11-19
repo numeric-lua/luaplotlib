@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- pie and donut charts with labels, colors, percentages, start angle, radius,
+  inner radius, and optional legend;
+- pie scene export;
+- 103 tests.
+
 ## 1.0.0
 
 - scene export parity for image, box, contour, barh, and twin-axis series;
