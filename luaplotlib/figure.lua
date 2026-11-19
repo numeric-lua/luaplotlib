@@ -52,6 +52,8 @@ local BAR_OPTIONS = {
   edgecolor = true,
   stacked = true,
   grouped = true,
+  bar_colors = true,
+  show_values = true,
 }
 
 local CONTOUR_OPTIONS = {
@@ -678,6 +680,29 @@ function Figure:bar(labels_or_x, values, opts, ...)
     width_fraction = util.check_number(opts.width, "bar width", 0.01, 1)
   end
 
+  local bar_colors = nil
+  if opts.bar_colors ~= nil then
+    if type(opts.bar_colors) ~= "table" then
+      fail("bar bar_colors must be a table")
+    end
+    if series_count ~= 1 then
+      fail("bar bar_colors supports a single value series")
+    end
+    if #opts.bar_colors ~= #xv then
+      fail(string.format(
+        "bar bar_colors must have one color per bar (%d ~= %d)",
+        #opts.bar_colors, #xv))
+    end
+    bar_colors = {}
+    for i = 1, #opts.bar_colors do
+      bar_colors[i] = util.check_color(opts.bar_colors[i],
+        "bar bar_colors[" .. i .. "]")
+    end
+  end
+  if opts.show_values ~= nil then
+    util.check_boolean(opts.show_values, "bar show_values")
+  end
+
   local positions = {}
   if kind == "categories" then
     for i = 1, #xv do
@@ -782,6 +807,8 @@ function Figure:bar(labels_or_x, values, opts, ...)
       mode = mode,
       series_index = i,
       series_count = series_count,
+      bar_colors = bar_colors,
+      show_values = opts.show_values == true,
     }
     if mode == "grouped" then
       entry.offset = 0

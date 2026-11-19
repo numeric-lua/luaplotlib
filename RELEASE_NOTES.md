@@ -1,14 +1,15 @@
-# luaplotlib 0.5.0
+# luaplotlib 0.6.0
 
 Pure-Lua, matplotlib-inspired SVG plotting.
 
 ## Highlights
 
-- custom x/y tick positions and labels;
-- tick formatter callbacks for generated ticks;
-- rotation for crowded categorical labels;
-- subplots, heatmaps, boxplots, and contours from 0.4;
-- 87 tests.
+- per-bar colors via `bar_colors`;
+- optional numeric value labels via `show_values`;
+- 89 tests.
+
+The 0.5 surface remains: custom ticks/formatters, subplots, heatmaps, boxplots,
+contours, log axes, and scene export.
 
 ## Install
 

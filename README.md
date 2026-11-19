@@ -194,9 +194,10 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`0.5.0`. The SVG backend supports line/scatter/histogram/bar/error-bar/box/
+`0.6.0`. The SVG backend supports line/scatter/histogram/bar/error-bar/box/
 heatmap/contour plots, annotations, linear/log axes, subplots, custom ticks,
-legends, and scene export. Tests and examples are included.
+per-bar colors, value labels, legends, and scene export. Tests and examples
+are included.
 
 ## Limitations
 

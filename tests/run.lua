@@ -193,6 +193,7 @@ local test_files = {
   "test_boxplot.lua",
   "test_contour.lua",
   "test_ticks.lua",
+  "test_bar_polish.lua",
 }
 
 print("luaplotlib test suite")

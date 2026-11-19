@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+- per-bar colors for single-series bar charts;
+- optional value labels on bars;
+- 89 tests.
+
 ## 0.5.0
 
 - custom `xticks`/`yticks` with optional labels;

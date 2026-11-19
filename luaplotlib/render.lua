@@ -679,10 +679,21 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
     end
     local top = math.min(base_y, value_y)
     local height = math.abs(base_y - value_y)
+    local fill = series.bar_colors and series.bar_colors[i] or style.color
     buf[#buf + 1] = string.format(
       '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
-      style.color, edge, opacity)
+      fill, edge, opacity)
+    if series.show_values then
+      local center_x = (x1 + x2) / 2
+      local value_y = value_y or top
+      local text_y = top - 4
+      if top > base_y then text_y = top + 14 end
+      buf[#buf + 1] = string.format(
+        '   <text class="bar-value" x="%s" y="%s" font-size="10" text-anchor="middle" fill="%s">%s</text>',
+        util.fmt(center_x), util.fmt(text_y), TEXT_COLOR,
+        util.fmt_tick(value))
+    end
   end
   buf[#buf + 1] = '  </g>'
 end
