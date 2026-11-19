@@ -1,16 +1,16 @@
-# luaplotlib 0.7.0
+# luaplotlib 0.8.0
 
-Pure-Lua, matplotlib-inspired SVG plotting.
+Pure-Lua, matplotlib-inspired SVG/HTML plotting.
 
 ## Highlights
 
-- horizontal bar charts with category labels on the y axis;
-- per-bar colors and numeric value labels for `barh`;
-- 91 tests.
+- date-formatted x axes (`fig:xdate("%Y-%m-%d")`);
+- standalone HTML export (`fig:to_html`, `fig:save_html`);
+- `imshow` accepts 2-D tensor-like objects through `totable()`;
+- 95 tests.
 
-The 0.6 surface remains: vertical bars with per-bar colors/value labels,
-subplots, heatmaps, boxplots, contours, custom ticks, log axes, and scene
-export.
+The 0.7 surface remains: horizontal/vertical bars, subplots, heatmaps,
+boxplots, contours, custom ticks, log axes, and scene export.
 
 ## Install
 

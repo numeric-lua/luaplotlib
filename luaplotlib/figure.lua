@@ -332,6 +332,7 @@ function Figure.new(opts)
     _yticks = nil,
     _xtick_format = nil,
     _ytick_format = nil,
+    _xdate_format = nil,
   }, Figure)
 end
 
@@ -845,6 +846,16 @@ local function checked_ticks(values, name)
     result[index] = util.check_number(values[index], name .. " value " .. index)
   end
   return result
+end
+
+-- Format x-axis tick labels as calendar dates.  Values are Unix timestamps;
+-- format uses os.date syntax (default "%Y-%m-%d").
+function Figure:xdate(format)
+  if format ~= nil and type(format) ~= "string" then
+    fail("xdate format must be a string or nil")
+  end
+  self._xdate_format = format or "%Y-%m-%d"
+  return self
 end
 
 function Figure:xticks(values, labels)
@@ -1363,6 +1374,34 @@ function Figure:to_svg()
   -- Required lazily so that the renderer can evolve without a require cycle.
   local render = require("luaplotlib.render")
   return render.to_svg(self)
+end
+
+function Figure:to_html(title)
+  local svg = self:to_svg()
+  local heading = title and util.escape_xml(tostring(title)) or "luaplotlib figure"
+  return table.concat({
+    "<!doctype html>",
+    '<html lang="en"><head><meta charset="utf-8">',
+    "<title>" .. heading .. "</title>",
+    "<style>body{margin:0;padding:24px;background:#f5f5f5;font-family:Helvetica,Arial,sans-serif}figure{margin:0 auto;background:#fff;padding:12px;max-width:100%;box-shadow:0 1px 4px #0002}svg{max-width:100%;height:auto}</style>",
+    "</head><body><figure>",
+    svg,
+    "</figure></body></html>",
+  }, "\n") .. "\n"
+end
+
+function Figure:save_html(path, title)
+  util.check_string(path, "save_html path", false)
+  local contents = self:to_html(title)
+  local handle, err = io.open(path, "wb")
+  if handle == nil then
+    fail("could not open " .. string.format("%q", path) .. ": " .. tostring(err))
+  end
+  local wrote, write_error = handle:write(contents)
+  local closed, close_error = handle:close()
+  if not wrote then fail("could not write HTML: " .. tostring(write_error)) end
+  if not closed then fail("could not close HTML: " .. tostring(close_error)) end
+  return path
 end
 
 function Figure:savefig(path)

@@ -195,6 +195,8 @@ local test_files = {
   "test_ticks.lua",
   "test_bar_polish.lua",
   "test_barh.lua",
+  "test_date_html.lua",
+  "test_tensor_matrix.lua",
 }
 
 print("luaplotlib test suite")

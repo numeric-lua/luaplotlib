@@ -854,6 +854,14 @@ function M.to_svg(fig)
     end
     return util.fmt_tick(fig_value)
   end
+  local function format_x(fig_value)
+    if fig._xdate_format ~= nil then
+      local ok, text = pcall(os.date, fig._xdate_format, math.floor(fig_value))
+      if not ok then util.fail("xdate formatting failed: " .. tostring(text), 3) end
+      return text
+    end
+    return format_value(fig_value, fig._xtick_format)
+  end
   local x_display = {}
   if categories then
     for _, category in ipairs(categories) do
@@ -867,13 +875,13 @@ function M.to_svg(fig)
       x_display[#x_display + 1] = {
         value = value,
         label = fig._xticks.labels and fig._xticks.labels[index] or
-          format_value(value, fig._xtick_format),
+          format_x(value),
       }
     end
   else
     for _, value in ipairs(xticks) do
       x_display[#x_display + 1] = {
-        value = value, label = format_value(value, fig._xtick_format),
+        value = value, label = format_x(value),
       }
     end
   end

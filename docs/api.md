@@ -148,7 +148,8 @@ y-axis includes zero. Empty bins are not emitted as rectangles.
 
 ### `fig:imshow(values, opts)`
 
-Renders a rectangular matrix as a heatmap. `opts.vmin`/`vmax` set the color
+Renders a rectangular matrix as a heatmap. Accepts a plain 2-D table or a
+2-D tensor-like object exposing `dim()` and `totable()`. `opts.vmin`/`vmax` set the color
 range; `colorbar` defaults to true. Values must be finite.
 
 ### `fig:boxplot(samples, opts)`
@@ -217,6 +218,15 @@ optional labels. Labels must match the number of values.
 
 Set a formatter callback for generated and custom tick labels. The callback
 receives the data value and returns a string.
+
+### `fig:xdate([format])`
+
+Formats x tick labels as calendar dates from Unix timestamps. `format` uses
+`os.date` syntax and defaults to `"%Y-%m-%d"`.
+
+### `fig:to_html([title])` / `fig:save_html(path[, title])`
+
+Embed the SVG in a standalone HTML document.
 
 ### `fig:xtick_rotation(angle)`
 

@@ -316,6 +316,17 @@ end
 -- are accepted because categories are only ever rendered as text.
 -- Validate a rectangular 2-D numeric table and return rows, cols, values.
 function M.matrix(value, name)
+  if M.is_tensor_like(value) then
+    local dimensions = tensor_dimensions(value)
+    if dimensions ~= 2 then
+      error("luaplotlib: " .. name .. " must be a 2-D tensor", 3)
+    end
+    local ok, converted = method(value, "totable")
+    if not ok or type(converted) ~= "table" then
+      error("luaplotlib: " .. name .. " tensor does not expose totable()", 3)
+    end
+    value = converted
+  end
   if type(value) ~= "table" then
     error("luaplotlib: " .. name .. " must be a 2-D table", 3)
   end

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- calendar-date x-axis labels via `xdate`;
+- standalone HTML export with `to_html`/`save_html`;
+- `imshow` accepts 2-D tensor-like matrices;
+- 95 tests.
+
 ## 0.7.0
 
 - horizontal bar charts (`barh`) with category labels, per-bar colors, options,
