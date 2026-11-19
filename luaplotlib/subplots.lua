@@ -27,7 +27,7 @@ function SubplotFigure.new(rows, cols, opts)
   opts = util.check_options(opts, {
     width = true, height = true, dpi = true, title = true,
     gap = true, margin = true, xscale = true, yscale = true,
-    sharex = true, sharey = true,
+    sharex = true, sharey = true, width_ratios = true, height_ratios = true,
   }, "subplots")
 
   rows = check_count(rows, "subplots rows")
@@ -57,10 +57,48 @@ function SubplotFigure.new(rows, cols, opts)
   local title = opts.title
   if title ~= nil then util.check_string(title, "subplots title", true) end
   local top = margin + (title ~= nil and TITLE_SPACE or 0)
-  local cell_width = (width - 2 * margin - (cols - 1) * gap) / cols
-  local cell_height = (height - top - margin - (rows - 1) * gap) / rows
-  if cell_width < 40 or cell_height < 40 then
-    util.fail("subplots canvas is too small for the requested grid", 3)
+  local function ratios(name, count)
+    local list = opts[name]
+    if list == nil then
+      list = {}
+      for index = 1, count do list[index] = 1 end
+    end
+    if type(list) ~= "table" or #list ~= count then
+      util.fail("subplots " .. name .. " must have one entry per row/column", 3)
+    end
+    local total = 0
+    for index = 1, count do
+      if type(list[index]) ~= "number" or list[index] <= 0 then
+        util.fail("subplots " .. name .. " must be positive", 3)
+      end
+      total = total + list[index]
+    end
+    return list, total
+  end
+  local col_ratios, col_total = ratios("width_ratios", cols)
+  local row_ratios, row_total = ratios("height_ratios", rows)
+  local available_width = width - 2 * margin - (cols - 1) * gap
+  local available_height = height - top - margin - (rows - 1) * gap
+  local col_widths, x_positions = {}, {}
+  local x = margin
+  for col = 1, cols do
+    col_widths[col] = available_width * col_ratios[col] / col_total
+    x_positions[col] = x
+    x = x + col_widths[col] + gap
+  end
+  local row_heights, y_positions = {}, {}
+  local y = top
+  for row = 1, rows do
+    row_heights[row] = available_height * row_ratios[row] / row_total
+    y_positions[row] = y
+    y = y + row_heights[row] + gap
+  end
+  for row = 1, rows do
+    for col = 1, cols do
+      if col_widths[col] < 40 or row_heights[row] < 40 then
+        util.fail("subplots canvas is too small for the requested grid", 3)
+      end
+    end
   end
 
   local axes = {}
@@ -68,7 +106,7 @@ function SubplotFigure.new(rows, cols, opts)
     axes[row] = {}
     for col = 1, cols do
       axes[row][col] = Figure.new({
-        width = cell_width, height = cell_height, dpi = dpi,
+        width = col_widths[col], height = row_heights[row], dpi = dpi,
         xscale = opts.xscale, yscale = opts.yscale,
       })
     end
@@ -80,7 +118,9 @@ function SubplotFigure.new(rows, cols, opts)
     axes = axes,
     _title = title,
     _gap = gap, _margin = margin, _top = top,
-    _cell_width = cell_width, _cell_height = cell_height,
+    _cell_width = col_widths[1], _cell_height = row_heights[1],
+    _x_positions = x_positions, _y_positions = y_positions,
+    _col_widths = col_widths, _row_heights = row_heights,
     _facecolor = "#ffffff", _sharex = opts.sharex == true,
     _sharey = opts.sharey == true,
   }, SubplotFigure)
@@ -224,8 +264,8 @@ function SubplotFigure:to_svg()
   end
   for row = 1, self.rows do
     for col = 1, self.cols do
-      local x = self._margin + (col - 1) * (self._cell_width + self._gap)
-      local y = self._top + (row - 1) * (self._cell_height + self._gap)
+      local x = self._x_positions[col]
+      local y = self._y_positions[row]
       local child = self.axes[row][col]:to_svg()
       child = child:gsub("^<%?xml[^>]*%>%s*", "")
       buffers[#buffers + 1] = string.format(

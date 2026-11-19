@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.0.0
+
+- gridspec-style width/height ratios for subplots;
+- 113 tests.
+
 ## 3.0.0
 
 - basic projected 3-D line/scatter (`plot3`, `scatter3`);

@@ -70,3 +70,11 @@ test("automatically shares subplot x and y limits", function()
   assert_true(axes[1][1]._xlim[2] >= 6)
   assert_true(axes[1][2]._ylim[2] >= 9)
 end)
+
+test("supports gridspec-style width and height ratios", function()
+  local fig = plt.subplots(1, 2, { width = 600, height = 300,
+    width_ratios = { 2, 1 } })
+  assert_true(fig.axes[1][1].width > fig.axes[1][2].width)
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-subplots="1x2"')
+end)
