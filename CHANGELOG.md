@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0
+
+- `contourf` filled contours with optional overlay lines;
+- 108 tests.
+
 ## 1.4.0
 
 - `fill_betweenx` horizontal bands and `pcolormesh` heatmap alias;

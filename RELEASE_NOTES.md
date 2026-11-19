@@ -1,5 +1,5 @@
-# luaplotlib 1.4.0
+# luaplotlib 1.5.0
 
-- `fill_betweenx` horizontal bands;
-- `pcolormesh` heatmap alias;
-- 107 tests.
+- `contourf` filled field plus optional contour lines;
+- `pcolor` alias for `pcolormesh`;
+- 108 tests.

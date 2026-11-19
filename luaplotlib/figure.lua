@@ -1012,6 +1012,25 @@ function Figure:pcolormesh(values, opts)
   return self:imshow(values, opts)
 end
 
+function Figure:pcolor(values, opts)
+  return self:imshow(values, opts)
+end
+
+function Figure:contourf(values, opts)
+  opts = opts or {}
+  if type(opts) ~= "table" then fail("contourf options must be a table") end
+  local image_opts = {
+    vmin = opts.vmin, vmax = opts.vmax, colorbar = opts.colorbar,
+    label = opts.label,
+  }
+  self:imshow(values, image_opts)
+  if opts.contours ~= false then
+    self:contour(values, { levels = opts.levels, color = opts.color,
+      linewidth = opts.linewidth })
+  end
+  return self
+end
+
 function Figure:step(x, y, opts)
   opts = util.check_options(opts, STEP_OPTIONS, "step")
   local xv = data.sequence(x, "step x")

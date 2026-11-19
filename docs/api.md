@@ -168,6 +168,10 @@ Stem plot with vertical lines and markers at each point.
 
 Stacked filled areas; `opts.labels` and `opts.colors` match the series list.
 
+### `fig:contourf(values[, opts])`
+
+Filled contour-style field with optional overlay contour lines (`opts.contours = false` disables them).
+
 ### `fig:imshow(values, opts)`
 
 Renders a rectangular matrix as a heatmap. Accepts a plain 2-D table or a
