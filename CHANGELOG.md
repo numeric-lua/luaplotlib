@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- horizontal bar charts (`barh`) with category labels, per-bar colors, options,
+  and value labels;
+- 91 tests.
+
 ## 0.6.0
 
 - per-bar colors for single-series bar charts;

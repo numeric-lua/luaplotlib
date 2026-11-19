@@ -56,6 +56,17 @@ local BAR_OPTIONS = {
   show_values = true,
 }
 
+local BARH_OPTIONS = {
+  color = true,
+  label = true,
+  labels = true,
+  height = true,
+  alpha = true,
+  edgecolor = true,
+  bar_colors = true,
+  show_values = true,
+}
+
 local CONTOUR_OPTIONS = {
   levels = true,
   color = true,
@@ -865,6 +876,75 @@ function Figure:xtick_rotation(angle)
     fail("xtick_rotation must be an integer in [-90, 90]")
   end
   self._xtick_rotation = angle
+  return self
+end
+
+-- Horizontal bars for a single numeric series.  Category labels are placed on
+-- the y axis; values extend horizontally from zero.
+function Figure:barh(labels_or_y, values, opts)
+  opts = util.check_options(opts, BARH_OPTIONS, "barh")
+  local values_v = data.sequence(values, "barh values")
+  if #values_v == 0 then fail("barh values must be non-empty") end
+  local kind, labels_or_positions
+  if type(labels_or_y) == "table" and #labels_or_y > 0 and
+      type(labels_or_y[1]) ~= "number" then
+    kind = "categories"
+    labels_or_positions = data.labels(labels_or_y, "barh labels")
+  else
+    kind = "numeric"
+    labels_or_positions = data.sequence(labels_or_y, "barh y")
+  end
+  if #labels_or_positions ~= #values_v then
+    fail(string.format(
+      "barh labels/y and values must have the same length (%d ~= %d)",
+      #labels_or_positions, #values_v))
+  end
+  local height = 0.7
+  if opts.height ~= nil then
+    height = util.check_number(opts.height, "barh height", 0.01, 1)
+  end
+  local color = opts.color and util.check_color(opts.color, "barh color") or
+    colors.next(self._color_serial)
+  if opts.color == nil then self._color_serial = self._color_serial + 1 end
+  if opts.label ~= nil then util.check_string(opts.label, "barh label", true) end
+  local edgecolor = opts.edgecolor and
+    util.check_color(opts.edgecolor, "barh edgecolor") or nil
+  local alpha = 1
+  if opts.alpha ~= nil then alpha = util.check_alpha(opts.alpha, "barh alpha") end
+  local positions = {}
+  local labels = {}
+  if kind == "categories" then
+    for i = 1, #labels_or_positions do
+      positions[i] = i
+      labels[i] = labels_or_positions[i]
+    end
+    self._yticks = {
+      values = positions,
+      labels = labels,
+    }
+  else
+    for i = 1, #labels_or_positions do positions[i] = labels_or_positions[i] end
+  end
+  local bar_colors = nil
+  if opts.bar_colors ~= nil then
+    if type(opts.bar_colors) ~= "table" or #opts.bar_colors ~= #values_v then
+      fail("barh bar_colors must have one color per bar")
+    end
+    bar_colors = {}
+    for i = 1, #opts.bar_colors do
+      bar_colors[i] = util.check_color(opts.bar_colors[i],
+        "barh bar_colors[" .. i .. "]")
+    end
+  end
+  if opts.show_values ~= nil then
+    util.check_boolean(opts.show_values, "barh show_values")
+  end
+  self._series[#self._series + 1] = {
+    kind = "barh", x = values_v, y = positions, height = height,
+    bar_colors = bar_colors, show_values = opts.show_values == true,
+    style = { color = color, label = opts.label, alpha = alpha,
+      edgecolor = edgecolor },
+  }
   return self
 end
 

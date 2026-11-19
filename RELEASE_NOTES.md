@@ -1,15 +1,16 @@
-# luaplotlib 0.6.0
+# luaplotlib 0.7.0
 
 Pure-Lua, matplotlib-inspired SVG plotting.
 
 ## Highlights
 
-- per-bar colors via `bar_colors`;
-- optional numeric value labels via `show_values`;
-- 89 tests.
+- horizontal bar charts with category labels on the y axis;
+- per-bar colors and numeric value labels for `barh`;
+- 91 tests.
 
-The 0.5 surface remains: custom ticks/formatters, subplots, heatmaps, boxplots,
-contours, log axes, and scene export.
+The 0.6 surface remains: vertical bars with per-bar colors/value labels,
+subplots, heatmaps, boxplots, contours, custom ticks, log axes, and scene
+export.
 
 ## Install
 

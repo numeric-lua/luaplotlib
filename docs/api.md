@@ -81,6 +81,11 @@ Draw a connected line series.
 A single-point line still renders its point. Unknown options, invalid colors,
 and malformed data raise errors.
 
+### `fig:barh(labels_or_y, values, opts)`
+
+Horizontal bars for a single numeric series. Category labels are placed on the
+y axis; `bar_colors` and `show_values` behave like `bar`.
+
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
 Draw a connected line and markers with symmetric vertical error bars, plus

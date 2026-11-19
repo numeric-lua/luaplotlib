@@ -129,6 +129,13 @@ local function data_extents(fig, xscale, yscale)
       include_x(series.cols or 1, series_index, 1, "contour")
       include_y(0, series_index, 1, "contour")
       include_y(series.rows or 1, series_index, 1, "contour")
+    elseif series.kind == "barh" then
+      include_x(0, series_index, 1, "barh baseline")
+      for i = 1, #series.x do
+        include_x(series.x[i], series_index, i, "barh value")
+        include_y(series.y[i] - series.height / 2, series_index, i, "barh")
+        include_y(series.y[i] + series.height / 2, series_index, i, "barh")
+      end
     elseif series.kind == "box" then
       include_x(series.position - series.width / 2, series_index, 1, "box")
       include_x(series.position + series.width / 2, series_index, 1, "box")
@@ -592,6 +599,42 @@ local function render_hist(series, map_x, map_y, baseline, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function render_barh(series, map_x, map_y, baseline, buf)
+  local style = series.style
+  local opacity = ""
+  if style.alpha < 1 then
+    local a = util.fmt(style.alpha)
+    opacity = string.format(' fill-opacity="%s" stroke-opacity="%s"', a, a)
+  end
+  local edge = style.edgecolor or "#ffffff"
+  buf[#buf + 1] = '  <g class="series series-barh">'
+  for i = 1, #series.x do
+    local value = series.x[i]
+    local center = map_y(series.y[i])
+    local top = center - math.abs(map_y(series.y[i] + series.height / 2) -
+      map_y(series.y[i] - series.height / 2)) / 2
+    local height = math.abs(map_y(series.y[i] + series.height / 2) -
+      map_y(series.y[i] - series.height / 2))
+    local value_x = map_x(value)
+    local left = math.min(baseline, value_x)
+    local width = math.abs(value_x - baseline)
+    local fill = series.bar_colors and series.bar_colors[i] or style.color
+    buf[#buf + 1] = string.format(
+      '   <rect class="barh" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+      util.fmt(left), util.fmt(top), util.fmt(width), util.fmt(height), fill,
+      edge, opacity)
+    if series.show_values then
+      local text_x = value >= 0 and (value_x + 4) or (value_x - 4)
+      local anchor = value >= 0 and "start" or "end"
+      buf[#buf + 1] = string.format(
+        '   <text class="barh-value" x="%s" y="%s" font-size="10" text-anchor="%s" fill="%s">%s</text>',
+        util.fmt(text_x), util.fmt(center + 3), anchor, TEXT_COLOR,
+        util.fmt_tick(value))
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_contour(series, map_x, map_y, buf)
   buf[#buf + 1] = '  <g class="contour">'
   for _, segment in ipairs(series.segments) do
@@ -928,6 +971,8 @@ function M.to_svg(fig)
       render_hist(series, map_x, map_y, y_baseline, buf)
     elseif series.kind == "bar" then
       render_bar(series, map_x, map_y, y_baseline, yscale, buf)
+    elseif series.kind == "barh" then
+      render_barh(series, map_x, map_y, map_x(0), buf)
     elseif series.kind == "contour" then
       render_contour(series, map_x, map_y, buf)
     elseif series.kind == "box" then
