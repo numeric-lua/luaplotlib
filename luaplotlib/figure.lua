@@ -54,6 +54,21 @@ local BAR_OPTIONS = {
   grouped = true,
 }
 
+local CONTOUR_OPTIONS = {
+  levels = true,
+  color = true,
+  linewidth = true,
+  label = true,
+}
+
+
+local BOX_OPTIONS = {
+  color = true,
+  label = true,
+  labels = true,
+  width = true,
+}
+
 local ERRORBAR_OPTIONS = {
   color = true,
   label = true,
@@ -298,6 +313,8 @@ function Figure.new(opts)
     _legend_requested = false,
     _legend_opts = { loc = "upper right", frame = true },
     _category_ticks = nil,
+    _colorbar = false,
+    _xtick_rotation = 0,
   }, Figure)
 end
 
@@ -772,6 +789,196 @@ function Figure:bar(labels_or_x, values, opts, ...)
     end
     self._series[#self._series + 1] = entry
   end
+  return self
+end
+
+-- Render a rectangular scalar matrix as a heatmap.  opts.vmin/vmax override
+-- the automatic range; opts.colorbar defaults to true.
+function Figure:xtick_rotation(angle)
+  if type(angle) ~= "number" or angle % 1 ~= 0 or angle < -90 or angle > 90 then
+    fail("xtick_rotation must be an integer in [-90, 90]")
+  end
+  self._xtick_rotation = angle
+  return self
+end
+
+function Figure:imshow(values, opts)
+  opts = util.check_options(opts, {
+    vmin = true, vmax = true, colorbar = true, label = true,
+  }, "imshow")
+  local rows, cols, matrix = data.matrix(values, "imshow values")
+  local minimum, maximum = math.huge, -math.huge
+  for r = 1, rows do
+    for c = 1, cols do
+      local value = matrix[r][c]
+      if value < minimum then minimum = value end
+      if value > maximum then maximum = value end
+    end
+  end
+  if opts.vmin ~= nil then
+    minimum = util.check_number(opts.vmin, "imshow vmin")
+  end
+  if opts.vmax ~= nil then
+    maximum = util.check_number(opts.vmax, "imshow vmax")
+  end
+  if maximum <= minimum then
+    maximum = minimum + 1
+  end
+  local colorbar = opts.colorbar
+  if colorbar == nil then colorbar = true end
+  util.check_boolean(colorbar, "imshow colorbar")
+  self._colorbar = colorbar
+  self._series[#self._series + 1] = {
+    kind = "image", values = matrix, rows = rows, cols = cols,
+    vmin = minimum, vmax = maximum,
+    style = { color = "#000000", label = opts.label, alpha = 1 },
+  }
+  return self
+end
+
+-- Box-and-whisker plot for one or more numeric samples.
+-- Contour lines computed with marching squares.  opts.levels is a count or an
+-- explicit level table; each level becomes a separate line series.
+function Figure:contour(values, opts)
+  opts = util.check_options(opts, CONTOUR_OPTIONS, "contour")
+  local rows, cols, matrix = data.matrix(values, "contour values")
+  local minimum, maximum = math.huge, -math.huge
+  for r = 1, rows do
+    for c = 1, cols do
+      local value = matrix[r][c]
+      if value < minimum then minimum = value end
+      if value > maximum then maximum = value end
+    end
+  end
+  local levels = opts.levels
+  if levels == nil then levels = 5 end
+  if type(levels) == "number" then
+    levels = util.check_integer(levels, "contour levels", 1, 50)
+    local list = {}
+    for i = 1, levels do
+      list[i] = minimum + (maximum - minimum) * i / (levels + 1)
+    end
+    levels = list
+  elseif type(levels) ~= "table" or #levels == 0 then
+    fail("contour levels must be a positive count or a non-empty table")
+  end
+  local color = opts.color and util.check_color(opts.color, "contour color") or
+    colors.next(self._color_serial)
+  if opts.color == nil then self._color_serial = self._color_serial + 1 end
+  local linewidth = opts.linewidth
+  if linewidth == nil then linewidth = 1.5 end
+  linewidth = util.check_number(linewidth, "contour linewidth", 0)
+  for _, level in ipairs(levels) do
+    if type(level) ~= "number" then fail("contour levels must be numeric") end
+    local segments = {}
+    local function crossing(a, b, x0, y0, x1, y1)
+      local da, db = a - level, b - level
+      if da == 0 or db == 0 or da * db > 0 then return nil end
+      local t = da / (da - db)
+      return { x0 + (x1 - x0) * t, y0 + (y1 - y0) * t }
+    end
+    for r = 1, rows - 1 do
+      for c = 1, cols - 1 do
+        local x0, y0 = c - 1, rows - r
+        local v0, v1 = matrix[r][c], matrix[r][c + 1]
+        local v2, v3 = matrix[r + 1][c + 1], matrix[r + 1][c]
+        local intersections = {}
+        local function add(point)
+          if point ~= nil then intersections[#intersections + 1] = point end
+        end
+        add(crossing(v0, v1, x0, y0 + 1, x0 + 1, y0 + 1))
+        add(crossing(v1, v2, x0 + 1, y0 + 1, x0 + 1, y0))
+        add(crossing(v2, v3, x0 + 1, y0, x0, y0))
+        add(crossing(v3, v0, x0, y0, x0, y0 + 1))
+        if #intersections == 2 then
+          segments[#segments + 1] = {
+            intersections[1][1], intersections[1][2],
+            intersections[2][1], intersections[2][2],
+          }
+        elseif #intersections == 4 then
+          segments[#segments + 1] = {
+            intersections[1][1], intersections[1][2],
+            intersections[2][1], intersections[2][2],
+          }
+          segments[#segments + 1] = {
+            intersections[3][1], intersections[3][2],
+            intersections[4][1], intersections[4][2],
+          }
+        end
+      end
+    end
+    self._series[#self._series + 1] = {
+      kind = "contour", segments = segments, level = level, rows = rows,
+      cols = cols,
+      style = { color = color, label = opts.label, linewidth = linewidth,
+        alpha = 1 },
+    }
+  end
+  return self
+end
+
+function Figure:boxplot(values, opts)
+  opts = util.check_options(opts, BOX_OPTIONS, "boxplot")
+  if type(values) ~= "table" or #values == 0 then
+    fail("boxplot expects a non-empty table of samples")
+  end
+  local samples = values
+  if type(values[1]) == "number" then samples = { values } end
+  local width = 0.6
+  if opts.width ~= nil then
+    width = util.check_number(opts.width, "boxplot width", 0.01, 1)
+  end
+  local labels = opts.labels
+  if labels ~= nil then
+    if type(labels) ~= "table" or #labels ~= #samples then
+      fail("boxplot labels must have one entry per sample")
+    end
+  end
+  local color = opts.color and util.check_color(opts.color, "boxplot color") or
+    colors.next(self._color_serial)
+  if opts.color == nil then self._color_serial = self._color_serial + 1 end
+  if opts.label ~= nil then util.check_string(opts.label, "boxplot label", true) end
+  local ticks = {}
+  for index, sample in ipairs(samples) do
+    local values_v = data.sequence(sample, "boxplot sample " .. index)
+    if #values_v == 0 then fail("boxplot samples must be non-empty") end
+    local sorted = {}
+    for i = 1, #values_v do sorted[i] = values_v[i] end
+    table.sort(sorted)
+    local function quantile(p)
+      if #sorted == 1 then return sorted[1] end
+      local position = ( #sorted - 1) * p
+      local lower = math.floor(position) + 1
+      local upper = math.min(#sorted, lower + 1)
+      local fraction = position - math.floor(position)
+      return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction
+    end
+    local q1, median, q3 = quantile(0.25), quantile(0.5), quantile(0.75)
+    local iqr = q3 - q1
+    local low_limit, high_limit = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    local whisker_low, whisker_high = q1, q3
+    for _, value in ipairs(sorted) do
+      if value >= low_limit and value <= q1 then whisker_low = value end
+      if value <= high_limit and value >= q3 then whisker_high = value end
+    end
+    local outliers = {}
+    for _, value in ipairs(sorted) do
+      if value < whisker_low or value > whisker_high then
+        outliers[#outliers + 1] = value
+      end
+    end
+    self._series[#self._series + 1] = {
+      kind = "box", position = index, width = width,
+      q1 = q1, median = median, q3 = q3,
+      low = whisker_low, high = whisker_high, outliers = outliers,
+      style = { color = color, label = opts.label, alpha = 1 },
+    }
+    ticks[#ticks + 1] = {
+      position = index,
+      label = labels and tostring(labels[index]) or ("sample " .. index),
+    }
+  end
+  self._category_ticks = ticks
   return self
 end
 

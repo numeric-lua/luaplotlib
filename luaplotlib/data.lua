@@ -314,6 +314,43 @@ end
 
 -- Validate the category labels used by fig:bar. Mixed string/number labels
 -- are accepted because categories are only ever rendered as text.
+-- Validate a rectangular 2-D numeric table and return rows, cols, values.
+function M.matrix(value, name)
+  if type(value) ~= "table" then
+    error("luaplotlib: " .. name .. " must be a 2-D table", 3)
+  end
+  local rows = #value
+  if rows == 0 then
+    error("luaplotlib: " .. name .. " must contain at least one row", 3)
+  end
+  local cols
+  local result = {}
+  for r = 1, rows do
+    local row = value[r]
+    if type(row) ~= "table" then
+      error("luaplotlib: " .. name .. " row " .. r .. " must be a table", 3)
+    end
+    if cols == nil then
+      cols = #row
+      if cols == 0 then
+        error("luaplotlib: " .. name .. " rows must be non-empty", 3)
+      end
+    elseif #row ~= cols then
+      error("luaplotlib: " .. name .. " rows must have equal length", 3)
+    end
+    result[r] = {}
+    for c = 1, cols do
+      local v = row[c]
+      if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then
+        error("luaplotlib: " .. name .. " contains a non-finite value at " ..
+          r .. "," .. c, 3)
+      end
+      result[r][c] = v
+    end
+  end
+  return rows, cols, result
+end
+
 function M.labels(value, name)
   name = name or "labels"
   if type(value) ~= "table" or #value == 0 then

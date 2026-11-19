@@ -141,6 +141,21 @@ If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
 y-axis includes zero. Empty bins are not emitted as rectangles.
 
+### `fig:imshow(values, opts)`
+
+Renders a rectangular matrix as a heatmap. `opts.vmin`/`vmax` set the color
+range; `colorbar` defaults to true. Values must be finite.
+
+### `fig:boxplot(samples, opts)`
+
+Draws box-and-whisker plots for one or more numeric samples. `opts.labels`
+names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
+
+### `fig:contour(values, opts)`
+
+Draws marching-squares contour lines. `opts.levels` is a level count or an
+explicit level table.
+
 ### `fig:bar(labels_or_x, values, opts)`
 
 Draw vertical bars. If `labels_or_x` is a table containing any strings, it is
@@ -187,6 +202,11 @@ Negative values draw downward from zero. The automatic x extent includes grouped
 offsets, and the automatic y extent includes stacked bottoms and total heights.
 The y-axis includes zero. Category ticks are emitted once per call, even when the
 call contains several series.
+
+### `fig:xtick_rotation(angle)`
+
+Rotates x tick labels by an integer in `[-90, 90]`. Useful for long categorical
+labels.
 
 ### Labels and titles
 
@@ -314,6 +334,22 @@ on an unchanged figure are deterministic.
 Writes the same SVG returned by `to_svg()` to `path` in binary mode and returns
 the path. It does not create parent directories. Use `to_svg()` if you need the
 string instead. File-open and write failures raise a `luaplotlib:` error.
+
+## Subplots
+
+`plt.subplots(rows, cols, opts)` returns a subplot figure and a row-major matrix
+of independent axes figures:
+
+```lua
+local fig, axes = plt.subplots(2, 2, { width = 900, height = 700 })
+axes[1][1]:plot(x, y)
+axes[2][2]:imshow(matrix)
+fig:title("Grid")
+fig:savefig("grid.svg")
+```
+
+The subplot figure supports `title`, `savefig`, `to_svg`, `axes_at`, and
+`share_limits("x" or "y"[, index])`. `gap` and `margin` are configurable.
 
 ## Automatic ranging and ticks
 

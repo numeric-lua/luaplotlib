@@ -48,6 +48,8 @@ luajit examples/histogram.lua
 luajit examples/errorbar.lua
 luajit examples/annotations.lua
 luajit examples/bars.lua
+luajit examples/heatmap.lua
+luajit examples/subplots.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -192,9 +194,9 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`0.3.0`. The SVG backend, line/scatter/histogram/bar/error-bar and annotation
-rendering, linear/log axis machinery, legend, scene export, tests, and examples
-are functional. Subplots remain the next major milestone.
+`0.4.0`. The SVG backend supports line/scatter/histogram/bar/error-bar/box/
+heatmap/contour plots, annotations, linear/log axes, subplots, legends, and
+scene export. Tests and examples are included.
 
 ## Limitations
 
@@ -202,10 +204,11 @@ are functional. Subplots remain the next major milestone.
   display server integration yet.
 - **Linear and log axes only.** Date axes, twin axes, and polar plots are not
   implemented.
-- **No advanced chart types.** Images, contour plots, 3-D plots, and subplots are
-  not implemented.
-- **Basic layout.** Margins are fixed/adaptive rather than a full layout engine;
-  many long categorical labels can overlap.
+- **No 3-D or pie charts yet.** Heatmaps, contours, and boxplots are available;
+  pie charts and 3-D plots are not.
+- **Basic layout.** Margins are adaptive, `xtick_rotation` helps crowded
+  categorical axes, and subplot gap/margin are configurable. There is no full
+  text-measurement layout engine yet.
 - **One color per bar series.** Colors are not split per bar, and categorical
   series with different label sets share one categorical x-axis.
 - **Heuristic tensor interop.** luatorch/numlua-style one-dimensional objects

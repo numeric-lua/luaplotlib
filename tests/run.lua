@@ -188,6 +188,10 @@ local test_files = {
   "test_scene.lua",
   "test_annotations.lua",
   "test_errors.lua",
+  "test_subplots.lua",
+  "test_heatmap.lua",
+  "test_boxplot.lua",
+  "test_contour.lua",
 }
 
 print("luaplotlib test suite")

@@ -21,6 +21,7 @@ local function layout(fig)
   local height = fig.height
   local left = math.min(72, math.max(36, width * 0.14))
   local right = width - math.min(28, math.max(12, width * 0.04))
+  if fig._colorbar then right = right - 62 end
   local top = math.min(48, math.max(24, height * 0.10))
   local bottom = height - math.min(66, math.max(36, height * 0.16))
 
@@ -82,7 +83,12 @@ local function data_extents(fig, xscale, yscale)
   end
 
   for series_index, series in ipairs(fig._series) do
-    if series.kind == "line" or series.kind == "scatter" then
+    if series.kind == "image" then
+      include_x(0, series_index, 1, "image")
+      include_x(series.cols, series_index, 1, "image")
+      include_y(0, series_index, 1, "image")
+      include_y(series.rows, series_index, 1, "image")
+    elseif series.kind == "line" or series.kind == "scatter" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "series")
         include_y(series.y[i], series_index, i, "series")
@@ -117,6 +123,19 @@ local function data_extents(fig, xscale, yscale)
         include_x(x + xerr, series_index, i, "errorbar x")
         include_y(y - yerr, series_index, i, "errorbar y")
         include_y(y + yerr, series_index, i, "errorbar y")
+      end
+    elseif series.kind == "contour" then
+      include_x(0, series_index, 1, "contour")
+      include_x(series.cols or 1, series_index, 1, "contour")
+      include_y(0, series_index, 1, "contour")
+      include_y(series.rows or 1, series_index, 1, "contour")
+    elseif series.kind == "box" then
+      include_x(series.position - series.width / 2, series_index, 1, "box")
+      include_x(series.position + series.width / 2, series_index, 1, "box")
+      include_y(series.low, series_index, 1, "box whisker")
+      include_y(series.high, series_index, 1, "box whisker")
+      for _, value in ipairs(series.outliers) do
+        include_y(value, series_index, 1, "box outlier")
       end
     elseif series.kind == "bar" then
       local half = series.width / 2
@@ -374,6 +393,53 @@ local function attribute(value)
   return util.escape_xml(value)
 end
 
+local function render_image(series, map_x, map_y, buf)
+  local colors = require("luaplotlib.colors")
+  buf[#buf + 1] = '  <g class="heatmap">'
+  for row = 1, series.rows do
+    for col = 1, series.cols do
+      local x0 = map_x(col - 1)
+      local x1 = map_x(col)
+      local y0 = map_y(series.rows - row)
+      local y1 = map_y(series.rows - row + 1)
+      local left = math.min(x0, x1)
+      local top = math.min(y0, y1)
+      local color = colors.heat(series.values[row][col], series.vmin,
+        series.vmax)
+      buf[#buf + 1] = string.format(
+        '   <rect class="heatmap-cell" x="%s" y="%s" width="%s" height="%s" fill="%s"/>',
+        util.fmt(left), util.fmt(top), util.fmt(math.abs(x1 - x0)),
+        util.fmt(math.abs(y1 - y0)), color)
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_colorbar(series, geom, buf)
+  local colors = require("luaplotlib.colors")
+  local x = geom.right + 14
+  local y = geom.top
+  local height = geom.plot_height
+  local steps = 40
+  buf[#buf + 1] = '  <g class="colorbar">'
+  for index = 1, steps do
+    local value = series.vmin + (series.vmax - series.vmin) *
+      ((index - 0.5) / steps)
+    buf[#buf + 1] = string.format(
+      '   <rect x="%s" y="%s" width="16" height="%s" fill="%s"/>',
+      util.fmt(x), util.fmt(y + height * (index - 1) / steps),
+      util.fmt(height / steps + 0.5), colors.heat(value, series.vmin,
+        series.vmax))
+  end
+  buf[#buf + 1] = string.format(
+    '   <text x="%s" y="%s" font-size="10" text-anchor="start">%s</text>',
+    util.fmt(x + 22), util.fmt(y + 10), util.fmt_tick(series.vmax))
+  buf[#buf + 1] = string.format(
+    '   <text x="%s" y="%s" font-size="10" text-anchor="start">%s</text>',
+    util.fmt(x + 22), util.fmt(y + height), util.fmt_tick(series.vmin))
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_line(series, map_x, map_y, buf)
   local style = series.style
   local color = style.color
@@ -524,6 +590,58 @@ local function render_hist(series, map_x, map_y, baseline, buf)
     end
   end
   buf[#buf + 1] = '  </g>'
+end
+
+local function render_contour(series, map_x, map_y, buf)
+  buf[#buf + 1] = '  <g class="contour">'
+  for _, segment in ipairs(series.segments) do
+    buf[#buf + 1] = string.format(
+      '   <line class="contour-segment" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+      util.fmt(map_x(segment[1])), util.fmt(map_y(segment[2])),
+      util.fmt(map_x(segment[3])), util.fmt(map_y(segment[4])),
+      series.style.color, util.fmt(series.style.linewidth))
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_box(series, map_x, map_y, buf)
+  local color = series.style.color
+  local half = series.width / 2
+  local left = series.position - half
+  local right = series.position + half
+  local x = map_x(series.position)
+  local top = map_y(series.q3)
+  local bottom = map_y(series.q1)
+  buf[#buf + 1] = string.format(
+    '  <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+    util.fmt(map_x(left)), util.fmt(top),
+    util.fmt(math.abs(map_x(right) - map_x(left))),
+    util.fmt(math.abs(bottom - top)), color, color)
+  buf[#buf + 1] = string.format(
+    '  <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+    util.fmt(map_x(left)), util.fmt(map_y(series.median)),
+    util.fmt(map_x(right)), util.fmt(map_y(series.median)), color)
+  buf[#buf + 1] = string.format(
+    '  <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+    util.fmt(x), util.fmt(map_y(series.q3)), util.fmt(x),
+    util.fmt(map_y(series.high)), color)
+  buf[#buf + 1] = string.format(
+    '  <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+    util.fmt(x), util.fmt(map_y(series.q1)), util.fmt(x),
+    util.fmt(map_y(series.low)), color)
+  buf[#buf + 1] = string.format(
+    '  <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+    util.fmt(map_x(left + 0.1)), util.fmt(map_y(series.high)),
+    util.fmt(map_x(right - 0.1)), util.fmt(map_y(series.high)), color)
+  buf[#buf + 1] = string.format(
+    '  <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+    util.fmt(map_x(left + 0.1)), util.fmt(map_y(series.low)),
+    util.fmt(map_x(right - 0.1)), util.fmt(map_y(series.low)), color)
+  for _, value in ipairs(series.outliers) do
+    buf[#buf + 1] = string.format(
+      '  <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
+      util.fmt(x), util.fmt(map_y(value)), color)
+  end
 end
 
 local function render_bar(series, map_x, map_y, baseline, yscale, buf)
@@ -755,7 +873,9 @@ function M.to_svg(fig)
 
   add('  <g class="series-layer" clip-path="url(#' .. clip_id .. ')">')
   for _, series in ipairs(fig._series) do
-    if series.kind == "line" then
+    if series.kind == "image" then
+      render_image(series, map_x, map_y, buf)
+    elseif series.kind == "line" then
       render_line(series, map_x, map_y, buf)
     elseif series.kind == "scatter" then
       render_scatter(series, map_x, map_y, buf)
@@ -763,6 +883,10 @@ function M.to_svg(fig)
       render_hist(series, map_x, map_y, y_baseline, buf)
     elseif series.kind == "bar" then
       render_bar(series, map_x, map_y, y_baseline, yscale, buf)
+    elseif series.kind == "contour" then
+      render_contour(series, map_x, map_y, buf)
+    elseif series.kind == "box" then
+      render_box(series, map_x, map_y, buf)
     elseif series.kind == "errorbar" then
       render_errorbar(series, map_x, map_y, buf)
     end
@@ -787,8 +911,16 @@ function M.to_svg(fig)
     local x = map_x(tick.value)
     printf('    <line class="tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
       util.fmt(x), util.fmt(geom.bottom), util.fmt(x), util.fmt(geom.bottom + 5), AXIS_COLOR)
-    printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="middle">%s</text>',
-      util.fmt(x), util.fmt(geom.bottom + 19), TEXT_COLOR,
+    local rotation = fig._xtick_rotation or 0
+    local transform = ""
+    local anchor = "middle"
+    if rotation ~= 0 then
+      transform = string.format(' transform="rotate(%d %s %s)"', rotation,
+        util.fmt(x), util.fmt(geom.bottom + 19))
+      anchor = rotation > 0 and "end" or "start"
+    end
+    printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="%s"%s>%s</text>',
+      util.fmt(x), util.fmt(geom.bottom + 19), TEXT_COLOR, anchor, transform,
       util.escape_xml(tick.label))
   end
   add('   </g>')
@@ -824,6 +956,11 @@ function M.to_svg(fig)
   end
   add('  </g>')
 
+  for _, series in ipairs(fig._series) do
+    if series.kind == "image" and fig._colorbar then
+      render_colorbar(series, geom, buf)
+    end
+  end
   render_legend(fig, geom, buf)
 
   add(' </g>')
