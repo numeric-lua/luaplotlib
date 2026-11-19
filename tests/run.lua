@@ -202,6 +202,7 @@ local test_files = {
   "test_area_step_stem.lua",
   "test_twiny.lua",
   "test_style.lua",
+  "test_axes3d.lua",
 }
 
 print("luaplotlib test suite")

@@ -6,10 +6,11 @@
 local Figure = require("luaplotlib.figure")
 local Scene = require("luaplotlib.scene")
 local SubplotFigure = require("luaplotlib.subplots")
+local Axes3D = require("luaplotlib.axes3d")
 
 local M = {
   _NAME = "luaplotlib",
-  _VERSION = "4.0.0",
+  _VERSION = "4.1.0",
   Figure = Figure,
   SubplotFigure = SubplotFigure,
   scene = Scene,
@@ -30,5 +31,8 @@ function M.subplots(rows, cols, opts)
   local figure = SubplotFigure.new(rows, cols, opts)
   return figure, figure.axes
 end
+
+function M.figure3d(opts) return Axes3D.new(opts) end
+M.Axes3D = Axes3D
 
 return M

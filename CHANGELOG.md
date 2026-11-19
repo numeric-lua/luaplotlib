@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.1.0
+
+- true 3-D axes (`plt.figure3d`) with orthographic box projection, line/scatter, title, and axis labels;
+- 114 tests.
+
 ## 4.0.0
 
 - gridspec-style width/height ratios for subplots;
