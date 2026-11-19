@@ -279,6 +279,14 @@ function SubplotFigure:to_svg()
   return table.concat(buffers, "\n") .. "\n"
 end
 
+function SubplotFigure:save_png(path)
+  return require("luaplotlib.export").png(self:to_svg(), path)
+end
+
+function SubplotFigure:save_pdf(path)
+  return require("luaplotlib.export").pdf(self:to_svg(), path)
+end
+
 function SubplotFigure:savefig(path)
   util.check_string(path, "savefig path", false)
   local svg = self:to_svg()

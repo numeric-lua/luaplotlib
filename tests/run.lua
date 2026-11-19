@@ -203,6 +203,7 @@ local test_files = {
   "test_twiny.lua",
   "test_style.lua",
   "test_axes3d.lua",
+  "test_export.lua",
 }
 
 print("luaplotlib test suite")

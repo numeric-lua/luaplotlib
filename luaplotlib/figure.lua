@@ -1766,6 +1766,16 @@ function Figure:save_html(path, title)
   return path
 end
 
+function Figure:save_png(path)
+  util.check_string(path, "save_png path", false)
+  return require("luaplotlib.export").png(self:to_svg(), path)
+end
+
+function Figure:save_pdf(path)
+  util.check_string(path, "save_pdf path", false)
+  return require("luaplotlib.export").pdf(self:to_svg(), path)
+end
+
 function Figure:savefig(path)
   util.check_string(path, "savefig path", false)
   local svg = self:to_svg()

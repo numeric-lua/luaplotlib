@@ -30,7 +30,7 @@ fig:savefig("line.svg")
 
 - LuaJIT 2.1 (the primary target). The library uses only standard Lua 5.1/LuaJIT
   features and has also been smoke-tested with PUC Lua 5.5.
-- No external Lua rocks, C modules, Python packages, or fonts are needed.
+- PNG/PDF export optionally uses the system `rsvg-convert`; SVG/HTML remain dependency-free.
 - A browser or converter is only needed to *view* the SVG; luaplotlib itself
   never renders or displays images interactively.
 
@@ -194,7 +194,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.3.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.4.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 annotations, linear/log/date axes, twin x/y axes, subplots, custom ticks,
 per-bar colors, value labels, legends, and scene export. See

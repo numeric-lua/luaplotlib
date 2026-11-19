@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.4.0
+
+- optional PNG/PDF export through the system `rsvg-convert`;
+- 117 tests.
+
 ## 4.3.0
 
 - 3-D surface/mesh wireframes;
