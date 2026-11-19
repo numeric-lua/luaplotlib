@@ -1,5 +1,6 @@
-# luaplotlib 1.5.0
+# luaplotlib 2.0.0
 
-- `contourf` filled field plus optional contour lines;
-- `pcolor` alias for `pcolormesh`;
-- 108 tests.
+- configurable grid styling;
+- figure facecolor;
+- SVG role/ARIA labels;
+- 109 tests.

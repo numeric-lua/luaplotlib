@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0
+
+- configurable grid color/width/linestyle;
+- figure facecolor and ARIA labels;
+- 109 tests.
+
 ## 1.5.0
 
 - `contourf` filled contours with optional overlay lines;

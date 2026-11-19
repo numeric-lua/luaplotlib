@@ -367,6 +367,9 @@ function Figure.new(opts)
     _xscale = checked_scale(opts.xscale, "figure xscale", true),
     _yscale = checked_scale(opts.yscale, "figure yscale", true),
     _grid = false,
+    _grid_opts = { color = "#d9d9d9", linewidth = 1, linestyle = "solid" },
+    _facecolor = "#ffffff",
+    _aria_label = nil,
     _legend_requested = false,
     _legend_opts = { loc = "upper right", frame = true },
     _category_ticks = nil,
@@ -1628,12 +1631,42 @@ function Figure:yscale(scale)
   return self
 end
 
-function Figure:grid(enabled)
-  if enabled == nil then
-    enabled = true
+function Figure:grid(enabled, opts)
+  if type(enabled) == "table" and opts == nil then
+    opts, enabled = enabled, true
   end
+  if enabled == nil then enabled = true end
   util.check_boolean(enabled, "grid")
+  if opts ~= nil then
+    opts = util.check_options(opts, { color = true, linewidth = true,
+      linestyle = true }, "grid")
+    if opts.color ~= nil then
+      self._grid_opts.color = util.check_color(opts.color, "grid color")
+    end
+    if opts.linewidth ~= nil then
+      self._grid_opts.linewidth = util.check_number(opts.linewidth,
+        "grid linewidth", 0)
+    end
+    if opts.linestyle ~= nil then
+      if opts.linestyle ~= "solid" and opts.linestyle ~= "dashed" and
+          opts.linestyle ~= "dotted" then
+        fail("grid linestyle must be solid, dashed, or dotted")
+      end
+      self._grid_opts.linestyle = opts.linestyle
+    end
+  end
   self._grid = enabled
+  return self
+end
+
+function Figure:facecolor(color)
+  self._facecolor = util.check_color(color, "facecolor")
+  return self
+end
+
+function Figure:aria_label(text)
+  if text ~= nil then util.check_string(text, "aria_label", false) end
+  self._aria_label = text
   return self
 end
 
