@@ -992,6 +992,26 @@ function Figure:fill_between(x, y1, y2, opts)
   return self
 end
 
+function Figure:fill_betweenx(y, x1, x2, opts)
+  opts = util.check_options(opts, FILL_OPTIONS, "fill_betweenx")
+  local yv = data.sequence(y, "fill_betweenx y")
+  local left = data.sequence(x1, "fill_betweenx x1")
+  local right = data.sequence(x2 or x1, "fill_betweenx x2")
+  if #yv ~= #left or #yv ~= #right then
+    fail("fill_betweenx y, x1, and x2 must have the same length")
+  end
+  local style = checked_style(self, opts, "fill_betweenx")
+  style.linewidth = 0
+  self._series[#self._series + 1] = {
+    kind = "fillx", y = yv, x1 = left, x2 = right, style = style,
+  }
+  return self
+end
+
+function Figure:pcolormesh(values, opts)
+  return self:imshow(values, opts)
+end
+
 function Figure:step(x, y, opts)
   opts = util.check_options(opts, STEP_OPTIONS, "step")
   local xv = data.sequence(x, "step x")

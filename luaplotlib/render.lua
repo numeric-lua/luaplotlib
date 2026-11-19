@@ -132,6 +132,12 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y1[i], series_index, i, "fill lower")
         include_y(series.y2[i], series_index, i, "fill upper")
       end
+    elseif series.kind == "fillx" then
+      for i = 1, #series.y do
+        include_y(series.y[i], series_index, i, "fillx y")
+        include_x(series.x1[i], series_index, i, "fillx left")
+        include_x(series.x2[i], series_index, i, "fillx right")
+      end
     elseif series.kind == "step" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "step x")
@@ -678,6 +684,22 @@ local function render_fill(series, map_x, map_y, buf)
     style.edgecolor or style.color)
 end
 
+local function render_fillx(series, map_x, map_y, buf)
+  local points = {}
+  for i = 1, #series.y do
+    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x1[i])),
+      util.fmt(map_y(series.y[i])))
+  end
+  for i = #series.y, 1, -1 do
+    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x2[i])),
+      util.fmt(map_y(series.y[i])))
+  end
+  buf[#buf + 1] = string.format(
+    '  <polygon class="fill-betweenx" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
+    table.concat(points, " "), series.style.color, util.fmt(series.style.alpha),
+    series.style.edgecolor or series.style.color)
+end
+
 local function render_step(series, map_x, map_y, buf)
   local xs, ys = {}, {}
   for i = 1, #series.x do
@@ -1221,6 +1243,8 @@ function M.to_svg(fig)
       render_bar(series, map_x, map_y, y_baseline, yscale, buf)
     elseif series.kind == "fill" then
       render_fill(series, map_x, map_y, buf)
+    elseif series.kind == "fillx" then
+      render_fillx(series, map_x, map_y, buf)
     elseif series.kind == "step" then
       render_step(series, map_x, map_y, buf)
     elseif series.kind == "stem" then

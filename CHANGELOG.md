@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.0
+
+- `fill_betweenx` horizontal bands and `pcolormesh` heatmap alias;
+- 107 tests.
+
 ## 1.3.0
 
 - `fill_between`, `step`, `stem`, and `stackplot`;
