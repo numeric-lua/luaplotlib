@@ -151,6 +151,65 @@ function M.from_figure(figure)
         if state.ymin == nil or lower < state.ymin then state.ymin = lower end
         if state.ymax == nil or upper > state.ymax then state.ymax = upper end
       end
+    elseif series.kind == "image" then
+      copy.rows = series.rows
+      copy.cols = series.cols
+      copy.values = {}
+      for row = 1, series.rows do copy.values[row] = copy_array(series.values[row]) end
+      copy.vmin = series.vmin
+      copy.vmax = series.vmax
+      copy.colorbar = figure._colorbar and true or false
+      if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
+      if state.xmax == nil or series.cols > state.xmax then state.xmax = series.cols end
+      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
+      if state.ymax == nil or series.rows > state.ymax then state.ymax = series.rows end
+    elseif series.kind == "barh" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      copy.height = series.height
+      copy.bar_colors = series.bar_colors and copy_array(series.bar_colors) or nil
+      copy.show_values = series.show_values and true or false
+      if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
+      for index = 1, #copy.x do
+        local x = copy.x[index]
+        local y = copy.y[index]
+        if state.xmin == nil or x < state.xmin then state.xmin = x end
+        if state.xmax == nil or x > state.xmax then state.xmax = x end
+        local low, high = y - copy.height / 2, y + copy.height / 2
+        if state.ymin == nil or low < state.ymin then state.ymin = low end
+        if state.ymax == nil or high > state.ymax then state.ymax = high end
+      end
+    elseif series.kind == "box" then
+      copy.position = series.position
+      copy.width = series.width
+      copy.q1 = series.q1
+      copy.median = series.median
+      copy.q3 = series.q3
+      copy.low = series.low
+      copy.high = series.high
+      copy.outliers = copy_array(series.outliers)
+      local left, right = series.position - series.width / 2,
+        series.position + series.width / 2
+      if state.xmin == nil or left < state.xmin then state.xmin = left end
+      if state.xmax == nil or right > state.xmax then state.xmax = right end
+      if state.ymin == nil or series.low < state.ymin then state.ymin = series.low end
+      if state.ymax == nil or series.high > state.ymax then state.ymax = series.high end
+      for _, value in ipairs(copy.outliers) do
+        if value < state.ymin then state.ymin = value end
+        if value > state.ymax then state.ymax = value end
+      end
+    elseif series.kind == "contour" then
+      copy.segments = {}
+      for index, segment in ipairs(series.segments) do
+        copy.segments[index] = copy_array(segment)
+      end
+      copy.level = series.level
+      copy.rows = series.rows
+      copy.cols = series.cols
+      if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
+      if state.xmax == nil or series.cols > state.xmax then state.xmax = series.cols end
+      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
+      if state.ymax == nil or series.rows > state.ymax then state.ymax = series.rows end
     elseif series.kind == "bar" then
       local mode = series.mode or "single"
       local offset = series.offset or 0
@@ -248,6 +307,34 @@ function M.from_figure(figure)
     end
   else
     scene.ylim = { 0, 1 }
+  end
+
+  if figure._twin ~= nil then
+    local twin = figure._twin
+    scene.twin = {
+      ylabel = twin._ylabel,
+      yscale = twin._yscale or "linear",
+      ylim = twin._ylim and { twin._ylim[1], twin._ylim[2] } or nil,
+      series = {},
+    }
+    for _, series in ipairs(twin._series or {}) do
+      local copy = { kind = series.kind, style = copy_style(series.style or {}) }
+      if series.kind == "line" or series.kind == "scatter" then
+        copy.x = copy_array(series.x)
+        copy.y = copy_array(series.y)
+      elseif series.kind == "errorbar" then
+        copy.x = copy_array(series.x)
+        copy.y = copy_array(series.y)
+        copy.yerr = copy_array(series.yerr)
+        if series.xerr then copy.xerr = copy_array(series.xerr) end
+      elseif series.kind == "bar" then
+        copy.x = copy_array(series.x)
+        copy.y = copy_array(series.y)
+        copy.width = series.width
+        copy.bottom = series.bottom and copy_array(series.bottom) or nil
+      end
+      scene.twin.series[#scene.twin.series + 1] = copy
+    end
   end
 
   if figure._category_ticks then

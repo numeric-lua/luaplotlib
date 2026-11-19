@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0
+
+- scene export parity for image, box, contour, barh, and twin-axis series;
+- documented API stability and semantic-versioning policy;
+- 99 tests.
+
 ## 0.9.0
 
 - secondary y axis via `fig:twinx()`;

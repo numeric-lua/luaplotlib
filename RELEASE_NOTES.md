@@ -1,17 +1,31 @@
-# luaplotlib 0.9.0
+# luaplotlib 1.0.0
 
 Pure-Lua, matplotlib-inspired SVG/HTML plotting.
 
-## Highlights
+## Milestone
 
-- secondary y axis through `fig:twinx()`;
-- independent right-axis limits, log/linear scale, and label;
-- twin line, scatter, error-bar, and bar series;
-- right-axis tick rendering and layout reservation;
-- 97 tests.
+The documented Lua API is now stable and follows semantic versioning. See
+`docs/stability.md`.
 
-The 0.8 surface remains: date axes, HTML export, 2-D tensor heatmaps, subplots,
-boxplots, contours, custom ticks, and scene export.
+## Included surface
+
+- line, scatter, histogram, vertical/horizontal bars, error bars, boxplots,
+  heatmaps, contours;
+- linear, log, date, and twin y axes;
+- subplots, custom ticks/formatters, tick rotation;
+- annotations and arrows;
+- SVG and standalone HTML output;
+- renderer-agnostic scene export, including image/box/contour/barh/twin series.
+
+## Verification
+
+- 99 tests;
+- CI green.
+
+## Limits
+
+No pie/donut or 3-D charts, no twin x axes, no PNG/PDF backend, and no full
+text-measurement layout engine. These are documented scope limits.
 
 ## Install
 
