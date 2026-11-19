@@ -1009,6 +1009,10 @@ function M.to_pie_svg(fig)
   return table.concat(buf, "\n") .. "\n"
 end
 
+function M.data_extents(fig, xscale, yscale)
+  return data_extents(fig, xscale or "linear", yscale or "linear")
+end
+
 function M.to_svg(fig)
   if fig._pie ~= nil then return M.to_pie_svg(fig) end
   local geom = layout(fig)

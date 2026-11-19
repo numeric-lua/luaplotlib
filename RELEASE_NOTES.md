@@ -1,5 +1,4 @@
-# luaplotlib 2.1.0
+# luaplotlib 2.2.0
 
-- subplot grid/facecolor propagation;
-- subplot first-axes plot/scatter convenience;
-- 110 tests.
+- automatic shared subplot x/y limits;
+- 111 tests.

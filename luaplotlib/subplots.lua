@@ -27,6 +27,7 @@ function SubplotFigure.new(rows, cols, opts)
   opts = util.check_options(opts, {
     width = true, height = true, dpi = true, title = true,
     gap = true, margin = true, xscale = true, yscale = true,
+    sharex = true, sharey = true,
   }, "subplots")
 
   rows = check_count(rows, "subplots rows")
@@ -80,7 +81,8 @@ function SubplotFigure.new(rows, cols, opts)
     _title = title,
     _gap = gap, _margin = margin, _top = top,
     _cell_width = cell_width, _cell_height = cell_height,
-    _facecolor = "#ffffff",
+    _facecolor = "#ffffff", _sharex = opts.sharex == true,
+    _sharey = opts.sharey == true,
   }, SubplotFigure)
 end
 
@@ -168,7 +170,42 @@ function SubplotFigure:share_limits(axis, index)
   return self
 end
 
+local function apply_shared_limits(self)
+  if not self._sharex and not self._sharey then return end
+  local render = require("luaplotlib.render")
+  local xmin, xmax, ymin, ymax
+  for row = 1, self.rows do
+    for col = 1, self.cols do
+      local child = self.axes[row][col]
+      local extents = render.data_extents(child, child._xscale or "linear",
+        child._yscale or "linear")
+      if extents ~= nil then
+        if self._sharex and extents.has_x then
+          if xmin == nil or extents.min_x < xmin then xmin = extents.min_x end
+          if xmax == nil or extents.max_x > xmax then xmax = extents.max_x end
+        end
+        if self._sharey and extents.has_y then
+          if ymin == nil or extents.min_y < ymin then ymin = extents.min_y end
+          if ymax == nil or extents.max_y > ymax then ymax = extents.max_y end
+        end
+      end
+    end
+  end
+  for row = 1, self.rows do
+    for col = 1, self.cols do
+      local child = self.axes[row][col]
+      if xmin ~= nil and xmin < xmax and child._xlim == nil then
+        child._xlim = { xmin, xmax }
+      end
+      if ymin ~= nil and ymin < ymax and child._ylim == nil then
+        child._ylim = { ymin, ymax }
+      end
+    end
+  end
+end
+
 function SubplotFigure:to_svg()
+  apply_shared_limits(self)
   local buffers = {}
   buffers[#buffers + 1] = '<?xml version="1.0" encoding="UTF-8"?>'
   buffers[#buffers + 1] = string.format(

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0
+
+- automatic shared x/y limits in subplots (`sharex`, `sharey`);
+- 111 tests.
+
 ## 2.1.0
 
 - subplot-level grid/facecolor propagation and first-axes plot/scatter delegates;
