@@ -203,6 +203,16 @@ offsets, and the automatic y extent includes stacked bottoms and total heights.
 The y-axis includes zero. Category ticks are emitted once per call, even when the
 call contains several series.
 
+### `fig:xticks(values[, labels])` / `fig:yticks(values[, labels])`
+
+Replace the automatically generated ticks with explicit data values and
+optional labels. Labels must match the number of values.
+
+### `fig:xtick_format(fn)` / `fig:ytick_format(fn)`
+
+Set a formatter callback for generated and custom tick labels. The callback
+receives the data value and returns a string.
+
 ### `fig:xtick_rotation(angle)`
 
 Rotates x tick labels by an integer in `[-90, 90]`. Useful for long categorical

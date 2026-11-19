@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- custom `xticks`/`yticks` with optional labels;
+- `xtick_format`/`ytick_format` callbacks for generated and custom ticks;
+- 87 tests.
+
 ## 0.4.0
 
 - `plt.subplots(rows, cols)` grid figures with configurable gap/margin, parent

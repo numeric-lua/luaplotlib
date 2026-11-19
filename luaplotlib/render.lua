@@ -792,6 +792,14 @@ function M.to_svg(fig)
   local yticks = yaxis.ticks
 
   local categories = find_category_ticks(fig, xmin, xmax)
+  local function format_value(fig_value, formatter)
+    if formatter ~= nil then
+      local ok, text = pcall(formatter, fig_value)
+      if not ok then util.fail("tick formatter failed: " .. tostring(text), 3) end
+      return tostring(text)
+    end
+    return util.fmt_tick(fig_value)
+  end
   local x_display = {}
   if categories then
     for _, category in ipairs(categories) do
@@ -800,9 +808,35 @@ function M.to_svg(fig)
         label = category.label,
       }
     end
+  elseif fig._xticks ~= nil then
+    for index, value in ipairs(fig._xticks.values) do
+      x_display[#x_display + 1] = {
+        value = value,
+        label = fig._xticks.labels and fig._xticks.labels[index] or
+          format_value(value, fig._xtick_format),
+      }
+    end
   else
     for _, value in ipairs(xticks) do
-      x_display[#x_display + 1] = { value = value, label = util.fmt_tick(value) }
+      x_display[#x_display + 1] = {
+        value = value, label = format_value(value, fig._xtick_format),
+      }
+    end
+  end
+  local y_display = {}
+  if fig._yticks ~= nil then
+    for index, value in ipairs(fig._yticks.values) do
+      y_display[#y_display + 1] = {
+        value = value,
+        label = fig._yticks.labels and fig._yticks.labels[index] or
+          format_value(value, fig._ytick_format),
+      }
+    end
+  else
+    for _, value in ipairs(yticks) do
+      y_display[#y_display + 1] = {
+        value = value, label = format_value(value, fig._ytick_format),
+      }
     end
   end
 
@@ -863,8 +897,8 @@ function M.to_svg(fig)
       printf('   <line x1="%s" y1="%s" x2="%s" y2="%s"/>',
         util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.bottom))
     end
-    for _, value in ipairs(yticks) do
-      local y = map_y(value)
+    for _, tick in ipairs(y_display) do
+      local y = map_y(tick.value)
       printf('   <line x1="%s" y1="%s" x2="%s" y2="%s"/>',
         util.fmt(geom.left), util.fmt(y), util.fmt(geom.right), util.fmt(y))
     end
@@ -926,12 +960,13 @@ function M.to_svg(fig)
   add('   </g>')
 
   add('   <g class="ticks y-ticks">')
-  for _, value in ipairs(yticks) do
-    local y = map_y(value)
+  for _, tick in ipairs(y_display) do
+    local y = map_y(tick.value)
     printf('    <line class="tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
       util.fmt(geom.left - 5), util.fmt(y), util.fmt(geom.left), util.fmt(y), AXIS_COLOR)
     printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="end">%s</text>',
-      util.fmt(geom.left - 9), util.fmt(y + 4), TEXT_COLOR, util.fmt_tick(value))
+      util.fmt(geom.left - 9), util.fmt(y + 4), TEXT_COLOR,
+      util.escape_xml(tick.label))
   end
   add('   </g>')
 

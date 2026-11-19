@@ -315,6 +315,10 @@ function Figure.new(opts)
     _category_ticks = nil,
     _colorbar = false,
     _xtick_rotation = 0,
+    _xticks = nil,
+    _yticks = nil,
+    _xtick_format = nil,
+    _ytick_format = nil,
   }, Figure)
 end
 
@@ -794,6 +798,41 @@ end
 
 -- Render a rectangular scalar matrix as a heatmap.  opts.vmin/vmax override
 -- the automatic range; opts.colorbar defaults to true.
+local function checked_ticks(values, name)
+  if type(values) ~= "table" or #values == 0 then
+    fail(name .. " expects a non-empty table of tick values")
+  end
+  local result = {}
+  for index = 1, #values do
+    result[index] = util.check_number(values[index], name .. " value " .. index)
+  end
+  return result
+end
+
+function Figure:xticks(values, labels)
+  self._xticks = { values = checked_ticks(values, "xticks"),
+    labels = labels and checked_series_labels(labels, "xticks labels", #values) or nil }
+  return self
+end
+
+function Figure:yticks(values, labels)
+  self._yticks = { values = checked_ticks(values, "yticks"),
+    labels = labels and checked_series_labels(labels, "yticks labels", #values) or nil }
+  return self
+end
+
+function Figure:xtick_format(formatter)
+  if type(formatter) ~= "function" then fail("xtick_format expects a function") end
+  self._xtick_format = formatter
+  return self
+end
+
+function Figure:ytick_format(formatter)
+  if type(formatter) ~= "function" then fail("ytick_format expects a function") end
+  self._ytick_format = formatter
+  return self
+end
+
 function Figure:xtick_rotation(angle)
   if type(angle) ~= "number" or angle % 1 ~= 0 or angle < -90 or angle > 90 then
     fail("xtick_rotation must be an integer in [-90, 90]")
