@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- `fill_between`, `step`, `stem`, and `stackplot`;
+- scene export for the new series;
+- 106 tests.
+
 ## 1.2.0
 
 - secondary x axis via `fig:twiny()` with top ticks, label, and independent

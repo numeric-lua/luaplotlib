@@ -126,6 +126,23 @@ local function data_extents(fig, xscale, yscale)
         include_y(y - yerr, series_index, i, "errorbar y")
         include_y(y + yerr, series_index, i, "errorbar y")
       end
+    elseif series.kind == "fill" then
+      for i = 1, #series.x do
+        include_x(series.x[i], series_index, i, "fill x")
+        include_y(series.y1[i], series_index, i, "fill lower")
+        include_y(series.y2[i], series_index, i, "fill upper")
+      end
+    elseif series.kind == "step" then
+      for i = 1, #series.x do
+        include_x(series.x[i], series_index, i, "step x")
+        include_y(series.y[i], series_index, i, "step y")
+      end
+    elseif series.kind == "stem" then
+      include_y(0, series_index, 1, "stem baseline")
+      for i = 1, #series.x do
+        include_x(series.x[i], series_index, i, "stem x")
+        include_y(series.y[i], series_index, i, "stem y")
+      end
     elseif series.kind == "contour" then
       include_x(0, series_index, 1, "contour")
       include_x(series.cols or 1, series_index, 1, "contour")
@@ -327,6 +344,10 @@ local function swatch(buf, kind, color, x, y)
     buf[#buf + 1] = string.format(
       '  <circle cx="%s" cy="%s" r="4" fill="%s"/>',
       util.fmt(x + 10), util.fmt(y), color)
+  elseif kind == "fill" then
+    buf[#buf + 1] = string.format(
+      '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
+      util.fmt(x), util.fmt(y - 4), color)
   elseif kind == "hist" or kind == "bar" then
     buf[#buf + 1] = string.format(
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
@@ -635,6 +656,69 @@ local function render_barh(series, map_x, map_y, baseline, buf)
     end
   end
   buf[#buf + 1] = '  </g>'
+end
+
+local function render_fill(series, map_x, map_y, buf)
+  local style = series.style
+  local opacity = ""
+  if style.alpha < 1 then opacity = string.format(' fill-opacity="%s"',
+    util.fmt(style.alpha)) end
+  local points = {}
+  for i = 1, #series.x do
+    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x[i])),
+      util.fmt(map_y(series.y1[i])))
+  end
+  for i = #series.x, 1, -1 do
+    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x[i])),
+      util.fmt(map_y(series.y2[i])))
+  end
+  buf[#buf + 1] = string.format(
+    '  <polygon class="fill-between" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
+    table.concat(points, " "), style.color, opacity,
+    style.edgecolor or style.color)
+end
+
+local function render_step(series, map_x, map_y, buf)
+  local xs, ys = {}, {}
+  for i = 1, #series.x do
+    if i > 1 then
+      if series.where == "pre" then
+        xs[#xs + 1] = series.x[i]
+        ys[#ys + 1] = series.y[i - 1]
+      elseif series.where == "post" then
+        xs[#xs + 1] = series.x[i - 1]
+        ys[#ys + 1] = series.y[i]
+      else
+        local mid = (series.x[i - 1] + series.x[i]) / 2
+        xs[#xs + 1] = mid
+        ys[#ys + 1] = series.y[i - 1]
+        xs[#xs + 1] = mid
+        ys[#ys + 1] = series.y[i]
+      end
+    end
+    xs[#xs + 1] = series.x[i]
+    ys[#ys + 1] = series.y[i]
+  end
+  buf[#buf + 1] = '  <g class="series series-step">'
+  render_line({ x = xs, y = ys, style = series.style, kind = "line" },
+    map_x, map_y, buf)
+  buf[#buf + 1] = '  </g>' 
+end
+
+local function render_stem(series, map_x, map_y, buf)
+  local baseline = map_y(0)
+  for i = 1, #series.x do
+    local x = map_x(series.x[i])
+    local y = map_y(series.y[i])
+    buf[#buf + 1] = string.format(
+      '  <line class="stem-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+      util.fmt(x), util.fmt(baseline), util.fmt(x), util.fmt(y),
+      series.style.color, util.fmt(series.style.linewidth or 1.5))
+    buf[#buf + 1] = string.format(
+      '  <circle class="stem-marker" cx="%s" cy="%s" r="%s" fill="%s"/>',
+      util.fmt(x), util.fmt(y), util.fmt(series.style.markersize or 4),
+      series.style.color)
+  end
 end
 
 local function render_contour(series, map_x, map_y, buf)
@@ -1135,6 +1219,12 @@ function M.to_svg(fig)
       render_hist(series, map_x, map_y, y_baseline, buf)
     elseif series.kind == "bar" then
       render_bar(series, map_x, map_y, y_baseline, yscale, buf)
+    elseif series.kind == "fill" then
+      render_fill(series, map_x, map_y, buf)
+    elseif series.kind == "step" then
+      render_step(series, map_x, map_y, buf)
+    elseif series.kind == "stem" then
+      render_stem(series, map_x, map_y, buf)
     elseif series.kind == "barh" then
       render_barh(series, map_x, map_y, map_x(0), buf)
     elseif series.kind == "contour" then

@@ -199,6 +199,7 @@ local test_files = {
   "test_tensor_matrix.lua",
   "test_twin.lua",
   "test_pie.lua",
+  "test_area_step_stem.lua",
   "test_twiny.lua",
 }
 

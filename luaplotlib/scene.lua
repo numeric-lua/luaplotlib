@@ -167,6 +167,31 @@ function M.from_figure(figure)
         if state.ymin == nil or lower < state.ymin then state.ymin = lower end
         if state.ymax == nil or upper > state.ymax then state.ymax = upper end
       end
+    elseif series.kind == "fill" then
+      copy.x = copy_array(series.x)
+      copy.y1 = copy_array(series.y1)
+      copy.y2 = copy_array(series.y2)
+      for index = 1, #copy.x do
+        local x = copy.x[index]
+        local lower, upper = copy.y1[index], copy.y2[index]
+        if state.xmin == nil or x < state.xmin then state.xmin = x end
+        if state.xmax == nil or x > state.xmax then state.xmax = x end
+        if state.ymin == nil or lower < state.ymin then state.ymin = lower end
+        if state.ymin == nil or upper < state.ymin then state.ymin = upper end
+        if state.ymax == nil or lower > state.ymax then state.ymax = lower end
+        if state.ymax == nil or upper > state.ymax then state.ymax = upper end
+      end
+    elseif series.kind == "step" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      copy.where = series.where
+      update_xy_range(state, copy)
+    elseif series.kind == "stem" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      update_xy_range(state, copy)
+      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
+      if state.ymax == nil or 0 > state.ymax then state.ymax = 0 end
     elseif series.kind == "image" then
       copy.rows = series.rows
       copy.cols = series.cols

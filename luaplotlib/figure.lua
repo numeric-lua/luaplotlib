@@ -56,6 +56,37 @@ local BAR_OPTIONS = {
   show_values = true,
 }
 
+local FILL_OPTIONS = {
+  color = true,
+  label = true,
+  alpha = true,
+  edgecolor = true,
+}
+
+local STEP_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  linestyle = true,
+  where = true,
+  alpha = true,
+}
+
+local STEM_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  markersize = true,
+  alpha = true,
+}
+
+local STACK_OPTIONS = {
+  labels = true,
+  colors = true,
+  alpha = true,
+  edgecolor = true,
+}
+
 local PIE_OPTIONS = {
   labels = true,
   colors = true,
@@ -945,6 +976,103 @@ end
 -- Horizontal bars for a single numeric series.  Category labels are placed on
 -- the y axis; values extend horizontally from zero.
 -- Pie/donut chart.  Values must be non-negative and sum to a positive total.
+function Figure:fill_between(x, y1, y2, opts)
+  opts = util.check_options(opts, FILL_OPTIONS, "fill_between")
+  local xv = data.sequence(x, "fill_between x")
+  local lower = data.sequence(y1, "fill_between y1")
+  local upper = data.sequence(y2 or y1, "fill_between y2")
+  if #xv ~= #lower or #xv ~= #upper then
+    fail("fill_between x, y1, and y2 must have the same length")
+  end
+  local style = checked_style(self, opts, "fill_between")
+  style.linewidth = 0
+  self._series[#self._series + 1] = {
+    kind = "fill", x = xv, y1 = lower, y2 = upper, style = style,
+  }
+  return self
+end
+
+function Figure:step(x, y, opts)
+  opts = util.check_options(opts, STEP_OPTIONS, "step")
+  local xv = data.sequence(x, "step x")
+  local yv = data.sequence(y, "step y")
+  if #xv ~= #yv then fail("step x and y must have the same length") end
+  local where = opts.where or "pre"
+  if where ~= "pre" and where ~= "post" and where ~= "mid" then
+    fail("step where must be 'pre', 'post', or 'mid'")
+  end
+  local linewidth = opts.linewidth
+  if linewidth == nil then linewidth = 2 end
+  linewidth = util.check_number(linewidth, "step linewidth", 0)
+  local linestyle = opts.linestyle or "solid"
+  if not LINESTYLES[linestyle] then fail("invalid step linestyle") end
+  local style = checked_style(self, opts, "step")
+  style.linewidth = linewidth
+  style.linestyle = linestyle
+  self._series[#self._series + 1] = {
+    kind = "step", x = xv, y = yv, where = where, style = style,
+  }
+  return self
+end
+
+function Figure:stem(x, y, opts)
+  opts = util.check_options(opts, STEM_OPTIONS, "stem")
+  local xv = data.sequence(x, "stem x")
+  local yv = data.sequence(y, "stem y")
+  if #xv ~= #yv then fail("stem x and y must have the same length") end
+  local linewidth = opts.linewidth or 1.5
+  linewidth = util.check_number(linewidth, "stem linewidth", 0)
+  local markersize = opts.markersize or 4
+  markersize = util.check_number(markersize, "stem markersize", 0.1)
+  local style = checked_style(self, opts, "stem")
+  style.linewidth = linewidth
+  style.markersize = markersize
+  self._series[#self._series + 1] = {
+    kind = "stem", x = xv, y = yv, style = style,
+  }
+  return self
+end
+
+function Figure:stackplot(x, series, opts)
+  opts = util.check_options(opts, STACK_OPTIONS, "stackplot")
+  if type(series) ~= "table" or #series == 0 then
+    fail("stackplot expects a non-empty table of series")
+  end
+  local xv = data.sequence(x, "stackplot x")
+  local labels = opts.labels
+  if labels ~= nil and (type(labels) ~= "table" or #labels ~= #series) then
+    fail("stackplot labels must match the number of series")
+  end
+  local colors_list = opts.colors
+  if colors_list ~= nil and (type(colors_list) ~= "table" or
+      #colors_list ~= #series) then
+    fail("stackplot colors must match the number of series")
+  end
+  local bottom = {}
+  for i = 1, #xv do bottom[i] = 0 end
+  for index, values in ipairs(series) do
+    local yv = data.sequence(values, "stackplot series " .. index)
+    if #yv ~= #xv then fail("stackplot series must match x length") end
+    local top = {}
+    for i = 1, #xv do top[i] = bottom[i] + yv[i] end
+    local color = colors_list and util.check_color(colors_list[index],
+      "stackplot colors[" .. index .. "]") or colors.next(self._color_serial)
+    if colors_list == nil then self._color_serial = self._color_serial + 1 end
+    self._series[#self._series + 1] = {
+      kind = "fill",
+      x = xv,
+      y1 = { unpack(bottom) },
+      y2 = top,
+      style = { color = color, label = labels and labels[index],
+        alpha = opts.alpha or 0.8,
+        edgecolor = opts.edgecolor and util.check_color(opts.edgecolor,
+          "stackplot edgecolor") or nil },
+    }
+    bottom = top
+  end
+  return self
+end
+
 function Figure:pie(values, opts)
   opts = util.check_options(opts, PIE_OPTIONS, "pie")
   local values_v = data.sequence(values, "pie values")

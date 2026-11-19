@@ -152,6 +152,22 @@ If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
 y-axis includes zero. Empty bins are not emitted as rectangles.
 
+### `fig:fill_between(x, y1, y2[, opts])`
+
+Filled band between two y sequences.
+
+### `fig:step(x, y[, opts])`
+
+Step plot with `opts.where = "pre" | "post" | "mid"` (default `pre`).
+
+### `fig:stem(x, y[, opts])`
+
+Stem plot with vertical lines and markers at each point.
+
+### `fig:stackplot(x, series[, opts])`
+
+Stacked filled areas; `opts.labels` and `opts.colors` match the series list.
+
 ### `fig:imshow(values, opts)`
 
 Renders a rectangular matrix as a heatmap. Accepts a plain 2-D table or a
