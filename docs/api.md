@@ -284,6 +284,12 @@ ranging; use `xlim`/`ylim` if a label needs to sit outside the data extents.
 Unknown options, invalid colors/alignment/font sizes, and malformed `xytext` or
 `arrow` tables raise a `luaplotlib:` error.
 
+### `fig:twinx()`
+
+Create a secondary y axis sharing the x axis. The returned object supports
+`plot`, `scatter`, `errorbar`, and `bar`, plus `ylim`, `yscale`, and `ylabel`.
+It renders on the right with independent ticks and a right-side label.
+
 ### Limits
 
 ```lua

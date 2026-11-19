@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- secondary y axis via `fig:twinx()`;
+- twin line/scatter/error-bar/bar series with independent y limits, scale, and
+  label;
+- right-side ticks and title integrated into layout;
+- 97 tests.
+
 ## 0.8.0
 
 - calendar-date x-axis labels via `xdate`;

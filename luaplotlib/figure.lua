@@ -316,6 +316,7 @@ function Figure.new(opts)
     _annotations = {},
     _color_serial = 0,
     _title = nil,
+    _twin = nil,
     _xlabel = nil,
     _ylabel = nil,
     _xlim = nil,
@@ -850,6 +851,26 @@ end
 
 -- Format x-axis tick labels as calendar dates.  Values are Unix timestamps;
 -- format uses os.date syntax (default "%Y-%m-%d").
+-- Create a secondary y axis sharing the x axis.  The returned object exposes
+-- the normal series methods (plot/scatter/errorbar) and its own ylim/yscale/
+-- ylabel; it is rendered on the right side by the parent figure.
+function Figure:twinx()
+  if self._twin ~= nil then return self._twin end
+  local twin = setmetatable({
+    _parent = self,
+    _series = {},
+    _color_serial = 0,
+    _yscale = "linear",
+    _ylim = nil,
+    _ylabel = nil,
+    _ytick_format = nil,
+    _legend_requested = false,
+    _legend_opts = { loc = "upper right", frame = true },
+  }, Figure)
+  self._twin = twin
+  return twin
+end
+
 function Figure:xdate(format)
   if format ~= nil and type(format) ~= "string" then
     fail("xdate format must be a string or nil")

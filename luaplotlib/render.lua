@@ -22,6 +22,7 @@ local function layout(fig)
   local left = math.min(72, math.max(36, width * 0.14))
   local right = width - math.min(28, math.max(12, width * 0.04))
   if fig._colorbar then right = right - 62 end
+  if fig._twin then right = right - 58 end
   local top = math.min(48, math.max(24, height * 0.10))
   local bottom = height - math.min(66, math.max(36, height * 0.16))
 
@@ -830,6 +831,24 @@ function M.to_svg(fig)
   local xscale = fig._xscale or "linear"
   local yscale = fig._yscale or "linear"
   local extents = data_extents(fig, xscale, yscale)
+  local twin = fig._twin
+  local twin_extents = twin and data_extents(twin, xscale,
+    twin._yscale or "linear") or nil
+  if twin_extents ~= nil then
+    if extents == nil then
+      extents = twin_extents
+    else
+      if twin_extents.has_x then
+        extents.has_x = true
+        if extents.min_x == nil or twin_extents.min_x < extents.min_x then
+          extents.min_x = twin_extents.min_x
+        end
+        if extents.max_x == nil or twin_extents.max_x > extents.max_x then
+          extents.max_x = twin_extents.max_x
+        end
+      end
+    end
+  end
   local x_target, y_target = tick_count(geom.plot_width, geom.plot_height)
 
   local xaxis = make_axis("xlim", xscale, fig._xlim,
@@ -840,6 +859,14 @@ function M.to_svg(fig)
     extents and extents.has_y and extents.min_y or nil,
     extents and extents.has_y and extents.max_y or nil,
     y_target, extents and extents.baseline_y or false, 0, 1)
+
+  local twin_yaxis
+  if twin ~= nil then
+    twin_yaxis = make_axis("twin ylim", twin._yscale or "linear", twin._ylim,
+      twin_extents and twin_extents.has_y and twin_extents.min_y or nil,
+      twin_extents and twin_extents.has_y and twin_extents.max_y or nil,
+      y_target, twin_extents and twin_extents.baseline_y or false, 0, 1)
+  end
 
   local xmin, xmax = xaxis.data_minimum, xaxis.data_maximum
   local xticks = xaxis.ticks
@@ -902,6 +929,15 @@ function M.to_svg(fig)
     end
   end
 
+  local twin_y_display = {}
+  if twin_yaxis ~= nil then
+    for _, value in ipairs(twin_yaxis.ticks) do
+      twin_y_display[#twin_y_display + 1] = {
+        value = value, label = format_value(value, twin._ytick_format),
+      }
+    end
+  end
+
   local function map_x(value)
     -- Bar edges derived from a positive position can cross zero. Clamp that
     -- geometry to the left edge of a log plot instead of taking log10(<= 0).
@@ -917,6 +953,13 @@ function M.to_svg(fig)
     local transformed = yaxis.to_axis(value)
     return geom.bottom -
       (transformed - yaxis.minimum) / (yaxis.maximum - yaxis.minimum) * geom.plot_height
+  end
+
+  local function map_y2(value)
+    local transformed = twin_yaxis.to_axis(value)
+    return geom.bottom -
+      (transformed - twin_yaxis.minimum) /
+      (twin_yaxis.maximum - twin_yaxis.minimum) * geom.plot_height
   end
 
   -- A log y axis has no zero baseline; bars and histogram bins grow from the
@@ -991,10 +1034,52 @@ function M.to_svg(fig)
   end
   add('  </g>')
 
+  if twin ~= nil then
+    add('  <g class="series-layer twin-series" clip-path="url(#' .. clip_id .. ')">')
+    for _, series in ipairs(twin._series) do
+      if series.kind == "line" then
+        render_line(series, map_x, map_y2, buf)
+      elseif series.kind == "scatter" then
+        render_scatter(series, map_x, map_y2, buf)
+      elseif series.kind == "errorbar" then
+        render_errorbar(series, map_x, map_y2, buf)
+      elseif series.kind == "bar" then
+        local baseline = geom.bottom
+        if (twin._yscale or "linear") ~= "log" then baseline = map_y2(0) end
+        render_bar(series, map_x, map_y2, baseline, twin._yscale, buf)
+      end
+    end
+    add('  </g>')
+  end
+
   if #(fig._annotations or {}) > 0 then
     add('  <g class="annotation-layer" clip-path="url(#' .. clip_id .. ')">')
     for index, annotation in ipairs(fig._annotations) do
       render_annotation(annotation, index, map_x, map_y, xscale, yscale, buf)
+    end
+    add('  </g>')
+  end
+
+  if twin ~= nil then
+    add('  <g class="twin-axis">')
+    printf('   <path class="spine" d="M %s %s L %s %s" fill="none" stroke="%s" stroke-width="1"/>',
+      util.fmt(geom.right), util.fmt(geom.top), util.fmt(geom.right),
+      util.fmt(geom.bottom), AXIS_COLOR)
+    for _, tick in ipairs(twin_y_display) do
+      local y = map_y2(tick.value)
+      printf('   <line class="tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+        util.fmt(geom.right), util.fmt(y), util.fmt(geom.right + 5),
+        util.fmt(y), AXIS_COLOR)
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="start">%s</text>',
+        util.fmt(geom.right + 9), util.fmt(y + 4), TEXT_COLOR,
+        util.escape_xml(tick.label))
+    end
+    if twin._ylabel ~= nil then
+      local center_y = geom.top + geom.plot_height / 2
+      local x = geom.width - 14
+      printf('   <text class="ylabel" x="%s" y="%s" font-size="13" fill="%s" text-anchor="middle" transform="rotate(90 %s %s)">%s</text>',
+        util.fmt(x), util.fmt(center_y), TEXT_COLOR, util.fmt(x),
+        util.fmt(center_y), util.escape_xml(twin._ylabel))
     end
     add('  </g>')
   end

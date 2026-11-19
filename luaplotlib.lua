@@ -9,7 +9,7 @@ local SubplotFigure = require("luaplotlib.subplots")
 
 local M = {
   _NAME = "luaplotlib",
-  _VERSION = "0.8.0",
+  _VERSION = "0.9.0",
   Figure = Figure,
   SubplotFigure = SubplotFigure,
   scene = Scene,
