@@ -1,7 +1,8 @@
-# luaplotlib 4.5.0
+# luaplotlib 4.6.0
 
-- fix default 3-D auto-bounds and surface coordinate mapping;
-- `.svg`/`.png`/`.pdf` dispatch in `savefig`;
-- axis-specific grid lines;
-- `axhline` and `axvline` reference lines;
-- refreshed API and README docs; 120 tests.
+- per-point scatter radii/fill colors;
+- histogram density and cumulative options;
+- multi-column legends with titles;
+- square/triangle/diamond/cross/x marker shapes;
+- 3-D savefig SVG/PNG/PDF dispatch;
+- 125 tests.

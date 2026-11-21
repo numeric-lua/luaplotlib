@@ -74,7 +74,7 @@ Draw a connected line series.
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `2` |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
-| `marker` | `"circle"`, `"o"`, `"point"`, `"dot"`, `true`, or `false` | `false` |
+| `marker` | `"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"cross"`, `"x"`, aliases, `true`, or `false` | `false` |
 | `markersize` | number > 0 | `4` |
 | `alpha` | number in [0, 1] | `1` |
 
@@ -117,7 +117,8 @@ options table with string keys.
 
 ### `fig:scatter(x, y, opts)`
 
-Draw one SVG circle per point.
+Draw one marker per point. `marker` selects circle (default), square,
+triangle, diamond, cross, or x.
 
 | Option | Type | Default |
 | --- | --- | --- |
@@ -147,6 +148,11 @@ Draw a histogram as adjacent filled rectangles.
 | `label` | string | no legend entry |
 | `alpha` | number in [0, 1] | `1` |
 | `edgecolor` | color string | `#ffffff` |
+| `density` | boolean | `false` |
+| `cumulative` | boolean | `false` |
+
+`density` normalizes bin heights by total count and bin width. `cumulative`
+accumulates counts or density left-to-right.
 
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
@@ -371,6 +377,7 @@ not representable.
 fig:grid(true)
 fig:grid(false)
 fig:grid()       -- same as true
+fig:grid(true, { axis = "x" })
 ```
 
 Grid is off by default. Grid lines align with the rendered x and y ticks and are
@@ -389,6 +396,8 @@ No options are required.
 | --- | --- | --- |
 | `loc` | `"upper right"`, `"upper left"`, `"lower right"`, `"lower left"` | `"upper right"` |
 | `frame` | boolean | `true` |
+| `ncol` | integer in [1, 6] | `1` |
+| `title` | string | none |
 
 Only series with a non-empty `label` appear. Swatches reflect the series type
 (line, point, or bar). Calling `legend()` with no labeled series produces no
@@ -481,6 +490,13 @@ includes, but is not limited to:
 - `NaN`/infinite values
 - reversed or empty axis limits
 - writing to a nonexistent directory
+
+## 3-D axes
+
+`plt.figure3d(opts)` returns an orthographic 3-D figure with `plot(x,y,z)`,
+`scatter(x,y,z)`, `surface(x,y,z)`, `mesh(x,y,z)`, `view(elev,azim)`,
+`xlim/ylim/zlim`, labels, title, and `savefig(path)`. Surface 1-D `x` maps
+across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
 
 ## Limitations
 

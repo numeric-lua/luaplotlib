@@ -1,9 +1,13 @@
 # Changelog
 
-## 4.6.0 (unreleased)
+## 4.6.0
 
 - per-point scatter radii and fill colors;
-- 121 tests.
+- histogram `density` and `cumulative` options;
+- legend `ncol` and `title`;
+- square/triangle/diamond/cross/x markers for line and scatter series;
+- 3-D `savefig` SVG/PNG/PDF dispatch;
+- 125 tests.
 
 ## 4.5.0
 

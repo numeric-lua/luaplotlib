@@ -30,6 +30,7 @@ local SCATTER_OPTIONS = {
   alpha = true,
   edgecolor = true,
   linewidth = true,
+  marker = true,
 }
 
 local HIST_OPTIONS = {
@@ -39,6 +40,8 @@ local HIST_OPTIONS = {
   alpha = true,
   edgecolor = true,
   range = true,
+  density = true,
+  cumulative = true,
 }
 
 local BAR_OPTIONS = {
@@ -165,10 +168,12 @@ local DEFAULT_ARROW_LINEWIDTH = 1.5
 local DEFAULT_ARROW_HEAD = 8
 
 local MARKERS = {
-  circle = true,
-  o = true,
-  point = true,
-  dot = true,
+  circle = true, o = true, point = true, dot = true,
+  square = true, s = true,
+  triangle = true, ["^"] = true,
+  diamond = true, D = true,
+  cross = true, ["+"] = true,
+  x = true, X = true,
 }
 
 local LINESTYLES = {
@@ -247,7 +252,7 @@ local function checked_marker(value, context)
     return "circle"
   end
   if type(value) ~= "string" or not MARKERS[value] then
-    fail(context .. " marker must be one of circle, o, point, dot, true, or false")
+    fail(context .. " marker must be circle, square, triangle, diamond, cross, x, true, or false")
   end
   return value
 end
@@ -472,6 +477,7 @@ function Figure:scatter(x, y, opts)
     style_opts.color = point_colors[1]
   end
   local style = checked_style(self, style_opts, "scatter")
+  style.marker = checked_marker(opts.marker, "scatter") or "circle"
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
@@ -519,6 +525,14 @@ function Figure:hist(values, opts)
     end
   end
 
+  local density = opts.density == true
+  local cumulative = opts.cumulative == true
+  if opts.density ~= nil and type(opts.density) ~= "boolean" then
+    fail("hist density must be a boolean")
+  end
+  if opts.cumulative ~= nil and type(opts.cumulative) ~= "boolean" then
+    fail("hist cumulative must be a boolean")
+  end
   local bin_width = (hi - lo) / bins
   local counts = {}
   for i = 1, bins do
@@ -534,6 +548,17 @@ function Figure:hist(values, opts)
     end
   end
 
+  if density then
+    local total = 0
+    for i = 1, bins do total = total + counts[i] end
+    if total > 0 then
+      for i = 1, bins do counts[i] = counts[i] / (total * bin_width) end
+    end
+  end
+  if cumulative then
+    for i = 2, bins do counts[i] = counts[i] + counts[i - 1] end
+  end
+
   local edges = {}
   for i = 0, bins do
     edges[i + 1] = lo + i * bin_width
@@ -546,6 +571,8 @@ function Figure:hist(values, opts)
     kind = "hist",
     edges = edges,
     counts = counts,
+    density = density,
+    cumulative = cumulative,
     style = style,
   }
   return self
@@ -1777,6 +1804,8 @@ function Figure:legend(opts)
     opts = util.check_options(opts, {
       loc = true,
       frame = true,
+      ncol = true,
+      title = true,
     }, "legend")
     if opts.loc ~= nil then
       util.check_string(opts.loc, "legend loc")
@@ -1787,9 +1816,18 @@ function Figure:legend(opts)
     if opts.frame ~= nil then
       util.check_boolean(opts.frame, "legend frame")
     end
+    local ncol = self._legend_opts.ncol or 1
+    if opts.ncol ~= nil then
+      ncol = util.check_integer(opts.ncol, "legend ncol", 1, 6)
+    end
+    if opts.title ~= nil then
+      util.check_string(opts.title, "legend title", true)
+    end
     self._legend_opts = {
       loc = opts.loc or self._legend_opts.loc,
       frame = opts.frame == nil and self._legend_opts.frame or opts.frame,
+      ncol = ncol,
+      title = opts.title == nil and self._legend_opts.title or opts.title,
     }
   end
   self._legend_requested = true

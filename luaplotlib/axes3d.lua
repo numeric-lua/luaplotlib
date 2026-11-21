@@ -248,6 +248,17 @@ function Axes3D:to_svg()
 end
 
 function Axes3D:savefig(path)
+  if type(path) ~= "string" or path == "" then
+    error("fig3d:savefig path must be a non-empty string", 2)
+  end
+  local lower = path:lower()
+  if lower:sub(-4) == ".png" then
+    return require("luaplotlib.export").png(self:to_svg(), path)
+  elseif lower:sub(-4) == ".pdf" then
+    return require("luaplotlib.export").pdf(self:to_svg(), path)
+  elseif lower:sub(-4) ~= ".svg" then
+    error("fig3d:savefig supports .svg, .png, and .pdf paths", 2)
+  end
   local f=assert(io.open(path,"wb")); f:write(self:to_svg()); f:close(); return path
 end
 

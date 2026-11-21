@@ -396,9 +396,15 @@ local function render_legend(fig, geom, buf)
     end
   end
 
-  local box_width = math.min(geom.plot_width - 8, math.max(88, 52 + max_chars * 6.5))
-  local box_height = 12 + #entries * 20
-  local opts = fig._legend_opts or { loc = "upper right", frame = true }
+  local opts = fig._legend_opts or { loc = "upper right", frame = true, ncol = 1 }
+  local ncol = math.max(1, math.min(opts.ncol or 1, #entries))
+  local rows = math.ceil(#entries / ncol)
+  local col_width = math.min(geom.plot_width - 8,
+    math.max(88, 52 + max_chars * 6.5))
+  local box_width = math.min(geom.plot_width - 8,
+    col_width * ncol + (ncol - 1) * 8)
+  local title_height = opts.title and 20 or 0
+  local box_height = 12 + title_height + rows * 20
   local x, y
   if opts.loc == "upper left" then
     x, y = geom.left + 8, geom.top + 8
@@ -418,12 +424,21 @@ local function render_legend(fig, geom, buf)
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="#ffffff" fill-opacity="0.92" stroke="#bbbbbb" stroke-width="1"/>',
       util.fmt(x), util.fmt(y), util.fmt(box_width), util.fmt(box_height))
   end
+  if opts.title then
+    buf[#buf + 1] = string.format(
+      '  <text class="legend-title" x="%s" y="%s" font-size="11" font-weight="bold" fill="%s">%s</text>',
+      util.fmt(x + 8), util.fmt(y + 14), TEXT_COLOR,
+      util.escape_xml(opts.title))
+  end
   for i, entry in ipairs(entries) do
-    local entry_y = y + 12 + (i - 1) * 20
-    swatch(buf, entry.kind, entry.color, x + 8, entry_y)
+    local column = math.floor((i - 1) / rows) + 1
+    local row = (i - 1) % rows + 1
+    local entry_x = x + 8 + (column - 1) * (col_width + 8)
+    local entry_y = y + 12 + title_height + (row - 1) * 20
+    swatch(buf, entry.kind, entry.color, entry_x, entry_y)
     buf[#buf + 1] = string.format(
       '  <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
-      util.fmt(x + 36), util.fmt(entry_y + 4), TEXT_COLOR,
+      util.fmt(entry_x + 28), util.fmt(entry_y + 4), TEXT_COLOR,
       util.escape_xml(entry.label))
   end
   buf[#buf + 1] = ' </g>'
@@ -507,6 +522,44 @@ local function render_reference(series, map_x, map_y, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function marker_svg(kind, klass, cx, cy, size, color, opacity, outline)
+  if kind == "square" or kind == "s" then
+    return string.format(
+      '   <rect class="%s" x="%s" y="%s" width="%s" height="%s" fill="%s"%s%s/>',
+      klass, util.fmt(cx - size), util.fmt(cy - size), util.fmt(size * 2),
+      util.fmt(size * 2), color, opacity, outline)
+  elseif kind == "triangle" or kind == "^" then
+    return string.format(
+      '   <polygon class="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s%s/>',
+      klass, util.fmt(cx), util.fmt(cy - size), util.fmt(cx - size),
+      util.fmt(cy + size), util.fmt(cx + size), util.fmt(cy + size), color,
+      opacity, outline)
+  elseif kind == "diamond" or kind == "D" then
+    return string.format(
+      '   <polygon class="%s" points="%s,%s %s,%s %s,%s %s,%s" fill="%s"%s%s/>',
+      klass, util.fmt(cx), util.fmt(cy - size), util.fmt(cx + size),
+      util.fmt(cy), util.fmt(cx), util.fmt(cy + size), util.fmt(cx - size),
+      util.fmt(cy), color, opacity, outline)
+  elseif kind == "cross" or kind == "+" or kind == "x" or kind == "X" then
+    local s = size
+    if kind == "cross" or kind == "+" then
+      return string.format(
+        '   <path class="%s" d="M%s,%s L%s,%s M%s,%s L%s,%s" stroke="%s" stroke-width="2" fill="none"%s/>',
+        klass, util.fmt(cx - s), util.fmt(cy), util.fmt(cx + s), util.fmt(cy),
+        util.fmt(cx), util.fmt(cy - s), util.fmt(cx), util.fmt(cy + s), color,
+        opacity)
+    end
+    return string.format(
+      '   <path class="%s" d="M%s,%s L%s,%s M%s,%s L%s,%s" stroke="%s" stroke-width="2" fill="none"%s/>',
+      klass, util.fmt(cx - s), util.fmt(cy - s), util.fmt(cx + s),
+      util.fmt(cy + s), util.fmt(cx + s), util.fmt(cy - s),
+      util.fmt(cx - s), util.fmt(cy + s), color, opacity)
+  end
+  return string.format(
+    '   <circle class="%s" cx="%s" cy="%s" r="%s" fill="%s"%s%s/>',
+    klass, util.fmt(cx), util.fmt(cy), util.fmt(size), color, opacity, outline)
+end
+
 local function render_line(series, map_x, map_y, buf)
   local style = series.style
   local color = style.color
@@ -545,10 +598,9 @@ local function render_line(series, map_x, map_y, buf)
       marker_opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
     end
     for i = 1, #series.x do
-      buf[#buf + 1] = string.format(
-        '   <circle class="marker" cx="%s" cy="%s" r="%s" fill="%s"%s/>',
-        util.fmt(map_x(series.x[i])), util.fmt(map_y(series.y[i])),
-        util.fmt(style.markersize), color, marker_opacity)
+      buf[#buf + 1] = marker_svg(style.marker, "marker",
+        map_x(series.x[i]), map_y(series.y[i]), style.markersize, color,
+        marker_opacity, "")
     end
   end
 
@@ -575,10 +627,8 @@ local function render_scatter(series, map_x, map_y, buf)
   for i = 1, #series.x do
     local radius = style.radii and style.radii[i] or style.radius
     local color = style.colors and style.colors[i] or style.color
-    buf[#buf + 1] = string.format(
-      '   <circle class="point" cx="%s" cy="%s" r="%s" fill="%s"%s%s/>',
-      util.fmt(map_x(series.x[i])), util.fmt(map_y(series.y[i])),
-      util.fmt(radius), color, fade, outline)
+    buf[#buf + 1] = marker_svg(style.marker, "point",
+      map_x(series.x[i]), map_y(series.y[i]), radius, color, fade, outline)
   end
   buf[#buf + 1] = '  </g>'
 end

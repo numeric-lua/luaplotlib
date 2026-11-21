@@ -38,7 +38,7 @@ test("plot rejects malformed data", function()
     "negative linewidth")
   bad(function() fig:plot({ 1, 2 }, { 1, 2 }, { linestyle = "zigzag" }) end,
     "unknown linestyle")
-  bad(function() fig:plot({ 1, 2 }, { 1, 2 }, { marker = "square" }) end,
+  bad(function() fig:plot({ 1, 2 }, { 1, 2 }, { marker = "star" }) end,
     "unknown marker")
   bad(function() fig:plot({ 1, 2 }, { 1, 2 }, { label = 12 }) end,
     "non-string label")

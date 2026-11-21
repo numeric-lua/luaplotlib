@@ -45,3 +45,19 @@ test("surface maps 1-D x along columns and y along rows", function()
   local ok = pcall(function() fig:surface({ 1 }, { 1, 2 }, { { 1, 2 }, { 3, 4 } }) end)
   assert_equal(ok, false)
 end)
+
+test("3-D savefig dispatches formats and rejects unknown extensions", function()
+  local fig = plt.figure3d()
+  fig:plot({ 0, 1 }, { 0, 1 }, { 0, 1 })
+  local base = (TMPDIR or "/tmp") .. "/axes3d-format"
+  assert_equal(fig:savefig(base .. ".svg"), base .. ".svg")
+  os.remove(base .. ".svg")
+  local ok, err = pcall(function() fig:savefig(base .. ".jpg") end)
+  assert_equal(ok, false)
+  assert_true(tostring(err):find("supports", 1, true) ~= nil)
+  ok, err = pcall(function() fig:savefig(base .. ".png") end)
+  os.remove(base .. ".png")
+  if not ok then
+    assert_true(tostring(err):find("rsvg", 1, true) ~= nil)
+  end
+end)
