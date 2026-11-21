@@ -41,6 +41,16 @@ end
 
 local fig = plt.figure({ width = 620, height = 620, dpi = 100 })
 fig:polar(theta, radius, { label = "3 + sin(4*theta)", linewidth = 2.5 })
+
+local mark_theta, mark_radius = {}, {}
+for i = 1, 8 do
+  mark_theta[i] = (i - 1) * 2 * math.pi / 8
+  mark_radius[i] = 3 + math.sin(4 * mark_theta[i])
+end
+fig:polar_scatter(mark_theta, mark_radius, {
+  color = "#d62728", size = 5, label = "samples",
+})
 fig:title("luaplotlib: polar plot")
+fig:legend()
 fig:savefig(outdir .. "/polar.svg")
 print("wrote " .. outdir .. "/polar.svg")

@@ -131,7 +131,9 @@ fig:savefig("polar.svg")
 `plt.polar(theta, r, opts)` is a shorthand that returns a figure with the
 default 640x480 canvas. Polar figures draw concentric radial grid circles and
 angular spokes with degree labels; the radial limit automatically covers the
-largest absolute radius. A figure cannot mix Cartesian and polar series.
+largest absolute radius. `fig:polar_scatter` adds polar markers with per-point
+sizes and colors, and labelled polar line/scatter series participate in
+`fig:legend()`. A figure cannot mix Cartesian and polar series.
 
 Annotations use data coordinates and can include a leader arrow:
 

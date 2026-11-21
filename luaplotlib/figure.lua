@@ -27,7 +27,21 @@ local POLAR_LINE_OPTIONS = {
   label = true,
   linewidth = true,
   linestyle = true,
+  marker = true,
+  markersize = true,
   alpha = true,
+}
+
+local POLAR_SCATTER_OPTIONS = {
+  color = true,
+  label = true,
+  size = true,
+  s = true,
+  markersize = true,
+  alpha = true,
+  edgecolor = true,
+  linewidth = true,
+  marker = true,
 }
 
 local SCATTER_OPTIONS = {
@@ -439,18 +453,21 @@ function Figure:plot(x, y, opts)
   return self
 end
 
--- Add a polar line series.  Theta values are radians and r values share the
--- same length.  A figure is either Cartesian or polar; mixing the two is
--- rejected so that a typo cannot silently produce an empty plot.
-function Figure:polar(theta, r, opts)
-  opts = util.check_options(opts, POLAR_LINE_OPTIONS, "polar")
+local function ensure_polar_state(self)
   if self._pie ~= nil then
     fail("cannot combine pie and polar plots in one figure")
   end
   if #self._series > 0 then
     fail("cannot mix cartesian and polar series in one figure; create a separate figure")
   end
+  return polar.ensure(self)
+end
 
+-- Add a polar line series.  Theta values are radians and r values share the
+-- same length.  A figure is either Cartesian or polar; mixing the two is
+-- rejected so that a typo cannot silently produce an empty plot.
+function Figure:polar(theta, r, opts)
+  opts = util.check_options(opts, POLAR_LINE_OPTIONS, "polar")
   local tv = data.sequence(theta, "polar theta")
   local rv = data.sequence(r, "polar r")
   if #tv ~= #rv then
@@ -466,14 +483,90 @@ function Figure:polar(theta, r, opts)
   if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
     fail("polar linestyle must be one of solid, dashed, dotted, or none")
   end
+  local marker = checked_marker(opts.marker, "polar")
+  local markersize = 4
+  if opts.markersize ~= nil then
+    markersize = util.check_number(opts.markersize, "polar markersize", 0.1)
+  end
 
   local style = checked_style(self, opts, "polar")
   style.linewidth = linewidth
   style.linestyle = linestyle
+  style.marker = marker
+  style.markersize = markersize
 
-  local state = polar.ensure(self)
+  local state = ensure_polar_state(self)
   state.series[#state.series + 1] = {
     kind = "line",
+    theta = tv,
+    r = rv,
+    style = style,
+  }
+  return self
+end
+
+-- Add a polar scatter series.  Sizes are marker radii in SVG user units and
+-- colors may be a single value or one value per point.
+function Figure:polar_scatter(theta, r, opts)
+  opts = util.check_options(opts, POLAR_SCATTER_OPTIONS, "polar scatter")
+  local tv = data.sequence(theta, "polar scatter theta")
+  local rv = data.sequence(r, "polar scatter r")
+  if #tv ~= #rv then
+    fail(string.format(
+      "polar scatter theta and r must have the same length (%d ~= %d)",
+      #tv, #rv))
+  end
+
+  local radius = 4
+  local radii
+  local radius_arg = opts.size
+  if radius_arg == nil then radius_arg = opts.markersize end
+  if radius_arg == nil then radius_arg = opts.s end
+  if type(radius_arg) == "table" then
+    if #radius_arg ~= #tv then
+      fail("polar scatter size array must match the number of points")
+    end
+    radii = {}
+    for index = 1, #radius_arg do
+      radii[index] = util.check_number(radius_arg[index],
+        "polar scatter size", 0.1)
+    end
+    radius = radii[1] or radius
+  elseif radius_arg ~= nil then
+    radius = util.check_number(radius_arg, "polar scatter size", 0.1)
+  end
+
+  local linewidth = 1
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "polar scatter linewidth", 0)
+  end
+
+  local point_colors
+  local style_opts = opts
+  if type(opts.color) == "table" then
+    if #opts.color ~= #tv then
+      fail("polar scatter color array must match the number of points")
+    end
+    point_colors = {}
+    for index = 1, #opts.color do
+      point_colors[index] = util.check_color(opts.color[index],
+        "polar scatter color")
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.color = point_colors[1]
+  end
+
+  local style = checked_style(self, style_opts, "polar scatter")
+  style.marker = checked_marker(opts.marker, "polar scatter") or "circle"
+  style.radius = radius
+  style.radii = radii
+  style.colors = point_colors
+  style.linewidth = linewidth
+
+  local state = ensure_polar_state(self)
+  state.series[#state.series + 1] = {
+    kind = "scatter",
     theta = tv,
     r = rv,
     style = style,

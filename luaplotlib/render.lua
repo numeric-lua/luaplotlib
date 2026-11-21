@@ -1,5 +1,6 @@
 -- Pure-Lua SVG renderer for luaplotlib figures.
 
+local markers = require("luaplotlib.markers")
 local ticks = require("luaplotlib.ticks")
 local util = require("luaplotlib.util")
 
@@ -554,44 +555,6 @@ local function render_reference(series, map_x, map_y, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
-local function marker_svg(kind, klass, cx, cy, size, color, opacity, outline)
-  if kind == "square" or kind == "s" then
-    return string.format(
-      '   <rect class="%s" x="%s" y="%s" width="%s" height="%s" fill="%s"%s%s/>',
-      klass, util.fmt(cx - size), util.fmt(cy - size), util.fmt(size * 2),
-      util.fmt(size * 2), color, opacity, outline)
-  elseif kind == "triangle" or kind == "^" then
-    return string.format(
-      '   <polygon class="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s%s/>',
-      klass, util.fmt(cx), util.fmt(cy - size), util.fmt(cx - size),
-      util.fmt(cy + size), util.fmt(cx + size), util.fmt(cy + size), color,
-      opacity, outline)
-  elseif kind == "diamond" or kind == "D" then
-    return string.format(
-      '   <polygon class="%s" points="%s,%s %s,%s %s,%s %s,%s" fill="%s"%s%s/>',
-      klass, util.fmt(cx), util.fmt(cy - size), util.fmt(cx + size),
-      util.fmt(cy), util.fmt(cx), util.fmt(cy + size), util.fmt(cx - size),
-      util.fmt(cy), color, opacity, outline)
-  elseif kind == "cross" or kind == "+" or kind == "x" or kind == "X" then
-    local s = size
-    if kind == "cross" or kind == "+" then
-      return string.format(
-        '   <path class="%s" d="M%s,%s L%s,%s M%s,%s L%s,%s" stroke="%s" stroke-width="2" fill="none"%s/>',
-        klass, util.fmt(cx - s), util.fmt(cy), util.fmt(cx + s), util.fmt(cy),
-        util.fmt(cx), util.fmt(cy - s), util.fmt(cx), util.fmt(cy + s), color,
-        opacity)
-    end
-    return string.format(
-      '   <path class="%s" d="M%s,%s L%s,%s M%s,%s L%s,%s" stroke="%s" stroke-width="2" fill="none"%s/>',
-      klass, util.fmt(cx - s), util.fmt(cy - s), util.fmt(cx + s),
-      util.fmt(cy + s), util.fmt(cx + s), util.fmt(cy - s),
-      util.fmt(cx - s), util.fmt(cy + s), color, opacity)
-  end
-  return string.format(
-    '   <circle class="%s" cx="%s" cy="%s" r="%s" fill="%s"%s%s/>',
-    klass, util.fmt(cx), util.fmt(cy), util.fmt(size), color, opacity, outline)
-end
-
 local function render_line(series, map_x, map_y, buf)
   local style = series.style
   local color = style.color
@@ -630,7 +593,7 @@ local function render_line(series, map_x, map_y, buf)
       marker_opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
     end
     for i = 1, #series.x do
-      buf[#buf + 1] = marker_svg(style.marker, "marker",
+      buf[#buf + 1] = markers.svg(style.marker, "marker",
         map_x(series.x[i]), map_y(series.y[i]), style.markersize, color,
         marker_opacity, "")
     end
@@ -659,7 +622,7 @@ local function render_scatter(series, map_x, map_y, buf)
   for i = 1, #series.x do
     local radius = style.radii and style.radii[i] or style.radius
     local color = style.colors and style.colors[i] or style.color
-    buf[#buf + 1] = marker_svg(style.marker, "point",
+    buf[#buf + 1] = markers.svg(style.marker, "point",
       map_x(series.x[i]), map_y(series.y[i]), radius, color, fade, outline)
   end
   buf[#buf + 1] = '  </g>'

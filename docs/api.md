@@ -93,8 +93,8 @@ Options include `labels`, `colors`, `startangle`, `radius`, `inner_radius`,
 
 Draw a polar line series. `theta` is in radians; negative `r` values are drawn
 on the opposite side of the origin. Both arrays must be non-empty, finite, and
-the same length. Options are `color`, `label`, `linewidth`, `linestyle`, and
-`alpha`, with the same validation as `plot`.
+the same length. Options are `color`, `label`, `linewidth`, `linestyle`,
+`marker`, `markersize`, and `alpha`, with the same validation as `plot`.
 
 `plt.polar` creates a default 640x480 figure and returns it. `fig:polar` adds a
 series to an existing figure; calling it more than once adds more polar line
@@ -102,6 +102,20 @@ series. A figure cannot contain both Cartesian and polar series. Polar figures
 draw eight angular spokes at 45-degree intervals with degree labels, concentric
 radial grid circles, and an automatically chosen radial limit covering the
 largest absolute radius. `to_svg`, `to_html`, and `savefig` work as usual.
+
+### `fig:polar_scatter(theta, r, opts)`
+
+Draw one marker per polar point. `theta` and `r` must be the same length and
+finite. `marker` selects circle (the default), square, triangle, diamond, cross,
+or x. `size` (or its `markersize`/`s` aliases) is a marker radius in SVG user
+units and may be a single number or an array with one radius per point. `color`
+may be a single color or an array with one fill color per point; `alpha`,
+`edgecolor`, and `linewidth` behave like Cartesian `scatter`. Sizes and color
+arrays must match the number of points.
+
+Polar scatter and line entries with labels participate in `fig:legend()`. The
+polar legend supports the same `loc`, `frame`, `ncol`, and `title` options as
+the Cartesian renderer.
 
 ### `fig:barh(labels_or_y, values, opts)`
 

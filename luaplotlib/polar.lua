@@ -15,6 +15,7 @@
 -- Negative r values therefore plot on the opposite side of the origin, which
 -- matches matplotlib's polar convention.
 
+local markers = require("luaplotlib.markers")
 local ticks = require("luaplotlib.ticks")
 local util = require("luaplotlib.util")
 
@@ -221,6 +222,51 @@ local function render_line(series, figure, cfg, geom, buf)
     '   <polyline class="polar-line" points="%s" fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"%s%s/>',
     table.concat(points, " "), style.color, util.fmt(style.linewidth), dash,
     opacity)
+
+  local draw_marker = style.marker ~= nil or
+    (#series.theta == 1 and style.linestyle ~= "none")
+  if draw_marker then
+    local marker_opacity = ""
+    if style.alpha < 1 then
+      marker_opacity = string.format(' fill-opacity="%s"',
+        util.fmt(style.alpha))
+    end
+    for index = 1, #series.theta do
+      local x, y = M.point(figure, cfg, geom, series.theta[index],
+        series.r[index])
+      buf[#buf + 1] = markers.svg(style.marker, "marker", x, y,
+        style.markersize or 4, style.color, marker_opacity, "")
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_scatter(series, figure, cfg, geom, buf)
+  local style = series.style
+  local fade = ""
+  if style.alpha < 1 then
+    fade = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
+  end
+  local outline = ""
+  if style.edgecolor ~= nil then
+    outline = string.format(' stroke="%s" stroke-width="%s"',
+      style.edgecolor, util.fmt(style.linewidth))
+  end
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', util.escape_xml(style.label))
+  end
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-polar-scatter"%s>', label)
+  for index = 1, #series.theta do
+    local radius = style.radii and style.radii[index] or style.radius
+    local color = style.colors and style.colors[index] or style.color
+    local x, y = M.point(figure, cfg, geom, series.theta[index],
+      series.r[index])
+    buf[#buf + 1] = markers.svg(style.marker, "point", x, y, radius, color,
+      fade, outline)
+  end
   buf[#buf + 1] = '  </g>'
 end
 
@@ -288,6 +334,104 @@ local function render_title(figure, geom, buf)
     util.fmt(geom.width / 2), TEXT_COLOR, util.escape_xml(figure._title))
 end
 
+local function clamp(value, minimum, maximum)
+  if value < minimum then return minimum end
+  if value > maximum then return maximum end
+  return value
+end
+
+local function polar_swatch(kind, color, x, y, buf)
+  if kind == "scatter" then
+    buf[#buf + 1] = string.format(
+      '   <circle cx="%s" cy="%s" r="4" fill="%s"/>',
+      util.fmt(x + 10), util.fmt(y), color)
+  elseif kind == "bar" then
+    buf[#buf + 1] = string.format(
+      '   <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
+      util.fmt(x), util.fmt(y - 4), color)
+  else
+    buf[#buf + 1] = string.format(
+      '   <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
+      util.fmt(x), util.fmt(y), util.fmt(x + 20), util.fmt(y), color)
+  end
+end
+
+local function render_legend(figure, geom, buf)
+  if not figure._legend_requested then return end
+
+  local entries = {}
+  for _, series in ipairs(figure._polar.series) do
+    local label = series.style.label
+    if label ~= nil and label ~= "" then
+      entries[#entries + 1] = {
+        kind = series.kind,
+        color = series.style.color,
+        label = label,
+      }
+    end
+  end
+  if #entries == 0 then return end
+
+  local max_chars = 0
+  for _, entry in ipairs(entries) do
+    if #entry.label > max_chars then max_chars = #entry.label end
+  end
+
+  local opts = figure._legend_opts or {
+    loc = "upper right", frame = true, ncol = 1,
+  }
+  local ncol = math.max(1, math.min(opts.ncol or 1, #entries))
+  local rows = math.ceil(#entries / ncol)
+  local available = math.max(40, geom.radius * 2 - 8)
+  local col_width = math.max(60, 52 + max_chars * 6.5)
+  col_width = math.min(col_width,
+    math.floor((available - (ncol - 1) * 8) / ncol))
+  local box_width = col_width * ncol + (ncol - 1) * 8
+  local title_height = opts.title and 20 or 0
+  local box_height = 12 + title_height + rows * 20
+
+  local left = geom.cx - geom.radius
+  local top = geom.cy - geom.radius
+  local x, y
+  if opts.loc == "upper left" then
+    x, y = left + 8, top + 8
+  elseif opts.loc == "lower left" then
+    x, y = left + 8, top + available - box_height - 8
+  elseif opts.loc == "lower right" then
+    x, y = left + available - box_width - 8,
+      top + available - box_height - 8
+  else
+    x, y = left + available - box_width - 8, top + 8
+  end
+  x = clamp(x, left + 4, math.max(left + 4, left + available - box_width - 4))
+  y = clamp(y, top + 4, math.max(top + 4, top + available - box_height - 4))
+
+  buf[#buf + 1] = '  <g class="polar-legend">'
+  if opts.frame ~= false then
+    buf[#buf + 1] = string.format(
+      '   <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="#ffffff" fill-opacity="0.92" stroke="#bbbbbb" stroke-width="1"/>',
+      util.fmt(x), util.fmt(y), util.fmt(box_width), util.fmt(box_height))
+  end
+  if opts.title then
+    buf[#buf + 1] = string.format(
+      '   <text class="legend-title" x="%s" y="%s" font-size="11" font-weight="bold" fill="%s">%s</text>',
+      util.fmt(x + 8), util.fmt(y + 14), TEXT_COLOR,
+      util.escape_xml(opts.title))
+  end
+  for index, entry in ipairs(entries) do
+    local column = math.floor((index - 1) / rows) + 1
+    local row = (index - 1) % rows + 1
+    local entry_x = x + 8 + (column - 1) * (col_width + 8)
+    local entry_y = y + 12 + title_height + (row - 1) * 20
+    polar_swatch(entry.kind, entry.color, entry_x, entry_y, buf)
+    buf[#buf + 1] = string.format(
+      '   <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
+      util.fmt(entry_x + 28), util.fmt(entry_y + 4), TEXT_COLOR,
+      util.escape_xml(entry.label))
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 function M.to_svg(figure)
   if figure._pie ~= nil then
     fail("cannot combine pie and polar plots in one figure")
@@ -344,10 +488,13 @@ function M.to_svg(figure)
   for _, series in ipairs(state.series) do
     if series.kind == "line" then
       render_line(series, figure, cfg, geom, buf)
+    elseif series.kind == "scatter" then
+      render_scatter(series, figure, cfg, geom, buf)
     end
   end
   add('  </g>')
   add('  </g>')
+  render_legend(figure, geom, buf)
   add(' </g>')
   add('</svg>')
   return table.concat(buf, "\n") .. "\n"
