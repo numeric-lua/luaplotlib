@@ -57,12 +57,24 @@ function Axes3D:surface(x, y, z, opts)
   local xx = x
   local yy = y
   if type(x) ~= "table" or type(x[1]) ~= "table" then
+    if #x < cols then
+      error("surface x must have at least " .. cols .. " entries")
+    end
     xx = {}
-    for r = 1, rows do xx[r] = {}; for c = 1, cols do xx[r][c] = x[r] or r end end
+    for r = 1, rows do
+      xx[r] = {}
+      for c = 1, cols do xx[r][c] = x[c] end
+    end
   end
   if type(y) ~= "table" or type(y[1]) ~= "table" then
+    if #y < rows then
+      error("surface y must have at least " .. rows .. " entries")
+    end
     yy = {}
-    for r = 1, rows do yy[r] = {}; for c = 1, cols do yy[r][c] = y[c] or c end end
+    for r = 1, rows do
+      yy[r] = {}
+      for c = 1, cols do yy[r][c] = y[r] end
+    end
   end
   opts = opts or {}
   self._series[#self._series + 1] = {
@@ -107,12 +119,15 @@ local function bounds(axes)
     local p = (hi - lo) * 0.1
     return lo - p, hi + p
   end
-  b.minx, b.maxx = axes._xlim and axes._xlim[1] or pad(b.minx, b.maxx),
-    axes._xlim and axes._xlim[2] or pad(b.maxx, b.maxx)
-  b.miny, b.maxy = axes._ylim and axes._ylim[1] or pad(b.miny, b.maxy),
-    axes._ylim and axes._ylim[2] or pad(b.miny, b.maxy)
-  b.minz, b.maxz = axes._zlim and axes._zlim[1] or pad(b.minz, b.maxz),
-    axes._zlim and axes._zlim[2] or pad(b.minz, b.maxz)
+  local x0, x1 = pad(b.minx, b.maxx)
+  local y0, y1 = pad(b.miny, b.maxy)
+  local z0, z1 = pad(b.minz, b.maxz)
+  b.minx = axes._xlim and axes._xlim[1] or x0
+  b.maxx = axes._xlim and axes._xlim[2] or x1
+  b.miny = axes._ylim and axes._ylim[1] or y0
+  b.maxy = axes._ylim and axes._ylim[2] or y1
+  b.minz = axes._zlim and axes._zlim[1] or z0
+  b.maxz = axes._zlim and axes._zlim[2] or z1
   return b
 end
 

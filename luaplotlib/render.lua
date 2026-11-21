@@ -90,6 +90,10 @@ local function data_extents(fig, xscale, yscale)
       include_x(series.cols, series_index, 1, "image")
       include_y(0, series_index, 1, "image")
       include_y(series.rows, series_index, 1, "image")
+    elseif series.kind == "axhline" then
+      include_y(series.y, series_index, 1, "axhline")
+    elseif series.kind == "axvline" then
+      include_x(series.x, series_index, 1, "axvline")
     elseif series.kind == "line" or series.kind == "scatter" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "series")
@@ -473,6 +477,33 @@ local function render_colorbar(series, geom, buf)
   buf[#buf + 1] = string.format(
     '   <text x="%s" y="%s" font-size="10" text-anchor="start">%s</text>',
     util.fmt(x + 22), util.fmt(y + height), util.fmt_tick(series.vmin))
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_reference(series, map_x, map_y, geom, buf)
+  local style = series.style
+  local dash = ""
+  if style.linestyle == "dashed" then dash = ' stroke-dasharray="6 4"'
+  elseif style.linestyle == "dotted" then dash = ' stroke-dasharray="1.5 3"' end
+  local opacity = style.alpha < 1 and
+    string.format(' stroke-opacity="%s"', util.fmt(style.alpha)) or ""
+  local label = style.label and
+    string.format(' data-label="%s"', attribute(style.label)) or ""
+  buf[#buf + 1] = string.format('  <g class="series series-%s"%s>',
+    series.kind, label)
+  if series.kind == "axhline" then
+    local y = map_y(series.y)
+    buf[#buf + 1] = string.format(
+      '   <line class="reference" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
+      util.fmt(geom.left), util.fmt(y), util.fmt(geom.right), util.fmt(y),
+      style.color, util.fmt(style.linewidth), dash, opacity)
+  else
+    local x = map_x(series.x)
+    buf[#buf + 1] = string.format(
+      '   <line class="reference" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
+      util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.bottom),
+      style.color, util.fmt(style.linewidth), dash, opacity)
+  end
   buf[#buf + 1] = '  </g>'
 end
 
@@ -1226,15 +1257,20 @@ function M.to_svg(fig)
     elseif grid_opts.linestyle == "dotted" then dash = ' stroke-dasharray="2 3"' end
     add('  <g class="grid" stroke="' .. (grid_opts.color or GRID_COLOR) ..
       '" stroke-width="' .. util.fmt(grid_opts.linewidth or 1) .. '"' .. dash .. '>')
-    for _, tick in ipairs(x_display) do
-      local x = map_x(tick.value)
-      printf('   <line x1="%s" y1="%s" x2="%s" y2="%s"/>',
-        util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.bottom))
+    local grid_axis = grid_opts.axis or "both"
+    if grid_axis ~= "y" then
+      for _, tick in ipairs(x_display) do
+        local x = map_x(tick.value)
+        printf('   <line x1="%s" y1="%s" x2="%s" y2="%s"/>',
+          util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.bottom))
+      end
     end
-    for _, tick in ipairs(y_display) do
-      local y = map_y(tick.value)
-      printf('   <line x1="%s" y1="%s" x2="%s" y2="%s"/>',
-        util.fmt(geom.left), util.fmt(y), util.fmt(geom.right), util.fmt(y))
+    if grid_axis ~= "x" then
+      for _, tick in ipairs(y_display) do
+        local y = map_y(tick.value)
+        printf('   <line x1="%s" y1="%s" x2="%s" y2="%s"/>',
+          util.fmt(geom.left), util.fmt(y), util.fmt(geom.right), util.fmt(y))
+      end
     end
     add('  </g>')
   end
@@ -1243,6 +1279,8 @@ function M.to_svg(fig)
   for _, series in ipairs(fig._series) do
     if series.kind == "image" then
       render_image(series, map_x, map_y, buf)
+    elseif series.kind == "axhline" or series.kind == "axvline" then
+      render_reference(series, map_x, map_y, geom, buf)
     elseif series.kind == "line" then
       render_line(series, map_x, map_y, buf)
     elseif series.kind == "scatter" then

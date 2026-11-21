@@ -194,20 +194,20 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.4.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.5.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-annotations, linear/log/date axes, twin x/y axes, subplots, custom ticks,
-per-bar colors, value labels, legends, and scene export. See
+annotations, linear/log/date axes, twin x/y axes, 3-D line/scatter/surface/mesh,
+subplots, custom ticks, per-bar colors, value labels, legends, reference lines,
+axis-specific grid lines, optional PNG/PDF export, and scene export. See
 [docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations
 
-- **SVG only.** There is no interactive window, HTML widget, PNG/PDF output, or
-  display server integration yet.
-- **Linear and log axes only.** Date axes, twin axes, and polar plots are not
-  implemented.
-- **No 3-D or pie charts yet.** Heatmaps, contours, and boxplots are available;
-  pie charts and 3-D plots are not.
+- **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
+  `rsvg-convert`; there is no interactive window or display server integration.
+- **Linear, log, and date-x axes.** Twin axes are supported; polar plots are not.
+- **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
+  full camera/lighting controls are not.
 - **Basic layout.** Margins are adaptive, `xtick_rotation` helps crowded
   categorical axes, custom ticks/formatters are available, and subplot
   gap/margin are configurable. There is no full text-measurement layout engine

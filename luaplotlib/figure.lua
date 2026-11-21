@@ -1665,6 +1665,42 @@ function Figure:yscale(scale)
   return self
 end
 
+local REFERENCE_OPTIONS = {
+  color = true, linewidth = true, linestyle = true, alpha = true, label = true,
+}
+
+local function reference_style(figure, opts, name)
+  opts = util.check_options(opts, REFERENCE_OPTIONS, name)
+  local style = checked_style(figure, opts, name)
+  style.linewidth = 1.5
+  if opts.linewidth ~= nil then
+    style.linewidth = util.check_number(opts.linewidth, name .. " linewidth", 0)
+  end
+  style.linestyle = opts.linestyle or "dashed"
+  if not LINESTYLES[style.linestyle] then
+    fail(name .. " linestyle must be one of solid, dashed, dotted, or none")
+  end
+  return style
+end
+
+function Figure:axhline(y, opts)
+  if type(y) ~= "number" or y ~= y or y == math.huge or y == -math.huge then
+    fail("axhline y must be a finite number")
+  end
+  local style = reference_style(self, opts, "axhline")
+  self._series[#self._series + 1] = { kind = "axhline", y = y, style = style }
+  return self
+end
+
+function Figure:axvline(x, opts)
+  if type(x) ~= "number" or x ~= x or x == math.huge or x == -math.huge then
+    fail("axvline x must be a finite number")
+  end
+  local style = reference_style(self, opts, "axvline")
+  self._series[#self._series + 1] = { kind = "axvline", x = x, style = style }
+  return self
+end
+
 function Figure:grid(enabled, opts)
   if type(enabled) == "table" and opts == nil then
     opts, enabled = enabled, true
@@ -1673,7 +1709,13 @@ function Figure:grid(enabled, opts)
   util.check_boolean(enabled, "grid")
   if opts ~= nil then
     opts = util.check_options(opts, { color = true, linewidth = true,
-      linestyle = true }, "grid")
+      linestyle = true, axis = true }, "grid")
+    if opts.axis ~= nil then
+      if opts.axis ~= "x" and opts.axis ~= "y" and opts.axis ~= "both" then
+        fail("grid axis must be x, y, or both")
+      end
+      self._grid_opts.axis = opts.axis
+    end
     if opts.color ~= nil then
       self._grid_opts.color = util.check_color(opts.color, "grid color")
     end
@@ -1778,6 +1820,12 @@ end
 
 function Figure:savefig(path)
   util.check_string(path, "savefig path", false)
+  local lower = path:lower()
+  if lower:sub(-4) == ".png" then return self:save_png(path) end
+  if lower:sub(-4) == ".pdf" then return self:save_pdf(path) end
+  if lower:sub(-4) ~= ".svg" then
+    fail("savefig supports .svg, .png, and .pdf paths", 3)
+  end
   local svg = self:to_svg()
   local handle, open_error = io.open(path, "wb")
   if not handle then

@@ -1,5 +1,7 @@
-# luaplotlib 4.4.0
+# luaplotlib 4.5.0
 
-- `save_png` / `save_pdf` for figures and subplots;
-- optional `rsvg-convert` dependency for raster/PDF export;
-- 117 tests.
+- fix default 3-D auto-bounds and surface coordinate mapping;
+- `.svg`/`.png`/`.pdf` dispatch in `savefig`;
+- axis-specific grid lines;
+- `axhline` and `axvline` reference lines;
+- refreshed API and README docs; 120 tests.

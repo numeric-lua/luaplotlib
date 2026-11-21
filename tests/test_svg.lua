@@ -225,6 +225,30 @@ test("savefig writes the same standalone SVG returned by to_svg", function()
   assert_contains(contents, 'class="legend"')
 end)
 
+test("grid supports axis-specific lines", function()
+  local function grid_lines(axis)
+    local fig = plt.figure()
+    fig:plot({ 1, 2, 3 }, { 1, 2, 3 })
+    fig:grid(true, { axis = axis })
+    local svg = fig:to_svg()
+    local block = assert(svg:match('<g class="grid".-</g>'))
+    local vertical, horizontal = 0, 0
+    for x1, y1, x2, y2 in block:gmatch('<line x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)"') do
+      if x1 == x2 then vertical = vertical + 1 end
+      if y1 == y2 then horizontal = horizontal + 1 end
+    end
+    return vertical, horizontal
+  end
+  local vx, hy = grid_lines("x")
+  assert_true(vx > 0 and hy == 0, "x grid emitted horizontal lines")
+  vx, hy = grid_lines("y")
+  assert_true(vx == 0 and hy > 0, "y grid emitted vertical lines")
+  local ok = pcall(function()
+    plt.figure():plot({1,2},{1,2}):grid(true, { axis = "z" })
+  end)
+  assert_equal(ok, false)
+end)
+
 test("renderer is deterministic for one figure", function()
   local fig = plt.figure()
   fig:plot({ 1, 2, 3 }, { 1, 3, 2 })

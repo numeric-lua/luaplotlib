@@ -171,6 +171,15 @@ test("savefig rejects bad paths and unwritable locations", function()
   bad(function() fig:savefig("") end, "empty path")
   bad(function() fig:savefig(TEST_OUTPUT_DIR .. "/missing-dir/out.svg") end,
     "missing parent directory")
+  bad(function() fig:savefig(TEST_OUTPUT_DIR .. "/out.jpg") end,
+    "unsupported extension")
+  local png_path = TEST_OUTPUT_DIR .. "/auto.png"
+  local ok, png_err = pcall(function() fig:savefig(png_path) end)
+  os.remove(png_path)
+  if not ok then
+    assert_true(tostring(png_err):find("rsvg", 1, true) ~= nil,
+      "png dispatch should fail only for a missing converter")
+  end
 end)
 
 test("methods fail on absent figure state without crashing the process", function()

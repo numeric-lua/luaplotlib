@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `0.2.0` (MVP). This document describes the public Lua API implemented
+Version: `4.5.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -250,6 +250,13 @@ receives the data value and returns a string.
 Formats x tick labels as calendar dates from Unix timestamps. `format` uses
 `os.date` syntax and defaults to `"%Y-%m-%d"`.
 
+### `fig:axhline(y[, opts])` / `fig:axvline(x[, opts])`
+
+Draw a horizontal or vertical reference line in data coordinates. Options:
+`color`, `linewidth`, `linestyle` (`solid`, `dashed`, `dotted`, `none`),
+`alpha`, and `label`. A horizontal line extends the y range; a vertical line
+extends the x range.
+
 ### `fig:to_html([title])` / `fig:save_html(path[, title])`
 
 Embed the SVG in a standalone HTML document.
@@ -477,11 +484,9 @@ includes, but is not limited to:
 
 ## Limitations
 
-- SVG only; no interactive display yet.
-- No date axes, 3-D plots, images, or subplots.
+- SVG is the primary backend; PNG/PDF require the optional `rsvg-convert`.
+- 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
-- One color per series; per-bar color arrays are not supported.
-- Only one categorical x-axis mapping is used per figure.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
   not required to use the library.
 
