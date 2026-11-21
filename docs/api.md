@@ -158,6 +158,17 @@ If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
 y-axis includes zero. Empty bins are not emitted as rectangles.
 
+### `fig:eventplot(positions[, opts])`
+
+Draw vertical event ticks. `positions` is one list of x values or a list of rows;
+each row becomes a horizontal lane. Options: `color`, `label`, `linewidth`,
+`alpha`.
+
+### `fig:ecdf(values[, opts])`
+
+Draw the empirical CDF as a post-step curve over the sorted values. Accepts the
+usual step styling options.
+
 ### `fig:fill_between(x, y1, y2[, opts])`
 
 Filled band between two y sequences.

@@ -492,6 +492,54 @@ function Figure:scatter(x, y, opts)
   return self
 end
 
+local EVENT_OPTIONS = {
+  color = true, label = true, linewidth = true, alpha = true,
+}
+
+function Figure:eventplot(positions, opts)
+  opts = util.check_options(opts, EVENT_OPTIONS, "eventplot")
+  local rows = {}
+  if type(positions) ~= "table" then
+    fail("eventplot positions must be a table")
+  end
+  if #positions > 0 and (type(positions[1]) == "table" or
+      data.is_tensor_like(positions[1])) then
+    for i = 1, #positions do
+      rows[i] = data.sequence(positions[i], "eventplot row")
+    end
+  else
+    rows[1] = data.sequence(positions, "eventplot positions")
+  end
+  local linewidth = opts.linewidth
+  if linewidth == nil then linewidth = 2 end
+  linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
+  local style = checked_style(self, opts, "eventplot")
+  style.linewidth = linewidth
+  self._series[#self._series + 1] = {
+    kind = "eventplot", rows = rows, style = style,
+  }
+  return self
+end
+
+function Figure:ecdf(values, opts)
+  opts = util.check_options(opts, STEP_OPTIONS, "ecdf")
+  local sorted = data.sequence(values, "ecdf values")
+  table.sort(sorted)
+  local count = #sorted
+  if count == 0 then fail("ecdf requires at least one value") end
+  local xs, ys = {}, {}
+  for i = 1, count do
+    xs[i] = sorted[i]
+    ys[i] = i / count
+  end
+  local style = checked_style(self, opts, "ecdf")
+  style.linewidth = opts.linewidth or 2
+  self._series[#self._series + 1] = {
+    kind = "step", x = xs, y = ys, where = "post", style = style,
+  }
+  return self
+end
+
 function Figure:hist(values, opts)
   opts = util.check_options(opts, HIST_OPTIONS, "hist")
   local values_v = data.sequence(values, "hist values")

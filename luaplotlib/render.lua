@@ -148,6 +148,14 @@ local function data_extents(fig, xscale, yscale)
         include_x(series.x1[i], series_index, i, "fillx left")
         include_x(series.x2[i], series_index, i, "fillx right")
       end
+    elseif series.kind == "eventplot" then
+      for row = 1, #series.rows do
+        for i = 1, #series.rows[row] do
+          include_x(series.rows[row][i], series_index, i, "eventplot x")
+        end
+      end
+      include_y(0, series_index, 1, "eventplot baseline")
+      include_y(math.max(1, #series.rows), series_index, 1, "eventplot top")
     elseif series.kind == "step" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "step x")
@@ -1371,6 +1379,25 @@ function M.to_svg(fig)
       render_fill(series, map_x, map_y, buf)
     elseif series.kind == "fillx" then
       render_fillx(series, map_x, map_y, buf)
+    elseif series.kind == "eventplot" then
+      local style = series.style
+      local opacity = ""
+      if style.alpha < 1 then
+        opacity = string.format(' stroke-opacity="%s"', util.fmt(style.alpha))
+      end
+      buf[#buf + 1] = '  <g class="series series-eventplot">'
+      for row, events in ipairs(series.rows) do
+        for _, value in ipairs(events) do
+          local x = map_x(value)
+          local y1 = map_y(row - 0.4)
+          local y2 = map_y(row + 0.4)
+          buf[#buf + 1] = string.format(
+            '   <line class="event" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
+            util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
+            style.color, util.fmt(style.linewidth), opacity)
+        end
+      end
+      buf[#buf + 1] = '  </g>'
     elseif series.kind == "step" then
       render_step(series, map_x, map_y, buf)
     elseif series.kind == "stem" then

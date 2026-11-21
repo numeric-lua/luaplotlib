@@ -1,5 +1,5 @@
-# luaplotlib 4.8.0
+# luaplotlib 4.9.0
 
-- subplot savefig format dispatch;
-- Axes3D scene export;
-- 128 tests.
+- eventplot raster series;
+- ecdf empirical CDF;
+- 129 tests.

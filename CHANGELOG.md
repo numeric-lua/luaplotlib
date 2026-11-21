@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.9.0
+
+- `eventplot` raster series;
+- `ecdf` empirical CDF step curve;
+- tests for both;
+- 129 tests.
+
 ## 4.8.0
 
 - subplot `savefig` format dispatch and unknown-extension errors;
