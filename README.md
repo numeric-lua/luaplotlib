@@ -185,6 +185,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars
+- Polar line, scatter, and bar plots with circular grid, theta/r ticks,
+  configurable orientation and limits, and polar scene export
 - Text annotations with optional leader arrows at data coordinates
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
@@ -218,15 +220,18 @@ make examples
 # examples/output/annotations.svg
 # examples/output/bars-grouped.svg
 # examples/output/bars-stacked.svg
+# examples/output/polar.svg
+# examples/output/polar-bars.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.11.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.12.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar plots, annotations, linear/log/date axes, twin x/y axes,
+polar line/scatter/bar plots with configurable orientation and grids,
+annotations, linear/log/date axes, twin x/y axes,
 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value
 labels, legends, reference lines, axis-specific grid lines, 3-D scene export,
 per-point scatter sizes/colors, histogram density, multi-column legends,
@@ -237,9 +242,10 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
-- **Polar axes are basic.** Polar figures support line, scatter, and bar series with automatic or explicit
-  radial limits, configurable zero location/direction, and custom angular and
-  radial grids; Cartesian and polar series cannot share a figure.
+- **Polar axes are basic.** Polar figures support line, scatter, and bar
+  series with automatic or explicit radial limits, configurable zero
+  location/direction, and custom angular and radial grids; Cartesian and polar
+  series cannot share a figure.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.

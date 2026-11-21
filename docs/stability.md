@@ -27,5 +27,6 @@ implementation details unless a document names them as public.
 ## Scope
 
 luaplotlib is a dependency-free SVG/HTML plotting library. It does not provide
-interactive windows, PNG/PDF rendering, 3-D plots, or a full text-measurement
-layout engine. Those are documented limits, not accidental omissions.
+interactive windows, a full 3-D camera/lighting model, or a full
+text-measurement layout engine. Those are documented limits, not accidental
+omissions.

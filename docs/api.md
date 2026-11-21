@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.5.0`. This document describes the public Lua API implemented
+Version: `4.12.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"0.2.0"`
+- `plt._VERSION` — currently `"4.12.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -611,6 +611,8 @@ across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
 ## Limitations
 
 - SVG is the primary backend; PNG/PDF require the optional `rsvg-convert`.
+- Polar axes support line/scatter/bar series; polar error bars, contour/heatmap
+  projections, and polar annotations are not implemented.
 - 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - Tensor/array interop is heuristic and reader-only; optional integrations are

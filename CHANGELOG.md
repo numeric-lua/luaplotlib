@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.12.0
+
+- polar axes (`plt.polar` / `fig:polar`) with circular grid and theta/r ticks;
+- polar scatter with per-point markers, sizes, colors, and legend support;
+- polar bar wedges with scalar or per-bar widths and per-bar colors;
+- `fig:polar_config` for zero location, direction, radial limits, and custom
+  angular/radial grids;
+- degrees input (`degrees = true` / `theta_unit = "degrees"`) for polar series;
+- polar scene export and subplot composition;
+- 149 tests.
+
 ## 4.11.0
 
 - bar `hatch` patterns (`/`, `\`, `|`, `-`, `+`, `x`, `.`, `o`);
