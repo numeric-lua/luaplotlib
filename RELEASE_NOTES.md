@@ -1,5 +1,5 @@
-# luaplotlib 4.7.0
+# luaplotlib 4.8.0
 
-- axhspan/axvspan shaded bands;
-- loglog, semilogx, and semilogy helpers;
-- 126 tests.
+- subplot savefig format dispatch;
+- Axes3D scene export;
+- 128 tests.

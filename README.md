@@ -194,11 +194,11 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.7.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.8.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 annotations, linear/log/date axes, twin x/y axes, 3-D line/scatter/surface/mesh,
 subplots, custom ticks, per-bar colors, value labels, legends, reference lines,
-axis-specific grid lines, per-point scatter sizes/colors, histogram density,
+axis-specific grid lines, 3-D scene export, per-point scatter sizes/colors, histogram density,
 multi-column legends, marker shapes, shaded spans, log helpers, optional
 PNG/PDF export, and scene export. See
 [docs/stability.md](docs/stability.md) for the API policy.

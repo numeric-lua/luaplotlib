@@ -289,6 +289,12 @@ end
 
 function SubplotFigure:savefig(path)
   util.check_string(path, "savefig path", false)
+  local lower = path:lower()
+  if lower:sub(-4) == ".png" then return self:save_png(path) end
+  if lower:sub(-4) == ".pdf" then return self:save_pdf(path) end
+  if lower:sub(-4) ~= ".svg" then
+    util.fail("savefig supports .svg, .png, and .pdf paths", 3)
+  end
   local svg = self:to_svg()
   local handle, err = io.open(path, "wb")
   if handle == nil then

@@ -505,7 +505,7 @@ includes, but is not limited to:
 
 `plt.figure3d(opts)` returns an orthographic 3-D figure with `plot(x,y,z)`,
 `scatter(x,y,z)`, `surface(x,y,z)`, `mesh(x,y,z)`, `view(elev,azim)`,
-`xlim/ylim/zlim`, labels, title, and `savefig(path)`. Surface 1-D `x` maps
+`xlim/ylim/zlim`, labels, title, `to_scene()`, and `savefig(path)`. Surface 1-D `x` maps
 across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
 
 ## Limitations

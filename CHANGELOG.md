@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.8.0
+
+- subplot `savefig` format dispatch and unknown-extension errors;
+- `Axes3D:to_scene()` for renderer-agnostic 3-D scene export;
+- tests for subplot dispatch and 3-D scene contents;
+- 128 tests.
+
 ## 4.7.0
 
 - `axhspan` / `axvspan` shaded data bands;

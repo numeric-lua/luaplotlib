@@ -262,4 +262,45 @@ function Axes3D:savefig(path)
   local f=assert(io.open(path,"wb")); f:write(self:to_svg()); f:close(); return path
 end
 
+local function copy1d(values)
+  local copy = {}
+  for i = 1, #values do copy[i] = values[i] end
+  return copy
+end
+
+local function copy2d(values, rows, cols)
+  local copy = {}
+  for r = 1, rows do
+    copy[r] = {}
+    for c = 1, cols do copy[r][c] = values[r][c] end
+  end
+  return copy
+end
+
+function Axes3D:to_scene()
+  local b = bounds(self)
+  local series = {}
+  for _, item in ipairs(self._series) do
+    local copy = { kind = item.kind, color = item.color, label = item.label,
+      style = item.style }
+    if item.kind == "surface" then
+      copy.rows = item.rows; copy.cols = item.cols
+      copy.x = copy2d(item.x, item.rows, item.cols)
+      copy.y = copy2d(item.y, item.rows, item.cols)
+      copy.z = copy2d(item.z, item.rows, item.cols)
+    else
+      copy.x = copy1d(item.x); copy.y = copy1d(item.y); copy.z = copy1d(item.z)
+    end
+    series[#series + 1] = copy
+  end
+  return {
+    version = 1, type = "luaplotlib3d", width = self.width,
+    height = self.height, elev = self.elev, azim = self.azim,
+    xlim = { b.minx, b.maxx }, ylim = { b.miny, b.maxy },
+    zlim = { b.minz, b.maxz }, xlabel = self._xlabel,
+    ylabel = self._ylabel, zlabel = self._zlabel, title = self._title,
+    series = series,
+  }
+end
+
 return Axes3D

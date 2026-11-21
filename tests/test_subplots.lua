@@ -78,3 +78,13 @@ test("supports gridspec-style width and height ratios", function()
   local svg = fig:to_svg()
   assert_contains(svg, 'data-subplots="1x2"')
 end)
+
+test("subplot savefig dispatches formats and rejects unknown", function()
+  local fig = plt.subplots(1, 1)
+  fig:axes_at(1, 1):plot({1,2}, {1,2})
+  local path = (TMPDIR or "/tmp") .. "/subplot-format.svg"
+  assert_equal(fig:savefig(path), path)
+  os.remove(path)
+  local ok = pcall(function() fig:savefig(path .. ".jpg") end)
+  assert_equal(ok, false)
+end)
