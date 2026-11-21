@@ -1,13 +1,13 @@
-# luaplotlib 4.13.0
+# luaplotlib 4.14.0
 
-- polar legends now choose a frame position that avoids theta and radial tick
-  labels, support `loc = "best"`, and expose their resolved geometry as
-  `data-x`/`data-y`/`data-width`/`data-height`;
-- `fig:polar_errorbar` draws radial error bars and optional angular errors with
-  configurable caps, colors, line styles, and markers;
-- `fig:polar_annotate` adds text and leader arrows at `(theta, r)` positions;
-  `fig:annotate` dispatches automatically on polar figures;
-- polar scene export includes error-bar series, annotations, resolved legend
-  entries, and `r_ticks` fractions; mixed Cartesian/polar exports fail loudly;
-- new `examples/polar_annotations.lua` and expanded API/README documentation;
-- 165 tests.
+- `fig:polar_heatmap` / `fig:polar_pcolormesh` project a value matrix as
+  annular or sector cells, with explicit radial and angular ranges, a fixed
+  heat palette, legends, and `polar.heatmaps` scene export;
+- polar annotation target radii extend the automatic `rmax`; explicit limits
+  reject out-of-range targets, and annotation text is shifted back inside the
+  canvas when it would leave the viewport;
+- polar legends use measured UTF-8 Helvetica/Arial advance widths for columns,
+  titles, and frames, and expose `data-text-width`;
+- radial tick labels draw above bars and heatmaps with a white contrast halo;
+- new `examples/polar_heatmap.lua`, optional `scripts/visual-qa.sh`, expanded
+  API/README documentation, and 188 tests.

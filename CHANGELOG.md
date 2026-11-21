@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.14.0
+
+- `fig:polar_heatmap` (alias `fig:polar_pcolormesh`) projects a rows-by-columns
+  matrix into annular/sector cells with `vmin`/`vmax`, `rmin`/`rmax`,
+  `theta_min`/`theta_max`, alpha, labels, degree input, legend entries, and
+  `polar.heatmaps` scene export;
+- polar annotation targets now extend the automatic radial limit, while an
+  explicit `rmax` rejects out-of-range targets; annotation text is clamped to
+  the canvas (`data-clip`/`data-clamped` metadata) and its leader arrow
+  follows;
+- measured UTF-8-aware Helvetica/Arial text metrics size polar legend columns,
+  titles, and frames; wide and narrow glyphs now receive different widths and
+  `data-text-width` exposes the measured label width;
+- polar radial tick labels render above series with a white contrast halo, so
+  filled bars and heatmaps no longer hide them;
+- new `examples/polar_heatmap.lua` and optional `scripts/visual-qa.sh`
+  rasterization check; expanded API/README documentation and 188 tests.
+
 ## 4.13.0
 
 - label-aware polar legend placement that avoids theta and radial tick labels,
