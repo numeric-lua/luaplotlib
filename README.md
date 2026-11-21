@@ -194,7 +194,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.9.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.10.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 annotations, linear/log/date axes, twin x/y axes, 3-D line/scatter/surface/mesh,
 subplots, custom ticks, per-bar colors, value labels, legends, reference lines,

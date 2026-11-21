@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.10.0
+
+- contour level labels and linestyles;
+- tests for labels, dashes, and invalid styles;
+- 130 tests.
+
 ## 4.9.0
 
 - `eventplot` raster series;

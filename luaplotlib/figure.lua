@@ -117,6 +117,8 @@ local CONTOUR_OPTIONS = {
   color = true,
   linewidth = true,
   label = true,
+  labels = true,
+  linestyle = true,
 }
 
 
@@ -1458,6 +1460,9 @@ function Figure:contour(values, opts)
   local linewidth = opts.linewidth
   if linewidth == nil then linewidth = 1.5 end
   linewidth = util.check_number(linewidth, "contour linewidth", 0)
+  local linestyle = opts.linestyle or "solid"
+  if not LINESTYLES[linestyle] then fail("invalid contour linestyle") end
+  if opts.labels ~= nil then util.check_boolean(opts.labels, "contour labels") end
   for _, level in ipairs(levels) do
     if type(level) ~= "number" then fail("contour levels must be numeric") end
     local segments = {}
@@ -1499,9 +1504,9 @@ function Figure:contour(values, opts)
     end
     self._series[#self._series + 1] = {
       kind = "contour", segments = segments, level = level, rows = rows,
-      cols = cols,
+      cols = cols, level_label = opts.labels and level or nil,
       style = { color = color, label = opts.label, linewidth = linewidth,
-        alpha = 1 },
+        linestyle = linestyle, alpha = 1 },
     }
   end
   return self

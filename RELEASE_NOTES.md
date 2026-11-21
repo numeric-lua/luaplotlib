@@ -1,5 +1,4 @@
-# luaplotlib 4.9.0
+# luaplotlib 4.10.0
 
-- eventplot raster series;
-- ecdf empirical CDF;
-- 129 tests.
+- contour labels and linestyles;
+- 130 tests.

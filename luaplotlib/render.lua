@@ -859,13 +859,24 @@ local function render_stem(series, map_x, map_y, buf)
 end
 
 local function render_contour(series, map_x, map_y, buf)
+  local dash = ""
+  if series.style.linestyle == "dashed" then dash = ' stroke-dasharray="6 4"'
+  elseif series.style.linestyle == "dotted" then dash = ' stroke-dasharray="2 3"' end
   buf[#buf + 1] = '  <g class="contour">'
   for _, segment in ipairs(series.segments) do
     buf[#buf + 1] = string.format(
-      '   <line class="contour-segment" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+      '   <line class="contour-segment" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(map_x(segment[1])), util.fmt(map_y(segment[2])),
       util.fmt(map_x(segment[3])), util.fmt(map_y(segment[4])),
-      series.style.color, util.fmt(series.style.linewidth))
+      series.style.color, util.fmt(series.style.linewidth), dash)
+  end
+  if series.level_label and series.segments[1] then
+    local segment = series.segments[1]
+    local x = (map_x(segment[1]) + map_x(segment[3])) / 2
+    local y = (map_y(segment[2]) + map_y(segment[4])) / 2
+    buf[#buf + 1] = string.format(
+      '   <text class="contour-label" x="%s" y="%s" font-size="10" fill="%s">%s</text>',
+      util.fmt(x), util.fmt(y), series.style.color, util.fmt(series.level_label))
   end
   buf[#buf + 1] = '  </g>'
 end
