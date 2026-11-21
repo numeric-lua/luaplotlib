@@ -52,6 +52,8 @@ luajit examples/heatmap.lua
 luajit examples/subplots.lua
 luajit examples/polar.lua
 luajit examples/polar_bars.lua
+luajit examples/polar_annotations.lua
+luajit examples/polar_heatmap.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -136,16 +138,24 @@ largest absolute radius, including error-bar extents. `fig:polar_scatter` adds
 polar markers with per-point sizes and colors, `fig:polar_bar` draws radial bar
 wedges with optional per-bar widths and colors, and
 `fig:polar_errorbar(theta, r, rerr, opts)` draws radial and optional angular
-uncertainty. `fig:polar_annotate` (or `fig:annotate` on a polar figure) places
-text and leader arrows at `(theta, r)` coordinates. `fig:polar_config` sets the
-zero location (`"E"`, `"N"`, `"W"`, `"S"`), clockwise/counterclockwise
-direction, explicit `rmax`, and custom angular/radial grids; pass
-`degrees = true` to any polar series method to supply theta in degrees.
-Labelled polar series participate in `fig:legend()`, which is placed so it does
-not cover the angular tick labels (`loc = "best"` searches for the least
-obstructed spot). `fig:to_scene()` exports the polar grid, series, annotations,
-and legend entries for non-SVG backends. A figure cannot mix Cartesian and
-polar content.
+uncertainty. `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
+projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
+`theta_min`/`theta_max`; it renders beneath the other series, so lines and
+annotations can be overlaid. `fig:polar_annotate` (or `fig:annotate` on a
+polar figure) places text and leader arrows at `(theta, r)` coordinates.
+Annotation target radii extend the automatic `rmax`; with an explicit limit, a
+target outside it raises an error. Annotation text may sit outside the circle
+but is shifted back inside the canvas when it would leave the viewport.
+`fig:polar_config` sets the zero location (`"E"`, `"N"`, `"W"`, `"S"`),
+clockwise/counterclockwise direction, explicit `rmax`, and custom
+angular/radial grids; pass `degrees = true` to any polar series method to
+supply theta in degrees. Labelled polar series and heatmaps participate in
+`fig:legend()`, which is placed so it does not cover the angular tick labels
+(`loc = "best"` searches for the least obstructed spot). Legend columns and
+titles are sized from UTF-8-aware Helvetica/Arial advance widths, so wide
+glyphs reserve more room than narrow ones. `fig:to_scene()` exports the polar
+grid, series, heatmaps, annotations, and legend entries for non-SVG backends.
+A figure cannot mix Cartesian and polar content.
 
 ```lua
 fig:polar_errorbar({ 0, math.pi / 4 }, { 3.5, 3.8 }, { 0.35, 0.4 }, {
@@ -156,6 +166,14 @@ fig:polar_annotate("maximum", math.pi / 2, 4.2, {
   xytext = { 1.85, 5.3 },
   align = "center",
   arrow = true,
+})
+local field = {
+  { 0.2, 0.7, 0.4 },
+  { 0.6, 1.0, 0.8 },
+}
+fig:polar_heatmap(field, {
+  rmax = 6,
+  label = "projected field",
 })
 ```
 
@@ -205,9 +223,10 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars
-- Polar line, scatter, bar, and error-bar plots with circular grid, theta/r
-  ticks, configurable orientation and limits, label-aware legends, polar
-  annotations, and polar scene export
+- Polar line, scatter, bar, error-bar, and heatmap plots with circular grid,
+  theta/r ticks, configurable orientation and limits, measured-text
+  label-aware legends, polar annotations with canvas clamping, and polar scene
+  export
 - Text annotations with optional leader arrows at Cartesian or polar data
   coordinates
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
@@ -232,6 +251,11 @@ luajit tests/run.lua
 make test
 ```
 
+For an optional visual check of the polar examples, `scripts/visual-qa.sh`
+runs every example and rasterizes the polar SVGs with `rsvg-convert` when that
+tool is installed. Rasterized files stay under the ignored `examples/output/`
+directory.
+
 To run the examples through the Makefile:
 
 ```sh
@@ -245,6 +269,7 @@ make examples
 # examples/output/polar.svg
 # examples/output/polar-bars.svg
 # examples/output/polar-annotations.svg
+# examples/output/polar-heatmap.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
@@ -253,8 +278,8 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 `4.13.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar/error-bar plots with configurable orientation and grids,
-polar annotations, label-aware polar legends,
+polar line/scatter/bar/error-bar/heatmap plots with configurable orientation
+and grids, polar annotations with canvas clamping, measured-text polar legends,
 annotations, linear/log/date axes, twin x/y axes,
 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value
 labels, legends, reference lines, axis-specific grid lines, 3-D scene export,
@@ -266,11 +291,12 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
-- **Polar axes are focused.** Polar figures support line, scatter, bar, and
-  error-bar series plus annotations, with automatic or explicit radial limits,
-  configurable zero location/direction, custom angular and radial grids, and
-  label-aware legends; Cartesian and polar content cannot share a figure.
-  Contour/heatmap projections and polar twin axes are not implemented.
+- **Polar axes are focused.** Polar figures support line, scatter, bar,
+  error-bar, and heatmap-series projections plus annotations, with automatic or
+  explicit radial limits, configurable zero location/direction, custom angular
+  and radial grids, and measured-text label-aware legends; Cartesian and polar
+  content cannot share a figure. Polar contour lines and polar twin axes are
+  not implemented.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.
@@ -310,5 +336,6 @@ local scene = figure:to_scene()
 The scene contains series geometry, styles, axes labels, scales, explicit
 limits, category ticks, and annotation geometry/styles. Polar figures export a
 `polar` block with resolved theta/r ticks, series (including error bars),
-annotations, and legend entries under `orientation = "polar"`. The export does
-not depend on LÖVR or any graphics toolkit.
+heatmap cells and value ranges, annotations, and legend entries under
+`orientation = "polar"`. The export does not depend on LÖVR or any graphics
+toolkit.

@@ -22,7 +22,8 @@ implementation details unless a document names them as public.
   prefer the scene export over scraping SVG.
 - The scene format is `version = 1`; additive fields may appear in minor
   releases. Polar figures set `orientation = "polar"` and store geometry under
-  `polar` while Cartesian scenes keep their existing shape.
+  `polar` while Cartesian scenes keep their existing shape. Polar scenes may
+also gain additive fields such as `polar.heatmaps` in minor releases.
 
 ## Scope
 

@@ -85,6 +85,19 @@ local POLAR_ERRORBAR_OPTIONS = {
   theta_unit = true,
 }
 
+local POLAR_HEATMAP_OPTIONS = {
+  vmin = true,
+  vmax = true,
+  rmin = true,
+  rmax = true,
+  theta_min = true,
+  theta_max = true,
+  alpha = true,
+  label = true,
+  degrees = true,
+  theta_unit = true,
+}
+
 local SCATTER_OPTIONS = {
   color = true,
   label = true,
@@ -838,6 +851,96 @@ function Figure:polar_errorbar(theta, r, rerr, opts)
     style = style,
   }
   return self
+end
+
+-- Project a rectangular value matrix into an annular polar heatmap.  Rows
+-- run from the inner radius to the outer radius and columns sweep from
+-- theta_min to theta_max.  The matrix is rendered beneath line/scatter/bar
+-- series, so callers can overlay contours or curves on the field.
+function Figure:polar_heatmap(values, opts)
+  opts = util.check_options(opts, POLAR_HEATMAP_OPTIONS, "polar heatmap")
+  local rows, cols, matrix = data.matrix(values, "polar heatmap values")
+
+  local minimum, maximum = math.huge, -math.huge
+  for row = 1, rows do
+    for col = 1, cols do
+      local value = matrix[row][col]
+      if value < minimum then minimum = value end
+      if value > maximum then maximum = value end
+    end
+  end
+  if opts.vmin ~= nil then
+    minimum = util.check_number(opts.vmin, "polar heatmap vmin")
+  end
+  if opts.vmax ~= nil then
+    maximum = util.check_number(opts.vmax, "polar heatmap vmax")
+  end
+  if maximum <= minimum then maximum = minimum + 1 end
+
+  local rmin = 0
+  if opts.rmin ~= nil then
+    rmin = util.check_number(opts.rmin, "polar heatmap rmin", 0)
+  end
+  local rmax = nil
+  if opts.rmax ~= nil then
+    rmax = util.check_number(opts.rmax, "polar heatmap rmax", 0)
+    if rmax <= rmin then
+      fail("polar heatmap rmax must be greater than rmin")
+    end
+  end
+
+  local unit = checked_theta_unit(opts, "polar heatmap")
+  local theta_min, theta_max
+  if unit == "degrees" then
+    theta_min = opts.theta_min == nil and 0 or
+      util.check_number(opts.theta_min, "polar heatmap theta_min")
+    theta_max = opts.theta_max == nil and 360 or
+      util.check_number(opts.theta_max, "polar heatmap theta_max")
+    theta_min = theta_min * math.pi / 180
+    theta_max = theta_max * math.pi / 180
+  else
+    theta_min = opts.theta_min == nil and 0 or
+      util.check_number(opts.theta_min, "polar heatmap theta_min")
+    theta_max = opts.theta_max == nil and 2 * math.pi or
+      util.check_number(opts.theta_max, "polar heatmap theta_max")
+  end
+  if theta_max <= theta_min then
+    fail("polar heatmap theta_max must be greater than theta_min")
+  end
+  if theta_max - theta_min > 2 * math.pi + 1e-9 then
+    fail("polar heatmap theta span must be at most 2*pi radians")
+  end
+
+  local alpha = 1
+  if opts.alpha ~= nil then
+    alpha = util.check_alpha(opts.alpha, "polar heatmap alpha")
+  end
+  if opts.label ~= nil then
+    util.check_string(opts.label, "polar heatmap label", true)
+  end
+
+  local state = ensure_polar_state(self)
+  state.heatmaps[#state.heatmaps + 1] = {
+    kind = "heatmap",
+    rows = rows,
+    cols = cols,
+    values = matrix,
+    vmin = minimum,
+    vmax = maximum,
+    rmin = rmin,
+    rmax = rmax,
+    theta_min = theta_min,
+    theta_max = theta_max,
+    alpha = alpha,
+    label = opts.label,
+  }
+  return self
+end
+
+-- Matplotlib-style alias: a heatmap is the natural pcolormesh projection for
+-- a polar axes because every cell is already a (theta, r) quad.
+function Figure:polar_pcolormesh(values, opts)
+  return self:polar_heatmap(values, opts)
 end
 
 -- Add text at a data (theta, r) position.  `xytext` optionally moves the text

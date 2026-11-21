@@ -15,7 +15,9 @@
 -- Negative r values therefore plot on the opposite side of the origin, which
 -- matches matplotlib's polar convention.
 
+local colors = require("luaplotlib.colors")
 local markers = require("luaplotlib.markers")
+local text = require("luaplotlib.text")
 local ticks = require("luaplotlib.ticks")
 local util = require("luaplotlib.util")
 
@@ -61,6 +63,7 @@ end
 function M.new_state()
   return {
     series = {},
+    heatmaps = {},
     annotations = {},
     theta_zero = 0,
     theta_direction = 1,
@@ -98,6 +101,37 @@ local function observed_radius(figure)
         if value > maximum then maximum = value end
       end
     end
+  end
+  return maximum
+end
+
+-- Annotation targets are data positions and must stay inside the radial
+-- frame.  Their text positions are layout coordinates, so `xytext` does not
+-- extend the radial limit; the renderer keeps that text on the canvas.
+local function annotation_radius(figure)
+  local maximum = 0
+  for _, annotation in ipairs(figure._polar.annotations or {}) do
+    local value = math.abs(annotation.r)
+    if value > maximum then maximum = value end
+  end
+  return maximum
+end
+
+-- The effective outer radius of a heatmap.  An explicit `rmax` wins; a
+-- configured polar `rmax` fills the frame when the caller did not pass one;
+-- otherwise one radial band per matrix row is the implicit extent.
+local function heatmap_rmax(state, heatmap)
+  if heatmap.rmax ~= nil then return heatmap.rmax end
+  if state.rmax ~= nil then return state.rmax end
+  return heatmap.rows
+end
+
+-- Radial extent that the heatmap would like the automatic limit to cover.
+local function heatmap_radius(figure)
+  local maximum = 0
+  for _, heatmap in ipairs(figure._polar.heatmaps or {}) do
+    local value = heatmap_rmax(figure._polar, heatmap)
+    if value > maximum then maximum = value end
   end
   return maximum
 end
@@ -233,26 +267,56 @@ function M.resolve(figure)
     fail("figure has no polar axes")
   end
 
-  local observed = observed_radius(figure)
+  local series_radius = observed_radius(figure)
+  local target_radius = annotation_radius(figure)
+  local heat_radius = heatmap_radius(figure)
+  local observed = math.max(series_radius, target_radius, heat_radius)
+  local wanted = observed
+  if state.rgrids ~= nil then
+    for _, value in ipairs(state.rgrids) do
+      if value > wanted then wanted = value end
+    end
+  end
   local rmax = state.rmax
   if rmax == nil then
-    local wanted = observed
-    if state.rgrids ~= nil then
-      for _, value in ipairs(state.rgrids) do
-        if value > wanted then wanted = value end
-      end
+    if heat_radius > 0 and wanted <= heat_radius * (1 + 1e-9) then
+      -- A heatmap defines a complete radial field.  Without an explicit
+      -- limit it fills the frame instead of leaving an arbitrary outer gap.
+      rmax = heat_radius
+    else
+      if wanted <= 0 then wanted = 1 end
+      local target = wanted * 1.05
+      local step = ticks.nice_step(target / 5)
+      rmax = math.ceil(target / step - 1e-9) * step
     end
-    if wanted <= 0 then wanted = 1 end
-    local target = wanted * 1.05
-    local step = ticks.nice_step(target / 5)
-    rmax = math.ceil(target / step - 1e-9) * step
-  elseif observed > rmax * (1 + 1e-9) then
-    fail(string.format(
-      "polar r value %s exceeds the configured rmax %s",
-      util.fmt_tick(observed), util.fmt_tick(rmax)))
+  else
+    if series_radius > rmax * (1 + 1e-9) then
+      fail(string.format(
+        "polar r value %s exceeds the configured rmax %s",
+        util.fmt_tick(series_radius), util.fmt_tick(rmax)))
+    end
+    if target_radius > rmax * (1 + 1e-9) then
+      fail(string.format(
+        "polar annotate r %s exceeds the configured rmax %s",
+        util.fmt_tick(target_radius), util.fmt_tick(rmax)))
+    end
+    if heat_radius > rmax * (1 + 1e-9) then
+      fail(string.format(
+        "polar heatmap rmax %s exceeds the configured rmax %s",
+        util.fmt_tick(heat_radius), util.fmt_tick(rmax)))
+    end
   end
   if not (rmax > 0) then
     fail("polar rmax must be positive")
+  end
+
+  for index, heatmap in ipairs(state.heatmaps or {}) do
+    local outer = heatmap_rmax(state, heatmap)
+    if heatmap.rmin >= outer - 1e-12 then
+      fail(string.format(
+        "polar heatmap %d rmin %s must be less than its rmax %s",
+        index, util.fmt_tick(heatmap.rmin), util.fmt_tick(outer)))
+    end
   end
 
   local rvalues, rlabels = {}, {}
@@ -442,6 +506,101 @@ local function render_bar(series, figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function render_heatmap(heatmap, figure, cfg, geom, buf)
+  local state = figure._polar
+  local outer_value = heatmap_rmax(state, heatmap)
+  local outer = geom.radius * outer_value / cfg.rmax
+  local inner = geom.radius * heatmap.rmin / cfg.rmax
+  local span = heatmap.theta_max - heatmap.theta_min
+  local full_turn = span >= 2 * math.pi - 1e-9
+  local sweep = (state.theta_direction or 1) < 0 and 1 or 0
+  local opacity = ""
+  if heatmap.alpha < 1 then
+    local alpha = util.fmt(heatmap.alpha)
+    opacity = string.format(' fill-opacity="%s" stroke-opacity="%s"',
+      alpha, alpha)
+  end
+  local label = ""
+  if heatmap.label ~= nil then
+    label = string.format(' data-label="%s"',
+      util.escape_xml(heatmap.label))
+  end
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-polar-heatmap" data-rows="%d" data-cols="%d" data-vmin="%s" data-vmax="%s" data-rmin="%s" data-rmax="%s" data-theta-min="%s" data-theta-max="%s"%s>',
+    heatmap.rows, heatmap.cols, util.fmt(heatmap.vmin),
+    util.fmt(heatmap.vmax), util.fmt(heatmap.rmin),
+    util.fmt(outer_value), util.fmt(heatmap.theta_min),
+    util.fmt(heatmap.theta_max), label)
+
+  local function point_at(theta, radius)
+    local display = M.theta_to_display(figure, theta)
+    return geom.cx + radius * math.cos(display),
+      geom.cy - radius * math.sin(display)
+  end
+
+  for row = 1, heatmap.rows do
+    local inner_radius = inner + (outer - inner) * (row - 1) / heatmap.rows
+    local outer_radius = inner + (outer - inner) * row / heatmap.rows
+    for col = 1, heatmap.cols do
+      local theta0 = heatmap.theta_min +
+        span * (col - 1) / heatmap.cols
+      local theta1 = heatmap.theta_min + span * col / heatmap.cols
+      local color = colors.heat(heatmap.values[row][col], heatmap.vmin,
+        heatmap.vmax)
+      local shape
+      if full_turn then
+        if inner_radius <= 0.0005 then
+          shape = string.format(
+            '<circle class="polar-heatmap-cell" data-row="%d" data-col="%d" cx="%s" cy="%s" r="%s" fill="%s" stroke="%s" stroke-width="0.35"%s/>',
+            row, col, util.fmt(geom.cx), util.fmt(geom.cy),
+            util.fmt(outer_radius), color, color, opacity)
+        else
+          shape = string.format(
+            '<path class="polar-heatmap-cell" data-row="%d" data-col="%d" fill-rule="evenodd" d="M %s %s A %s %s 0 1 1 %s %s A %s %s 0 1 1 %s %s M %s %s A %s %s 0 1 0 %s %s A %s %s 0 1 0 %s %s Z" fill="%s" stroke="%s" stroke-width="0.35"%s/>',
+            row, col,
+            util.fmt(geom.cx + outer_radius), util.fmt(geom.cy),
+            util.fmt(outer_radius), util.fmt(outer_radius),
+            util.fmt(geom.cx - outer_radius), util.fmt(geom.cy),
+            util.fmt(outer_radius), util.fmt(outer_radius),
+            util.fmt(geom.cx + outer_radius), util.fmt(geom.cy),
+            util.fmt(geom.cx + inner_radius), util.fmt(geom.cy),
+            util.fmt(inner_radius), util.fmt(inner_radius),
+            util.fmt(geom.cx - inner_radius), util.fmt(geom.cy),
+            util.fmt(inner_radius), util.fmt(inner_radius),
+            util.fmt(geom.cx + inner_radius), util.fmt(geom.cy),
+            color, color, opacity)
+        end
+      else
+        local cell_span = theta1 - theta0
+        local large = cell_span > math.pi and 1 or 0
+        local ox0, oy0 = point_at(theta0, outer_radius)
+        local ox1, oy1 = point_at(theta1, outer_radius)
+        if inner_radius <= 0.0005 then
+          shape = string.format(
+            '<path class="polar-heatmap-cell" data-row="%d" data-col="%d" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="0.35"%s/>',
+            row, col, util.fmt(geom.cx), util.fmt(geom.cy),
+            util.fmt(ox0), util.fmt(oy0), util.fmt(outer_radius),
+            util.fmt(outer_radius), large, sweep, util.fmt(ox1),
+            util.fmt(oy1), color, color, opacity)
+        else
+          local ix0, iy0 = point_at(theta0, inner_radius)
+          local ix1, iy1 = point_at(theta1, inner_radius)
+          shape = string.format(
+            '<path class="polar-heatmap-cell" data-row="%d" data-col="%d" d="M %s %s A %s %s 0 %d %d %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="0.35"%s/>',
+            row, col, util.fmt(ox0), util.fmt(oy0), util.fmt(outer_radius),
+            util.fmt(outer_radius), large, sweep, util.fmt(ox1),
+            util.fmt(oy1), util.fmt(ix1), util.fmt(iy1),
+            util.fmt(inner_radius), util.fmt(inner_radius), large,
+            1 - sweep, util.fmt(ix0), util.fmt(iy0), color, color, opacity)
+        end
+      end
+      buf[#buf + 1] = '   ' .. shape
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_errorbar(series, figure, cfg, geom, buf)
   local style = series.style
   local cap = style.capsize or 4
@@ -603,7 +762,7 @@ local function render_radius_labels(cfg, geom, buf)
   for index, value in ipairs(cfg.rticks) do
     local y = geom.cy - geom.radius * value / cfg.rmax + 4
     buf[#buf + 1] = string.format(
-      '   <text class="r-tick" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start">%s</text>',
+      '   <text class="r-tick" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round">%s</text>',
       util.fmt(geom.cx + 6), util.fmt(y), TEXT_COLOR,
       util.escape_xml(cfg.rlabels[index]))
   end
@@ -616,31 +775,73 @@ local ANNOTATION_ANCHORS = {
   right = "end",
 }
 
+-- Resolve an annotation's target and text layout once, including the canvas
+-- clamp applied to the text box.  The legend planner uses the same boxes so
+-- it can avoid covering a shifted label.
+local function annotation_layout(figure, cfg, geom, annotation)
+  local target_x, target_y = M.point(figure, cfg, geom,
+    annotation.theta, annotation.r)
+  local text_x, text_y
+  if annotation.xytext ~= nil then
+    text_x, text_y = M.point(figure, cfg, geom,
+      annotation.xytext[1], annotation.xytext[2])
+  elseif annotation.arrow ~= nil then
+    text_x, text_y = target_x + 12, target_y - 12
+  else
+    text_x, text_y = target_x, target_y
+  end
+
+  local fontsize = annotation.fontsize or 12
+  local align = annotation.align or "left"
+  local anchor = ANNOTATION_ANCHORS[align] or "start"
+  local box = text.bounds(text_x, text_y, annotation.text, fontsize, anchor)
+  local padding = 2
+  local shift_x, shift_y = 0, 0
+  if box.x < padding then
+    shift_x = padding - box.x
+  elseif box.x + box.width > figure.width - padding then
+    shift_x = figure.width - padding - (box.x + box.width)
+  end
+  if box.y < padding then
+    shift_y = padding - box.y
+  elseif box.y + box.height > figure.height - padding then
+    shift_y = figure.height - padding - (box.y + box.height)
+  end
+  text_x, text_y = text_x + shift_x, text_y + shift_y
+  box = text.bounds(text_x, text_y, annotation.text, fontsize, anchor)
+  return {
+    target_x = target_x,
+    target_y = target_y,
+    text_x = text_x,
+    text_y = text_y,
+    box = box,
+    fontsize = fontsize,
+    align = align,
+    anchor = anchor,
+    clamped = shift_x ~= 0 or shift_y ~= 0,
+  }
+end
+
 local function render_annotations(figure, cfg, geom, buf)
   local annotations = figure._polar.annotations or {}
   if #annotations == 0 then return end
 
-  buf[#buf + 1] = '  <g class="annotation-layer">'
+  buf[#buf + 1] = '  <g class="annotation-layer" data-clip="canvas">'
   for index, annotation in ipairs(annotations) do
-    local target_x, target_y = M.point(figure, cfg, geom,
-      annotation.theta, annotation.r)
-    local text_x, text_y
-    if annotation.xytext ~= nil then
-      text_x, text_y = M.point(figure, cfg, geom,
-        annotation.xytext[1], annotation.xytext[2])
-    elseif annotation.arrow ~= nil then
-      text_x, text_y = target_x + 12, target_y - 12
-    else
-      text_x, text_y = target_x, target_y
-    end
-
+    local layout = annotation_layout(figure, cfg, geom, annotation)
+    local target_x, target_y = layout.target_x, layout.target_y
+    local text_x, text_y = layout.text_x, layout.text_y
     local color = annotation.color or TEXT_COLOR
-    local fontsize = annotation.fontsize or 12
-    local align = annotation.align or "left"
-    local anchor = ANNOTATION_ANCHORS[align] or "start"
+    local fontsize = layout.fontsize
+    local align = layout.align
+    local anchor = layout.anchor
+    local clamped = layout.clamped
 
     buf[#buf + 1] = string.format(
-      '   <g class="annotation" data-index="%d">', index)
+      '   <g class="annotation" data-index="%d" data-theta="%s" data-r="%s" data-clamped="%s">',
+      index, util.fmt(annotation.theta), util.fmt(annotation.r),
+      clamped and "true" or "false")
+
     if annotation.arrow ~= nil then
       local dx = target_x - text_x
       local dy = target_y - text_y
@@ -690,33 +891,11 @@ local function clamp(value, minimum, maximum)
   return value
 end
 
--- Number of UTF-8 characters, used only for approximate text metrics.
-local function display_chars(text)
-  local count = 0
-  for index = 1, #text do
-    local byte = text:byte(index)
-    if byte < 128 or byte >= 192 then
-      count = count + 1
-    end
-  end
-  return count
-end
+-- Text boxes come from the shared approximate metrics module so legend
+-- sizing, tick-aware placement, and annotation clamping agree.
 
-local function text_box(x, baseline, text, fontsize, anchor)
-  local width = display_chars(text) * fontsize * 0.56
-  local height = fontsize * 1.15
-  local left = x
-  if anchor == "middle" then
-    left = x - width / 2
-  elseif anchor == "end" then
-    left = x - width
-  end
-  return {
-    x = left,
-    y = baseline - fontsize * 0.85,
-    width = width,
-    height = height,
-  }
+local function text_box(x, baseline, value, fontsize, anchor)
+  return text.bounds(x, baseline, value, fontsize, anchor)
 end
 
 local function overlap_area(first, second)
@@ -751,6 +930,17 @@ end
 
 local function legend_entries(figure)
   local entries = {}
+  for _, heatmap in ipairs(figure._polar.heatmaps or {}) do
+    local label = heatmap.label
+    if label ~= nil and label ~= "" then
+      entries[#entries + 1] = {
+        kind = "heatmap",
+        color = colors.heat((heatmap.vmin + heatmap.vmax) / 2,
+          heatmap.vmin, heatmap.vmax),
+        label = label,
+      }
+    end
+  end
   for _, series in ipairs(figure._polar.series) do
     local label = series.style.label
     if label ~= nil and label ~= "" then
@@ -764,31 +954,47 @@ local function legend_entries(figure)
   return entries
 end
 
+-- Legend sizing uses measured text widths rather than character counts.
+-- The swatch column is 28 user units wide; add left/right padding so every
+-- label can be drawn completely inside its column.
+local LEGEND_FONT_SIZE = 11
+local LEGEND_SWATCH = 28
+local LEGEND_PAD = 12
+
 local function legend_dimensions(figure, geom, entries)
-  local max_chars = 0
+  local max_text = 0
   for _, entry in ipairs(entries) do
-    local chars = display_chars(entry.label)
-    if chars > max_chars then max_chars = chars end
+    local width = text.measure(entry.label, LEGEND_FONT_SIZE)
+    if width > max_text then max_text = width end
   end
 
   local opts = figure._legend_opts or {
     loc = "upper right", frame = true, ncol = 1,
   }
-  local ncol = math.max(1, math.min(opts.ncol or 1, #entries))
-  local rows = math.ceil(#entries / ncol)
-  local available = math.max(40, geom.radius * 2 - 8)
-  local col_width = math.max(60, 52 + max_chars * 6.5)
-  col_width = math.min(col_width,
-    math.floor((available - (ncol - 1) * 8) / ncol))
-  col_width = math.max(40, col_width)
-  local box_width = col_width * ncol + (ncol - 1) * 8
-  local max_width = math.max(40, geom.width - 16)
-  if box_width > max_width then
-    box_width = max_width
-    col_width = math.max(30,
-      math.floor((box_width - (ncol - 1) * 8) / ncol))
+  local requested_ncol = math.max(1, math.min(opts.ncol or 1, #entries))
+  local title_width = 0
+  local title_height = 0
+  if opts.title ~= nil and opts.title ~= "" then
+    title_width = text.measure(opts.title, LEGEND_FONT_SIZE) + 16
+    title_height = 22
   end
-  local title_height = opts.title and 20 or 0
+
+  local max_width = math.max(40, geom.width - 16)
+  local ncol = requested_ncol
+  local rows, col_width, box_width
+  while true do
+    rows = math.ceil(#entries / ncol)
+    local entry_width = math.max(60,
+      LEGEND_SWATCH + max_text + LEGEND_PAD)
+    box_width = entry_width * ncol + (ncol - 1) * 8
+    if title_width > box_width then box_width = title_width end
+    if box_width <= max_width or ncol == 1 then break end
+    ncol = ncol - 1
+  end
+  if box_width > max_width then box_width = max_width end
+  col_width = math.max(30,
+    math.floor((box_width - (ncol - 1) * 8) / ncol))
+
   local box_height = 12 + title_height + rows * 20
   return {
     opts = opts,
@@ -798,6 +1004,7 @@ local function legend_dimensions(figure, geom, entries)
     title_height = title_height,
     width = box_width,
     height = box_height,
+    text_width = max_text,
   }
 end
 
@@ -845,13 +1052,7 @@ local function legend_plan(figure, cfg, geom)
   local theta_boxes, radius_boxes = tick_boxes(figure, cfg, geom)
   local title_box = nil
   if figure._title ~= nil then
-    local char_count = display_chars(figure._title)
-    title_box = {
-      x = geom.cx - char_count * 4.7,
-      y = 12,
-      width = char_count * 9.4,
-      height = 26,
-    }
+    title_box = text.bounds(geom.width / 2, 30, figure._title, 18, "middle")
   end
 
   local data_points = {}
@@ -861,6 +1062,14 @@ local function legend_plan(figure, cfg, geom)
         series.r[index])
       data_points[#data_points + 1] = { x, y }
     end
+  end
+
+  local annotation_boxes = {}
+  for _, annotation in ipairs(figure._polar.annotations or {}) do
+    local layout = annotation_layout(figure, cfg, geom, annotation)
+    annotation_boxes[#annotation_boxes + 1] = layout.box
+    -- A leader arrow target is a data point too; keep the legend off it.
+    data_points[#data_points + 1] = { layout.target_x, layout.target_y }
   end
 
   local candidates = {}
@@ -940,6 +1149,9 @@ local function legend_plan(figure, cfg, geom)
     for _, tick in ipairs(radius_boxes) do
       label_overlap = label_overlap + overlap_area(box, tick)
     end
+    for _, annotation_box in ipairs(annotation_boxes) do
+      label_overlap = label_overlap + overlap_area(box, annotation_box)
+    end
     if title_box ~= nil then
       label_overlap = label_overlap + overlap_area(box, title_box)
     end
@@ -1009,6 +1221,7 @@ local function legend_plan(figure, cfg, geom)
     rows = dims.rows,
     col_width = dims.col_width,
     title_height = dims.title_height,
+    text_width = dims.text_width,
     opts = opts,
     loc = opts.loc or "upper right",
     placement = best.inside and "inside" or "outside",
@@ -1020,6 +1233,10 @@ local function polar_swatch(kind, color, x, y, buf)
     buf[#buf + 1] = string.format(
       '   <circle cx="%s" cy="%s" r="4" fill="%s"/>',
       util.fmt(x + 10), util.fmt(y), color)
+  elseif kind == "heatmap" then
+    buf[#buf + 1] = string.format(
+      '   <rect x="%s" y="%s" width="20" height="10" rx="1" fill="%s"/>',
+      util.fmt(x), util.fmt(y - 5), color)
   elseif kind == "bar" then
     buf[#buf + 1] = string.format(
       '   <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
@@ -1046,9 +1263,10 @@ local function render_legend(figure, cfg, geom, buf)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
-    util.fmt(plan.width), util.fmt(plan.height))
+    util.fmt(plan.width), util.fmt(plan.height),
+    util.fmt(plan.text_width or 0))
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '   <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="#ffffff" fill-opacity="0.92" stroke="#bbbbbb" stroke-width="1"/>',
@@ -1128,8 +1346,10 @@ function M.to_svg(figure)
     '  <circle class="polar-frame" cx="%s" cy="%s" r="%s" fill="none" stroke="%s" stroke-width="1"/>',
     util.fmt(geom.cx), util.fmt(geom.cy), util.fmt(geom.radius), AXIS_COLOR))
   render_theta_labels(figure, cfg, geom, buf)
-  render_radius_labels(cfg, geom, buf)
   add('  <g class="series-layer" clip-path="url(#' .. clip_id .. ')">')
+  for _, heatmap in ipairs(state.heatmaps or {}) do
+    render_heatmap(heatmap, figure, cfg, geom, buf)
+  end
   for _, series in ipairs(state.series) do
     if series.kind == "line" then
       render_line(series, figure, cfg, geom, buf)
@@ -1142,6 +1362,9 @@ function M.to_svg(figure)
     end
   end
   add('  </g>')
+  -- Radial labels sit inside the circle.  Draw them after the clipped series
+  -- layer so bars and filled heatmap cells cannot hide the numbers.
+  render_radius_labels(cfg, geom, buf)
   render_annotations(figure, cfg, geom, buf)
   add('  </g>')
   render_legend(figure, cfg, geom, buf)
@@ -1153,6 +1376,12 @@ end
 local function copy_array(source)
   local result = {}
   for index = 1, #source do result[index] = source[index] end
+  return result
+end
+
+local function copy_matrix(source)
+  local result = {}
+  for row = 1, #source do result[row] = copy_array(source[row]) end
   return result
 end
 
@@ -1239,6 +1468,7 @@ function M.to_scene(figure)
       rmax = cfg.rmax,
       theta_ticks = {},
       r_ticks = {},
+      heatmaps = {},
       series = {},
     },
   }
@@ -1278,6 +1508,23 @@ function M.to_scene(figure)
       }
     end
     scene.polar.legend = exported
+  end
+
+  for _, heatmap in ipairs(state.heatmaps or {}) do
+    scene.polar.heatmaps[#scene.polar.heatmaps + 1] = {
+      kind = "heatmap",
+      rows = heatmap.rows,
+      cols = heatmap.cols,
+      values = copy_matrix(heatmap.values),
+      vmin = heatmap.vmin,
+      vmax = heatmap.vmax,
+      rmin = heatmap.rmin,
+      rmax = heatmap_rmax(state, heatmap),
+      theta_min = heatmap.theta_min,
+      theta_max = heatmap.theta_max,
+      alpha = heatmap.alpha,
+      label = heatmap.label,
+    }
   end
 
   for _, series in ipairs(state.series) do

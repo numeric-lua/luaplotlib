@@ -2,7 +2,7 @@
 
 LUA ?= luajit
 
-.PHONY: all test examples clean
+.PHONY: all test examples visual-qa clean
 
 all: test
 
@@ -18,6 +18,10 @@ examples:
 	@$(LUA) examples/polar.lua
 	@$(LUA) examples/polar_bars.lua
 	@$(LUA) examples/polar_annotations.lua
+	@$(LUA) examples/polar_heatmap.lua
+
+visual-qa:
+	@./scripts/visual-qa.sh
 
 clean:
 	@rm -rf -- examples/output tests/output

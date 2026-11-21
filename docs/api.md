@@ -118,16 +118,20 @@ may be a single color or an array with one fill color per point; `alpha`,
 arrays must match the number of points. `degrees`/`theta_unit` are accepted as
 in `fig:polar`.
 
-Polar line, scatter, bar, and error-bar entries with labels participate in
-`fig:legend()`. The polar legend supports the same `loc`, `frame`, `ncol`, and
-`title` options as the Cartesian renderer, plus `loc = "best"`. Placement is
-label-aware: the renderer estimates the angular and radial tick-label boxes and
-prefers a frame position that covers none of them, falling back to the least
-obstructed candidate when the canvas is too small. The legend group exposes
-`data-x`, `data-y`, `data-width`, `data-height`, `data-loc`, and
-`data-placement` (`"inside"` or `"outside"`) so tests and tooling can inspect
-the resolved box. For Cartesian figures `"best"` currently resolves to the
-upper-right corner.
+Polar line, scatter, bar, error-bar, and heatmap entries with labels
+participate in `fig:legend()`. The polar legend supports the same `loc`,
+`frame`, `ncol`, and `title` options as the Cartesian renderer, plus
+`loc = "best"`. Placement is label-aware: the renderer estimates the angular
+and radial tick-label boxes and prefers a frame position that covers none of
+them, falling back to the least obstructed candidate when the canvas is too
+small. Column, frame, and title widths use estimated Helvetica/Arial advance
+widths for each UTF-8 codepoint instead of counting characters, so wide glyphs
+(`M`, `W`, `m`, `w`) reserve more space than narrow ones (`i`, `l`, `.`). The
+legend group exposes `data-x`, `data-y`, `data-width`, `data-height`,
+`data-text-width`, `data-loc`, and `data-placement` (`"inside"` or
+`"outside"`) so tests and tooling can inspect the resolved box. `data-text-width`
+is the widest measured entry label at the legend font size. For Cartesian
+figures `"best"` currently resolves to the upper-right corner.
 
 ### `fig:polar_bar(theta, r, opts)`
 
@@ -138,6 +142,36 @@ must be greater than zero and at most `2*pi`; a full-turn bar is rendered as a
 disk. `colors` may provide one fill color per bar, while `color`, `alpha`,
 `edgecolor`, and `label` behave like Cartesian bars. `color` and `colors` cannot
 be combined. `degrees`/`theta_unit` are accepted as in `fig:polar`.
+
+### `fig:polar_heatmap(values, opts)` / `fig:polar_pcolormesh(values, opts)`
+
+Project a rectangular value matrix onto the polar axes as annular cells. The
+matrix is a non-empty 2-D table (or a 2-D tensor with `totable()`); `rows` map
+linearly from `rmin` to `rmax` and `cols` map linearly from `theta_min` to
+`theta_max`. Rows increase outward and columns increase with data theta, so
+`theta_direction` and `theta_zero` rotate the projected field together with
+the grid. Cells use the same viridis-like palette as Cartesian heatmaps.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `vmin` | finite number | matrix minimum |
+| `vmax` | finite number | matrix maximum |
+| `rmin` | number ≥ 0 | `0` |
+| `rmax` | number > `rmin` | configured polar `rmax`, else `rows` |
+| `theta_min` | finite number | `0` (`0` degrees) |
+| `theta_max` | finite number, span ≤ `2*pi` | `2*pi` (`360` degrees) |
+| `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
+| `alpha` | number in [0, 1] | `1` |
+| `label` | string | no legend entry |
+
+The optional `rmax` fixes the heatmap's own outer radius. If it is omitted, a
+configured `polar_config.rmax` is used; without either, each matrix row is one
+radial unit. Heatmaps render beneath line/scatter/bar/error-bar series, so a
+curve or annotation can be overlaid. A full-turn heatmap is drawn as a disk
+for its innermost band and as annuli otherwise; partial sweeps draw sector
+cells. Heatmaps participate in `fig:legend()` with a `"heatmap"` swatch and in
+scene export under `polar.heatmaps`. Explicit `rmax` values that do not cover
+a heatmap or data extent raise an error when rendered.
 
 ### `fig:polar_errorbar(theta, r, rerr, opts)`
 
@@ -176,8 +210,16 @@ annotation examples work unchanged. Options match Cartesian annotations:
 `xytext = { theta, r }` places the text at another polar coordinate,
 `align`/`color`/`fontsize` style the text, and `arrow = true` or an arrow
 options table draws a leader line from the text to the target. `degrees` and
-`theta_unit` apply to the target angle and to `xytext[1]`. Polar annotations are
-not clipped to the circle, so labels may extend into the canvas margins.
+`theta_unit` apply to the target angle and to `xytext[1]`. Annotation target
+radii extend the automatic radial limit, so an arrow always points at a target
+inside the frame. With an explicit `polar_config.rmax`, a target outside that
+limit raises an error instead of drawing outside the axes; `xytext` positions
+do not extend the limit. Polar annotation text is not clipped to the circle,
+so labels may extend into the canvas margins, but the renderer shifts a text
+box that would leave the canvas back inside the viewport (and the leader arrow
+follows the shifted text). The annotation layer carries
+`data-clip="canvas"`, and each annotation group reports `data-theta`, `data-r`,
+and `data-clamped`.
 
 ### `fig:polar_config(opts)`
 
@@ -188,7 +230,7 @@ for chaining.
 | --- | --- | --- | --- |
 | `theta_zero` | `"E"`, `"N"`, `"W"`, `"S"`, or number | `"E"` | Display location of theta=0; a number is a display offset in radians |
 | `theta_direction` | `"counterclockwise"`, `"ccw"`, `"clockwise"`, or `"cw"` | `"counterclockwise"` | Direction of increasing theta |
-| `rmax` | number > 0 | automatic | Explicit radial limit; data and `rgrids` above it raise an error when rendered |
+| `rmax` | number > 0 | automatic | Explicit radial limit; series, error-bar extents, annotation targets, heatmaps, and `rgrids` above it raise an error when rendered |
 | `thetagrids` | non-empty array of numbers | 0, 45, ..., 315 | Angular grid positions in **degrees of the data theta coordinate** |
 | `thetagrid_labels` | array of strings | `"0°"`, `"45°"`, ... | Labels matching `thetagrids` |
 | `rgrids` | non-empty array of positive numbers | automatic | Explicit radial grid circles |
@@ -633,19 +675,21 @@ Polar figures are created with `plt.polar(theta, r, opts)` or by calling
 `fig:polar(theta, r, opts)`. `theta` is in radians unless `degrees = true` or
 `theta_unit = "degrees"` is passed; `r` may be negative. `fig:polar_scatter`,
 `fig:polar_bar`, and `fig:polar_errorbar` add markers, radial wedges, and
-radial/angular uncertainty. `fig:polar_annotate` (or `fig:annotate` on a polar
-figure) adds text and optional arrows at `(theta, r)` coordinates.
-`fig:polar_config` changes the zero location, theta direction, radial limit,
-and explicit grids.
+radial/angular uncertainty; `fig:polar_heatmap` projects a matrix as annular
+cells. `fig:polar_annotate` (or `fig:annotate` on a polar figure) adds text and
+optional arrows at `(theta, r)` coordinates. `fig:polar_config` changes the
+zero location, theta direction, radial limit, and explicit grids.
 
 The radial limit is selected automatically from the largest absolute radius,
-including the extents of radial error bars; the default angular grid has spokes
-every 45 degrees and the radial grid uses "nice" steps. An explicit `rmax` must
-cover every series value, error-bar extent, and `rgrids` entry. The polar
+including the extents of radial error bars, annotation targets, and heatmaps;
+the default angular grid has spokes every 45 degrees and the radial grid uses
+"nice" steps. An explicit `rmax` must cover every series value, error-bar
+extent, annotation target, heatmap extent, and `rgrids` entry. The polar
 renderer draws the grid and tick labels itself, so `grid`, `xlim`/`ylim`,
-`xscale`/`yscale`, and twin axes do not apply. The title, facecolor, ARIA
-label, `to_html`, and `savefig` remain available, and `to_scene()` exports the
-polar schema described below.
+`xscale`/`yscale`, and twin axes do not apply. Radial tick numbers draw above
+the series with a white halo so filled bars and heatmaps do not hide them. The
+title, facecolor, ARIA label, `to_html`, and `savefig` remain available, and
+`to_scene()` exports the polar schema described below.
 
 The SVG root sets `data-polar="true"`, `data-theta-unit="radians"`,
 `data-theta-zero`, and `data-theta-direction`. The `polar` group exposes
@@ -795,6 +839,11 @@ present only when angular errors were requested. `r_ticks` include `fraction`
 (the radius as a fraction of `rmax`) so a backend can draw rings without
 dividing. `polar.legend` is present only when a non-empty legend was requested;
 top-level `legend` remains a boolean for compatibility with earlier scenes.
+`polar.heatmaps` is present when the figure contains projected heatmaps. Each
+entry carries `kind = "heatmap"`, `rows`, `cols`, `values` (a row-major copy),
+`vmin`, `vmax`, `rmin`, the effective `rmax`, `theta_min`, `theta_max`,
+`alpha`, and the optional `label`. Values are copied, so later mutation of the
+caller's matrix does not change an exported scene.
 Polar `annotations` use theta/r coordinates instead of Cartesian x/y, mirroring
 the Cartesian annotation schema. The `rmax`, tick arrays, and labels reflect the
 same resolution rules as the SVG renderer, so another backend does not need to
