@@ -10,6 +10,8 @@ local plt = require("luaplotlib")
 The module exposes:
 
 - `plt.figure(opts)` → `Figure`
+- `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
+- `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
 - `plt._VERSION` — currently `"0.2.0"`
 
@@ -86,6 +88,20 @@ and malformed data raise errors.
 Pie and donut charts. Values must be non-negative with a positive total.
 Options include `labels`, `colors`, `startangle`, `radius`, `inner_radius`,
 `autopct`, and `legend`. `donut` defaults `inner_radius` to 0.55.
+
+### `plt.polar(theta, r[, opts])` / `fig:polar(theta, r[, opts])`
+
+Draw a polar line series. `theta` is in radians; negative `r` values are drawn
+on the opposite side of the origin. Both arrays must be non-empty, finite, and
+the same length. Options are `color`, `label`, `linewidth`, `linestyle`, and
+`alpha`, with the same validation as `plot`.
+
+`plt.polar` creates a default 640x480 figure and returns it. `fig:polar` adds a
+series to an existing figure; calling it more than once adds more polar line
+series. A figure cannot contain both Cartesian and polar series. Polar figures
+draw eight angular spokes at 45-degree intervals with degree labels, concentric
+radial grid circles, and an automatically chosen radial limit covering the
+largest absolute radius. `to_svg`, `to_html`, and `savefig` work as usual.
 
 ### `fig:barh(labels_or_y, values, opts)`
 
@@ -511,6 +527,25 @@ includes, but is not limited to:
 - `NaN`/infinite values
 - reversed or empty axis limits
 - writing to a nonexistent directory
+
+## Polar axes
+
+Polar figures are created with `plt.polar(theta, r, opts)` or by calling
+`fig:polar(theta, r, opts)`. `theta` is in radians and `r` may be negative.
+The radial limit is selected automatically from the largest absolute radius;
+the default angular grid has spokes every 45 degrees and the radial grid uses
+"nice" steps.
+
+The SVG root sets `data-polar="true"`, `data-theta-unit="radians"`,
+`data-theta-zero`, and `data-theta-direction`. The `polar` group exposes
+`data-cx`, `data-cy`, `data-radius`, and `data-rmax` for tests and for
+coordinate-aware tooling. Series are clipped to the polar circle and rendered
+with classes `polar-line` and `polar-frame`, plus `polar-spoke`,
+`polar-circle`, `theta-tick`, and `r-tick` for the grid.
+
+Polar figures do not use Cartesian `xlim`/`ylim`, `xscale`/`yscale`, twin
+axes, or `xlabel`/`ylabel`. The title, facecolor, ARIA label, `to_html`, and
+`savefig` remain available.
 
 ## 3-D axes
 

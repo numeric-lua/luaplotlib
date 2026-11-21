@@ -25,6 +25,15 @@ function M.figure(opts)
   return Figure.new(opts)
 end
 
+-- Convenience constructor for a polar line plot.  theta and r are one-based
+-- arrays; theta is in radians.  Use plt.figure(...):polar(...) when a
+-- different canvas size is needed.
+function M.polar(theta, r, opts)
+  local figure = Figure.new()
+  figure:polar(theta, r, opts)
+  return figure
+end
+
 -- Create a grid of independent axes.  Returns the subplot figure and a
 -- row-major matrix of axes figures.
 function M.subplots(rows, cols, opts)

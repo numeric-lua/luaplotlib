@@ -50,6 +50,7 @@ luajit examples/annotations.lua
 luajit examples/bars.lua
 luajit examples/heatmap.lua
 luajit examples/subplots.lua
+luajit examples/polar.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -110,6 +111,27 @@ fig:savefig("log.svg")
 Log axes require strictly positive values; zero or negative data raises a
 `luaplotlib:` error when the figure is rendered. The scales can also be set in
 the figure options: `plt.figure({ xscale = "log", yscale = "log" })`.
+
+Polar plots use radians for theta and accept negative radii, which are drawn on
+the opposite side of the origin:
+
+```lua
+local theta, r = {}, {}
+for i = 1, 181 do
+  theta[i] = (i - 1) * 2 * math.pi / 180
+  r[i] = 3 + math.sin(4 * theta[i])
+end
+
+local fig = plt.figure({ width = 620, height = 620 })
+fig:polar(theta, r, { label = "3 + sin(4*theta)" })
+fig:title("Polar rose")
+fig:savefig("polar.svg")
+```
+
+`plt.polar(theta, r, opts)` is a shorthand that returns a figure with the
+default 640x480 canvas. Polar figures draw concentric radial grid circles and
+angular spokes with degree labels; the radial limit automatically covers the
+largest absolute radius. A figure cannot mix Cartesian and polar series.
 
 Annotations use data coordinates and can include a leader arrow:
 
@@ -196,18 +218,21 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 `4.11.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-annotations, linear/log/date axes, twin x/y axes, 3-D line/scatter/surface/mesh,
-subplots, custom ticks, per-bar colors, value labels, legends, reference lines,
-axis-specific grid lines, 3-D scene export, per-point scatter sizes/colors, histogram density,
-multi-column legends, marker shapes, shaded spans, log helpers, optional
-PNG/PDF export, and scene export. See
-[docs/stability.md](docs/stability.md) for the API policy.
+polar line plots, annotations, linear/log/date axes, twin x/y axes,
+3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value
+labels, legends, reference lines, axis-specific grid lines, 3-D scene export,
+per-point scatter sizes/colors, histogram density, multi-column legends,
+marker shapes, shaded spans, log helpers, optional PNG/PDF export, and scene
+export. See [docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations
 
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
-- **Linear, log, and date-x axes.** Twin axes are supported; polar plots are not.
+- **Polar axes are basic.** Polar figures support line series with automatic
+  radial limits, fixed 45-degree angular grid labels, and radial grid circles;
+  Cartesian and polar series cannot share a figure.
+- **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.
 - **Basic layout.** Margins are adaptive, `xtick_rotation` helps crowded

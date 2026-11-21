@@ -2,6 +2,7 @@
 
 local colors = require("luaplotlib.colors")
 local data = require("luaplotlib.data")
+local polar = require("luaplotlib.polar")
 local util = require("luaplotlib.util")
 
 local Figure = {}
@@ -18,6 +19,14 @@ local PLOT_OPTIONS = {
   linestyle = true,
   marker = true,
   markersize = true,
+  alpha = true,
+}
+
+local POLAR_LINE_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  linestyle = true,
   alpha = true,
 }
 
@@ -425,6 +434,48 @@ function Figure:plot(x, y, opts)
     kind = "line",
     x = xv,
     y = yv,
+    style = style,
+  }
+  return self
+end
+
+-- Add a polar line series.  Theta values are radians and r values share the
+-- same length.  A figure is either Cartesian or polar; mixing the two is
+-- rejected so that a typo cannot silently produce an empty plot.
+function Figure:polar(theta, r, opts)
+  opts = util.check_options(opts, POLAR_LINE_OPTIONS, "polar")
+  if self._pie ~= nil then
+    fail("cannot combine pie and polar plots in one figure")
+  end
+  if #self._series > 0 then
+    fail("cannot mix cartesian and polar series in one figure; create a separate figure")
+  end
+
+  local tv = data.sequence(theta, "polar theta")
+  local rv = data.sequence(r, "polar r")
+  if #tv ~= #rv then
+    fail(string.format(
+      "polar theta and r must have the same length (%d ~= %d)", #tv, #rv))
+  end
+
+  local linewidth = 2
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "polar linewidth", 0)
+  end
+  local linestyle = opts.linestyle or "solid"
+  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+    fail("polar linestyle must be one of solid, dashed, dotted, or none")
+  end
+
+  local style = checked_style(self, opts, "polar")
+  style.linewidth = linewidth
+  style.linestyle = linestyle
+
+  local state = polar.ensure(self)
+  state.series[#state.series + 1] = {
+    kind = "line",
+    theta = tv,
+    r = rv,
     style = style,
   }
   return self
@@ -1272,6 +1323,9 @@ function Figure:stackplot(x, series, opts)
 end
 
 function Figure:pie(values, opts)
+  if self._polar ~= nil then
+    fail("cannot combine pie and polar plots in one figure")
+  end
   opts = util.check_options(opts, PIE_OPTIONS, "pie")
   local values_v = data.sequence(values, "pie values")
   if #values_v == 0 then fail("pie values must be non-empty") end
@@ -1960,6 +2014,9 @@ end
 
 function Figure:to_svg()
   -- Required lazily so that the renderer can evolve without a require cycle.
+  if self._polar ~= nil then
+    return require("luaplotlib.polar").to_svg(self)
+  end
   local render = require("luaplotlib.render")
   return render.to_svg(self)
 end
