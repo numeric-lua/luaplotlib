@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.12.0`. This document describes the public Lua API implemented
+Version: `4.13.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.12.0"`
+- `plt._VERSION` — currently `"4.13.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -104,7 +104,8 @@ series to an existing figure; calling it more than once adds more polar line
 series. A figure cannot contain both Cartesian and polar series. Polar figures
 draw eight angular spokes at 45-degree intervals with degree labels, concentric
 radial grid circles, and an automatically chosen radial limit covering the
-largest absolute radius. `to_svg`, `to_html`, and `savefig` work as usual.
+largest absolute radius (including radial error bars when present). `to_svg`,
+`to_html`, and `savefig` work as usual.
 
 ### `fig:polar_scatter(theta, r, opts)`
 
@@ -117,9 +118,16 @@ may be a single color or an array with one fill color per point; `alpha`,
 arrays must match the number of points. `degrees`/`theta_unit` are accepted as
 in `fig:polar`.
 
-Polar scatter and line entries with labels participate in `fig:legend()`. The
-polar legend supports the same `loc`, `frame`, `ncol`, and `title` options as
-the Cartesian renderer.
+Polar line, scatter, bar, and error-bar entries with labels participate in
+`fig:legend()`. The polar legend supports the same `loc`, `frame`, `ncol`, and
+`title` options as the Cartesian renderer, plus `loc = "best"`. Placement is
+label-aware: the renderer estimates the angular and radial tick-label boxes and
+prefers a frame position that covers none of them, falling back to the least
+obstructed candidate when the canvas is too small. The legend group exposes
+`data-x`, `data-y`, `data-width`, `data-height`, `data-loc`, and
+`data-placement` (`"inside"` or `"outside"`) so tests and tooling can inspect
+the resolved box. For Cartesian figures `"best"` currently resolves to the
+upper-right corner.
 
 ### `fig:polar_bar(theta, r, opts)`
 
@@ -130,6 +138,46 @@ must be greater than zero and at most `2*pi`; a full-turn bar is rendered as a
 disk. `colors` may provide one fill color per bar, while `color`, `alpha`,
 `edgecolor`, and `label` behave like Cartesian bars. `color` and `colors` cannot
 be combined. `degrees`/`theta_unit` are accepted as in `fig:polar`.
+
+### `fig:polar_errorbar(theta, r, rerr, opts)`
+
+Draw polar error bars. `rerr` is a non-negative radial error, either one number
+for every point or an array matching `theta`. `thetaerr` optionally adds
+angular errors in the same unit as `theta` (radians by default, degrees with
+`degrees = true`/`theta_unit = "degrees"`); it also accepts a scalar or an array
+and must be at most `2*pi`. Angular errors at or above `pi` render as a full
+circle around the data point. `capsize = 0` suppresses the end caps.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `rerr` | number ≥ 0 or array (required) | — |
+| `thetaerr` | number ≥ 0 or array, ≤ `2*pi` radians | no angular error |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `linewidth` | number ≥ 0 | `1.5` |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
+| `marker` | marker name, `true`, or `false` | `"circle"` |
+| `markersize` | number > 0 | `4` |
+| `alpha` | number in [0, 1] | `1` |
+| `capsize` | number ≥ 0 | `4` |
+| `elinewidth` | number ≥ 0 | `1` |
+| `ecolor` | color string | same as `color` |
+
+The connecting line is drawn unless `linestyle = "none"`. Automatic radial
+limits include `abs(r) + rerr`, so error bars are never clipped by the default
+frame. Explicit `rmax` values that do not cover the error extents raise an
+error when rendered.
+
+### `fig:polar_annotate(text, theta, r, opts)` / `fig:annotate(text, theta, r, opts)`
+
+Add a text annotation at a polar `(theta, r)` position. In a polar figure the
+regular `fig:annotate` method dispatches to `polar_annotate`, so the Cartesian
+annotation examples work unchanged. Options match Cartesian annotations:
+`xytext = { theta, r }` places the text at another polar coordinate,
+`align`/`color`/`fontsize` style the text, and `arrow = true` or an arrow
+options table draws a leader line from the text to the target. `degrees` and
+`theta_unit` apply to the target angle and to `xytext[1]`. Polar annotations are
+not clipped to the circle, so labels may extend into the canvas margins.
 
 ### `fig:polar_config(opts)`
 
@@ -150,7 +198,7 @@ for chaining.
 the label array must match the corresponding grid length. `theta_zero` rotates
 the display without changing the theta data or the degree labels. A figure
 cannot switch between Cartesian and polar mode, so `polar_config` rejects a
-figure that already has Cartesian series.
+figure that already has Cartesian series or annotations.
 
 ### `fig:barh(labels_or_y, values, opts)`
 
@@ -480,14 +528,16 @@ No options are required.
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `loc` | `"upper right"`, `"upper left"`, `"lower right"`, `"lower left"` | `"upper right"` |
+| `loc` | `"upper right"`, `"upper left"`, `"lower right"`, `"lower left"`, `"best"` | `"upper right"` |
 | `frame` | boolean | `true` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
 
 Only series with a non-empty `label` appear. Swatches reflect the series type
-(line, point, or bar). Calling `legend()` with no labeled series produces no
-legend box.
+(line, point, bar, or error bar). Calling `legend()` with no labeled series
+produces no legend box. In polar figures `"best"` searches for the placement
+that covers the fewest labels and data points; Cartesian figures currently
+resolve `"best"` to the upper-right corner.
 
 ### `fig:to_svg()`
 
@@ -581,25 +631,30 @@ includes, but is not limited to:
 
 Polar figures are created with `plt.polar(theta, r, opts)` or by calling
 `fig:polar(theta, r, opts)`. `theta` is in radians unless `degrees = true` or
-`theta_unit = "degrees"` is passed; `r` may be negative. `fig:polar_scatter`
-and `fig:polar_bar` add markers and radial wedges. `fig:polar_config` changes
-the zero location, theta direction, radial limit, and explicit grids.
+`theta_unit = "degrees"` is passed; `r` may be negative. `fig:polar_scatter`,
+`fig:polar_bar`, and `fig:polar_errorbar` add markers, radial wedges, and
+radial/angular uncertainty. `fig:polar_annotate` (or `fig:annotate` on a polar
+figure) adds text and optional arrows at `(theta, r)` coordinates.
+`fig:polar_config` changes the zero location, theta direction, radial limit,
+and explicit grids.
 
-The radial limit is selected automatically from the largest absolute radius;
-the default angular grid has spokes every 45 degrees and the radial grid uses
-"nice" steps. An explicit `rmax` must cover every series value and `rgrids`
-entry. The polar renderer draws the grid and tick labels itself, so `grid`,
-`xlim`/`ylim`, `xscale`/`yscale`, and twin axes do not apply. The title,
-facecolor, ARIA label, `to_html`, and `savefig` remain available, and
-`to_scene()` exports the polar schema described below.
+The radial limit is selected automatically from the largest absolute radius,
+including the extents of radial error bars; the default angular grid has spokes
+every 45 degrees and the radial grid uses "nice" steps. An explicit `rmax` must
+cover every series value, error-bar extent, and `rgrids` entry. The polar
+renderer draws the grid and tick labels itself, so `grid`, `xlim`/`ylim`,
+`xscale`/`yscale`, and twin axes do not apply. The title, facecolor, ARIA
+label, `to_html`, and `savefig` remain available, and `to_scene()` exports the
+polar schema described below.
 
 The SVG root sets `data-polar="true"`, `data-theta-unit="radians"`,
 `data-theta-zero`, and `data-theta-direction`. The `polar` group exposes
 `data-cx`, `data-cy`, `data-radius`, and `data-rmax` for tests and for
 coordinate-aware tooling. Series are clipped to the polar circle and rendered
-with classes `polar-line`, `polar-scatter`, `polar-bar`, and `polar-frame`,
-plus `polar-spoke`, `polar-circle`, `theta-tick`, `r-tick`, and
-`polar-legend` for the grid and legend.
+with classes `polar-line`, `polar-scatter`, `polar-bar`,
+`polar-errorbar-r`, `polar-errorbar-theta`, `polar-errorbar-cap`, and
+`polar-frame`, plus `polar-spoke`, `polar-circle`, `theta-tick`, `r-tick`,
+`annotation-text`, and `polar-legend` for the grid, annotations, and legend.
 
 ## 3-D axes
 
@@ -611,8 +666,9 @@ across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
 ## Limitations
 
 - SVG is the primary backend; PNG/PDF require the optional `rsvg-convert`.
-- Polar axes support line/scatter/bar series; polar error bars, contour/heatmap
-  projections, and polar annotations are not implemented.
+- Polar axes support line/scatter/bar/error-bar series and annotations;
+  contour/heatmap projections and polar twin axes are not implemented. Legend
+  placement uses estimated text metrics, not a full text-measurement engine.
 - 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
@@ -682,8 +738,17 @@ schema, the Cartesian `series` array is empty, and geometry lives under
   width = 620, height = 620, dpi = 100,
   title = "Polar rose",
   grid = true,
-  legend = false,
+  legend = true,
   series = {},
+  annotations = {
+    {
+      kind = "annotation", text = "peak", theta = 1.5708, r = 5,
+      xytext = { 1.2, 6, theta = 1.2, r = 6 },
+      color = "#d62728", fontsize = 13, align = "center",
+      style = { color = "#d62728", fontsize = 13, align = "center" },
+      arrow = { enabled = true, color = "#d62728", linewidth = 1.5, head = 9 },
+    },
+  },
   polar = {
     theta_unit = "radians",
     theta_zero = 0,                     -- display offset in radians
@@ -696,9 +761,16 @@ schema, the Cartesian `series` array is empty, and geometry lives under
       -- ...
     },
     r_ticks = {
-      { value = 1.2, label = "1.2" },
-      { value = 2.4, label = "2.4" },
+      { value = 1.2, fraction = 0.2, label = "1.2" },
+      { value = 2.4, fraction = 0.4, label = "2.4" },
       -- ...
+    },
+    legend = {
+      loc = "best", frame = true, title = nil, ncol = 1,
+      entries = {
+        { kind = "line", label = "line", color = "#1f77b4" },
+        { kind = "errorbar", label = "errors", color = "#ff7f0e" },
+      },
     },
     series = {
       { kind = "line", theta = {...}, r = {...}, style = {...} },
@@ -706,6 +778,8 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         radii = {...}, colors = {...}, style = {...} },
       { kind = "bar", theta = {...}, r = {...},
         widths = {...}, colors = {...}, style = {...} },
+      { kind = "errorbar", theta = {...}, r = {...}, rerr = {...},
+        thetaerr = {...}, style = {...} },
     },
   },
 }
@@ -716,6 +790,14 @@ schema, the Cartesian `series` array is empty, and geometry lives under
 `theta_direction` is always the string `"counterclockwise"` or `"clockwise"`.
 Scatter series include `radii`/`colors` only when per-point arrays were
 supplied, and bar series always include `widths` plus `colors` when per-bar
-colors were supplied. The `rmax`, tick arrays, and labels reflect the same
-resolution rules as the SVG renderer, so another backend does not need to
-reimplement automatic limits or "nice" tick selection.
+colors were supplied. Error-bar series always include `rerr`; `thetaerr` is
+present only when angular errors were requested. `r_ticks` include `fraction`
+(the radius as a fraction of `rmax`) so a backend can draw rings without
+dividing. `polar.legend` is present only when a non-empty legend was requested;
+top-level `legend` remains a boolean for compatibility with earlier scenes.
+Polar `annotations` use theta/r coordinates instead of Cartesian x/y, mirroring
+the Cartesian annotation schema. The `rmax`, tick arrays, and labels reflect the
+same resolution rules as the SVG renderer, so another backend does not need to
+reimplement automatic limits or "nice" tick selection. Exporting a figure that
+mixes Cartesian and polar series or annotations raises an error, matching
+`to_svg()`.

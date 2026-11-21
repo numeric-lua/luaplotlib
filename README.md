@@ -132,14 +132,32 @@ fig:savefig("polar.svg")
 `plt.polar(theta, r, opts)` is a shorthand that returns a figure with the
 default 640x480 canvas. Polar figures draw concentric radial grid circles and
 angular spokes with degree labels; the radial limit automatically covers the
-largest absolute radius. `fig:polar_scatter` adds polar markers with per-point
-sizes and colors, and `fig:polar_bar` draws radial bar wedges with optional
-per-bar widths and colors. `fig:polar_config` sets the zero location
-(`"E"`, `"N"`, `"W"`, `"S"`), clockwise/counterclockwise direction, explicit
-`rmax`, and custom angular/radial grids; pass `degrees = true` to any polar
-series method to supply theta in degrees. Labelled polar series participate in
-`fig:legend()`, and `fig:to_scene()` exports the polar grid and series geometry
-for non-SVG backends. A figure cannot mix Cartesian and polar series.
+largest absolute radius, including error-bar extents. `fig:polar_scatter` adds
+polar markers with per-point sizes and colors, `fig:polar_bar` draws radial bar
+wedges with optional per-bar widths and colors, and
+`fig:polar_errorbar(theta, r, rerr, opts)` draws radial and optional angular
+uncertainty. `fig:polar_annotate` (or `fig:annotate` on a polar figure) places
+text and leader arrows at `(theta, r)` coordinates. `fig:polar_config` sets the
+zero location (`"E"`, `"N"`, `"W"`, `"S"`), clockwise/counterclockwise
+direction, explicit `rmax`, and custom angular/radial grids; pass
+`degrees = true` to any polar series method to supply theta in degrees.
+Labelled polar series participate in `fig:legend()`, which is placed so it does
+not cover the angular tick labels (`loc = "best"` searches for the least
+obstructed spot). `fig:to_scene()` exports the polar grid, series, annotations,
+and legend entries for non-SVG backends. A figure cannot mix Cartesian and
+polar content.
+
+```lua
+fig:polar_errorbar({ 0, math.pi / 4 }, { 3.5, 3.8 }, { 0.35, 0.4 }, {
+  thetaerr = { 0.12, 0.1 },
+  label = "uncertainty",
+})
+fig:polar_annotate("maximum", math.pi / 2, 4.2, {
+  xytext = { 1.85, 5.3 },
+  align = "center",
+  arrow = true,
+})
+```
 
 Annotations use data coordinates and can include a leader arrow:
 
@@ -151,8 +169,10 @@ fig:annotate("local maximum", 2.5, 4.1, {
 })
 ```
 
-The label is drawn above the series and clipped to the plot area. Pass
-`arrow = true` for the default leader style, or omit `arrow` for plain text.
+The label is drawn above the series and clipped to the Cartesian plot area.
+Pass `arrow = true` for the default leader style, or omit `arrow` for plain
+text. On polar figures `fig:annotate` accepts `(theta, r)` and isn't clipped to
+the circle.
 
 Bars accept several value series in one call. Grouped bars share category
 centers, while stacked bars accumulate positive and negative values separately:
@@ -185,9 +205,11 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars
-- Polar line, scatter, and bar plots with circular grid, theta/r ticks,
-  configurable orientation and limits, and polar scene export
-- Text annotations with optional leader arrows at data coordinates
+- Polar line, scatter, bar, and error-bar plots with circular grid, theta/r
+  ticks, configurable orientation and limits, label-aware legends, polar
+  annotations, and polar scene export
+- Text annotations with optional leader arrows at Cartesian or polar data
+  coordinates
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional grid, titles, axis labels, and legends
@@ -222,15 +244,17 @@ make examples
 # examples/output/bars-stacked.svg
 # examples/output/polar.svg
 # examples/output/polar-bars.svg
+# examples/output/polar-annotations.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.12.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.13.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar plots with configurable orientation and grids,
+polar line/scatter/bar/error-bar plots with configurable orientation and grids,
+polar annotations, label-aware polar legends,
 annotations, linear/log/date axes, twin x/y axes,
 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value
 labels, legends, reference lines, axis-specific grid lines, 3-D scene export,
@@ -242,10 +266,11 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
-- **Polar axes are basic.** Polar figures support line, scatter, and bar
-  series with automatic or explicit radial limits, configurable zero
-  location/direction, and custom angular and radial grids; Cartesian and polar
-  series cannot share a figure.
+- **Polar axes are focused.** Polar figures support line, scatter, bar, and
+  error-bar series plus annotations, with automatic or explicit radial limits,
+  configurable zero location/direction, custom angular and radial grids, and
+  label-aware legends; Cartesian and polar content cannot share a figure.
+  Contour/heatmap projections and polar twin axes are not implemented.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.
@@ -283,5 +308,7 @@ local scene = figure:to_scene()
 ```
 
 The scene contains series geometry, styles, axes labels, scales, explicit
-limits, category ticks, and annotation geometry/styles.  It does not depend on
-LÖVR or any graphics toolkit.
+limits, category ticks, and annotation geometry/styles. Polar figures export a
+`polar` block with resolved theta/r ticks, series (including error bars),
+annotations, and legend entries under `orientation = "polar"`. The export does
+not depend on LÖVR or any graphics toolkit.

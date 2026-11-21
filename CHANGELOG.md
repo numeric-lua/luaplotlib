@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.13.0
+
+- label-aware polar legend placement that avoids theta and radial tick labels,
+  with `loc = "best"` and `data-*` geometry on the legend group;
+- `fig:polar_errorbar` for radial and angular uncertainty, including caps,
+  line/marker styling, automatic rmax coverage, and scene export;
+- `fig:polar_annotate` at `(theta, r)` coordinates, with polar dispatch from
+  `fig:annotate`, leader arrows, and degrees input;
+- polar scene export for error-bar series, annotations, legend entries, and
+  radius fractions, with mixed-content export guards;
+- new `polar_annotations` example, API docs, README updates, and 165 tests.
+
 ## 4.12.0
 
 - polar axes (`plt.polar` / `fig:polar`) with circular grid and theta/r ticks;
