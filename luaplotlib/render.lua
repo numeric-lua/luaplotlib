@@ -763,6 +763,7 @@ local function render_barh(series, map_x, map_y, baseline, buf)
     local left = math.min(baseline, value_x)
     local width = math.abs(value_x - baseline)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
+    if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
       '   <rect class="barh" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
       util.fmt(left), util.fmt(top), util.fmt(width), util.fmt(height), fill,
@@ -921,6 +922,48 @@ local function render_box(series, map_x, map_y, buf)
   end
 end
 
+local HATCH_PATTERNS = {
+  ["/"] = { transform = "rotate(45)", body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
+  ["\\"] = { transform = "rotate(-45)", body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
+  ["|"] = { body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
+  ["-"] = { body = '<line x1="0" y1="3" x2="6" y2="3" stroke="#333" stroke-width="1"/>' },
+  ["+"] = { body = '<line x1="0" y1="3" x2="6" y2="3" stroke="#333" stroke-width="1"/><line x1="3" y1="0" x2="3" y2="6" stroke="#333" stroke-width="1"/>' },
+  x = { body = '<path d="M0,0 L6,6 M6,0 L0,6" stroke="#333" stroke-width="1"/>' },
+  ["."] = { body = '<circle cx="3" cy="3" r="1" fill="#333"/>' },
+  o = { body = '<circle cx="3" cy="3" r="2" fill="none" stroke="#333" stroke-width="1"/>' },
+}
+
+local function hatch_id(hatch, color)
+  return "hatch-" .. hatch:gsub("[^%w]", "x") .. "-" ..
+    color:gsub("[^%w]", "")
+end
+
+local function hatch_defs(fig)
+  local out, seen = {}, {}
+  local function add(hatch, color)
+    if not hatch or seen[hatch .. color] then return end
+    seen[hatch .. color] = true
+    local spec = HATCH_PATTERNS[hatch]
+    if not spec then return end
+    out[#out + 1] = string.format(
+      '  <pattern id="%s" patternUnits="userSpaceOnUse" width="6" height="6"%s>',
+      hatch_id(hatch, color), spec.transform and (' patternTransform="' .. spec.transform .. '"') or "")
+    out[#out + 1] = '   <rect width="6" height="6" fill="' .. color .. '" fill-opacity="0.15"/>'
+    out[#out + 1] = '   ' .. spec.body
+    out[#out + 1] = '  </pattern>'
+  end
+  for _, series in ipairs(fig._series) do
+    local style = series.style
+    if style and style.hatch then
+      add(style.hatch, style.color)
+      if series.bar_colors then
+        for _, color in ipairs(series.bar_colors) do add(style.hatch, color) end
+      end
+    end
+  end
+  return table.concat(out, "\n")
+end
+
 local function render_bar(series, map_x, map_y, baseline, yscale, buf)
   local style = series.style
   local opacity = ""
@@ -957,6 +1000,7 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
     local top = math.min(base_y, value_y)
     local height = math.abs(base_y - value_y)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
+    if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
       '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
@@ -1342,6 +1386,8 @@ function M.to_svg(fig)
   printf('  <clipPath id="%s"><rect x="%s" y="%s" width="%s" height="%s"/></clipPath>',
     clip_id, util.fmt(geom.left), util.fmt(geom.top),
     util.fmt(geom.plot_width), util.fmt(geom.plot_height))
+  local hatch_markup = hatch_defs(fig)
+  if hatch_markup ~= "" then add(hatch_markup) end
   add(' </defs>')
   add(' <g class="figure" font-family="' .. FONT_FAMILY .. '" font-size="12" fill="' .. TEXT_COLOR .. '">')
 

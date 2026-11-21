@@ -1,4 +1,4 @@
-# luaplotlib 4.10.0
+# luaplotlib 4.11.0
 
-- contour labels and linestyles;
-- 130 tests.
+- bar hatch patterns with generated SVG definitions;
+- 131 tests.

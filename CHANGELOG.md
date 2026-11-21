@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.11.0
+
+- bar `hatch` patterns (`/`, `\`, `|`, `-`, `+`, `x`, `.`, `o`);
+- generated SVG pattern definitions and validation;
+- 131 tests.
+
 ## 4.10.0
 
 - contour level labels and linestyles;

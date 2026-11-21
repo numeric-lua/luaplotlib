@@ -57,6 +57,7 @@ local BAR_OPTIONS = {
   grouped = true,
   bar_colors = true,
   show_values = true,
+  hatch = true,
 }
 
 local FILL_OPTIONS = {
@@ -864,6 +865,23 @@ function Figure:bar(labels_or_x, values, opts, ...)
   if opts.show_values ~= nil then
     util.check_boolean(opts.show_values, "bar show_values")
   end
+  local hatch = opts.hatch
+  if hatch ~= nil then
+    if type(hatch) ~= "table" then
+      error("bar hatch must be a table of per-series hatches", 2)
+    end
+    if #hatch ~= series_count then
+      error("bar hatch must match the number of value series", 2)
+    end
+    for i = 1, #hatch do
+      local value = hatch[i]
+      if type(value) ~= "string" or
+          not ({ ["/"]=true, ["\\"]=true, ["|"]=true, ["-"]=true,
+            ["+"]=true, x=true, ["."]=true, o=true })[value] then
+        error("bar hatch entries must be /, \\, |, -, +, x, ., or o", 2)
+      end
+    end
+  end
 
   local positions = {}
   if kind == "categories" then
@@ -959,6 +977,7 @@ function Figure:bar(labels_or_x, values, opts, ...)
   end
 
   for i = 1, series_count do
+    if hatch then styles[i].hatch = hatch[i] end
     local entry = {
       kind = "bar",
       x = positions,
