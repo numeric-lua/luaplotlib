@@ -437,3 +437,68 @@ test("polar radial labels draw above series with a contrast halo", function()
   assert_contains(svg, 'stroke-width="2.5"')
   assert_well_formed_svg(svg)
 end)
+
+test("the outermost radial label is clamped inside the polar frame", function()
+  local figure = plt.figure({ width = 600, height = 600 })
+  figure:polar_config({ rmax = 5, rgrids = { 1, 3, 5 } })
+  figure:polar({ 0, math.pi / 2 }, { 5, 5 })
+  local svg = figure:to_svg()
+  local cy, radius = svg:match(
+    'class="polar" data%-cx="[^"]+" data%-cy="([^"]+)" data%-radius="([^"]+)"')
+  assert_true(cy ~= nil and radius ~= nil)
+  cy, radius = tonumber(cy), tonumber(radius)
+  local target
+  for y, fraction, clamped in svg:gmatch(
+      '<text class="r%-tick" x="[^"]+" y="([^"]+)"[^>]-data%-fraction="([^"]+)" data%-clamped="([^"]+)"') do
+    if fraction == "1" then
+      target = { y = tonumber(y), clamped = clamped }
+    end
+  end
+  assert_true(target ~= nil, "expected the outer radial tick")
+  assert_equal(target.clamped, "true")
+  assert_true(target.y >= cy - radius + 12.5,
+    "outermost label should sit fully inside the frame")
+  -- Labels below the frame stay unclamped and keep their natural baseline.
+  local saw_unclamped = false
+  for flag in svg:gmatch(
+      '<text class="r%-tick"[^>]-data%-clamped="([^"]+)"') do
+    if flag == "false" then saw_unclamped = true end
+  end
+  assert_true(saw_unclamped)
+  assert_well_formed_svg(svg)
+end)
+
+test("polar heatmap legends use a gradient swatch with scene range data",
+    function()
+  local function field(rows, cols)
+    local values = {}
+    for row = 1, rows do
+      values[row] = {}
+      for col = 1, cols do
+        values[row][col] = row * 10 + col
+      end
+    end
+    return values
+  end
+  local figure = plt.figure({ width = 640, height = 640 })
+  figure:polar_heatmap(field(4, 8), { label = "field" })
+  figure:legend({ loc = "best" })
+  local svg = figure:to_svg()
+  local swatches = select(2, svg:gsub('class="legend%-swatch%-step"', ""))
+  assert_equal(swatches, 5)
+  local colors = {}
+  for color in svg:gmatch(
+      '<rect class="legend%-swatch%-step"[^>]-fill="([^"]+)"') do
+    colors[color] = true
+  end
+  local distinct = 0
+  for _ in pairs(colors) do distinct = distinct + 1 end
+  assert_equal(distinct, 5)
+  assert_well_formed_svg(svg)
+
+  local scene = figure:to_scene()
+  local entry = scene.polar.legend.entries[1]
+  assert_equal(entry.kind, "heatmap")
+  assert_equal(entry.vmin, 11)
+  assert_equal(entry.vmax, 48)
+end)

@@ -64,6 +64,7 @@ function M.new_state()
   return {
     series = {},
     heatmaps = {},
+    contours = {},
     annotations = {},
     theta_zero = 0,
     theta_direction = 1,
@@ -126,11 +127,23 @@ local function heatmap_rmax(state, heatmap)
   return heatmap.rows
 end
 
--- Radial extent that the heatmap would like the automatic limit to cover.
-local function heatmap_radius(figure)
+-- Contours follow the same implicit extent rules as the heatmap they overlay.
+local function contour_rmax(state, contour)
+  if contour.rmax ~= nil then return contour.rmax end
+  if state.rmax ~= nil then return state.rmax end
+  return contour.rows
+end
+
+-- Radial extent that projected fields (heatmaps and contours) would like the
+-- automatic limit to cover.
+local function field_radius(figure)
   local maximum = 0
   for _, heatmap in ipairs(figure._polar.heatmaps or {}) do
     local value = heatmap_rmax(figure._polar, heatmap)
+    if value > maximum then maximum = value end
+  end
+  for _, contour in ipairs(figure._polar.contours or {}) do
+    local value = contour_rmax(figure._polar, contour)
     if value > maximum then maximum = value end
   end
   return maximum
@@ -269,7 +282,7 @@ function M.resolve(figure)
 
   local series_radius = observed_radius(figure)
   local target_radius = annotation_radius(figure)
-  local heat_radius = heatmap_radius(figure)
+  local heat_radius = field_radius(figure)
   local observed = math.max(series_radius, target_radius, heat_radius)
   local wanted = observed
   if state.rgrids ~= nil then
@@ -280,8 +293,8 @@ function M.resolve(figure)
   local rmax = state.rmax
   if rmax == nil then
     if heat_radius > 0 and wanted <= heat_radius * (1 + 1e-9) then
-      -- A heatmap defines a complete radial field.  Without an explicit
-      -- limit it fills the frame instead of leaving an arbitrary outer gap.
+      -- A projected field defines a complete radial extent.  Without an
+      -- explicit limit it fills the frame instead of leaving an outer gap.
       rmax = heat_radius
     else
       if wanted <= 0 then wanted = 1 end
@@ -301,9 +314,26 @@ function M.resolve(figure)
         util.fmt_tick(target_radius), util.fmt_tick(rmax)))
     end
     if heat_radius > rmax * (1 + 1e-9) then
-      fail(string.format(
-        "polar heatmap rmax %s exceeds the configured rmax %s",
-        util.fmt_tick(heat_radius), util.fmt_tick(rmax)))
+      local heat_extent = 0
+      for _, heatmap in ipairs(state.heatmaps) do
+        local value = heatmap_rmax(state, heatmap)
+        if value > heat_extent then heat_extent = value end
+      end
+      if heat_extent > rmax * (1 + 1e-9) then
+        fail(string.format(
+          "polar heatmap rmax %s exceeds the configured rmax %s",
+          util.fmt_tick(heat_extent), util.fmt_tick(rmax)))
+      end
+      local contour_extent = 0
+      for _, contour in ipairs(state.contours or {}) do
+        local value = contour_rmax(state, contour)
+        if value > contour_extent then contour_extent = value end
+      end
+      if contour_extent > rmax * (1 + 1e-9) then
+        fail(string.format(
+          "polar contour rmax %s exceeds the configured rmax %s",
+          util.fmt_tick(contour_extent), util.fmt_tick(rmax)))
+      end
     end
   end
   if not (rmax > 0) then
@@ -317,6 +347,25 @@ function M.resolve(figure)
         "polar heatmap %d rmin %s must be less than its rmax %s",
         index, util.fmt_tick(heatmap.rmin), util.fmt_tick(outer)))
     end
+  end
+
+  for index, contour in ipairs(state.contours or {}) do
+    local outer = contour_rmax(state, contour)
+    if contour.rmin >= outer - 1e-12 then
+      fail(string.format(
+        "polar contour %d rmin %s must be less than its rmax %s",
+        index, util.fmt_tick(contour.rmin), util.fmt_tick(outer)))
+    end
+  end
+
+  -- One vertical colorbar can annotate one heatmap per polar figure.  The
+  -- layout and legend planner both reserve its canvas column.
+  local colorbars = 0
+  for _, heatmap in ipairs(state.heatmaps or {}) do
+    if heatmap.colorbar then colorbars = colorbars + 1 end
+  end
+  if colorbars > 1 then
+    fail("only one polar colorbar per figure is supported")
   end
 
   local rvalues, rlabels = {}, {}
@@ -364,12 +413,49 @@ function M.point(figure, cfg, geom, theta, r)
     geom.cy - geom.radius * radial * math.sin(display)
 end
 
+-- One vertical colorbar can annotate one heatmap per polar figure.
+local function colorbar_heatmap(figure)
+  local found
+  for _, heatmap in ipairs(figure._polar.heatmaps or {}) do
+    if heatmap.colorbar then
+      if found ~= nil then
+        fail("only one polar colorbar per figure is supported")
+      end
+      found = heatmap
+    end
+  end
+  return found
+end
+
+local COLORBAR_WIDTH = 16
+local COLORBAR_GAP = 16
+local COLORBAR_MARGIN = 68
+
+-- Canvas column reserved for the vertical colorbar and its labels.
+local function colorbar_geometry(geom)
+  local x = geom.cx + geom.radius + COLORBAR_GAP
+  local height = geom.radius * 1.7
+  local y = geom.cy - height / 2
+  return x, y, COLORBAR_WIDTH, height
+end
+
+-- Compact three-significant-digit labels keep the colorbar column narrow and
+-- readable; the scene keeps the exact numeric tick values.
+local function colorbar_value(value)
+  if value == 0 or math.abs(value) < 1e-12 then return "0" end
+  local formatted = string.format("%.3g", value)
+  return (formatted:gsub("e%+0*", "e"):gsub("e%-0*", "e-"))
+end
+
 local function layout(figure)
   local width, height = figure.width, figure.height
   local top = 22
   if figure._title ~= nil then top = 52 end
   local bottom = 28
   local left, right = 44, 44
+  if colorbar_heatmap(figure) ~= nil then
+    right = right + COLORBAR_MARGIN
+  end
   local available_width = width - left - right
   local available_height = height - top - bottom
   local diameter = math.min(available_width, available_height)
@@ -601,6 +687,108 @@ local function render_heatmap(heatmap, figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+-- Project one normalized contour position onto the canvas.  `u` and `v` are
+-- fractions of the field width and height, so both the renderer and the scene
+-- exporter can resolve them against the effective radial extent.
+local function contour_position(figure, cfg, geom, contour, u, v)
+  local outer = contour_rmax(figure._polar, contour)
+  local theta = contour.theta_min +
+    (contour.theta_max - contour.theta_min) * u
+  local radius = contour.rmin + (outer - contour.rmin) * v
+  local x, y = M.point(figure, cfg, geom, theta, radius)
+  return x, y, theta, radius
+end
+
+local function render_contour(contour, figure, cfg, geom, buf)
+  local style = contour.style
+  local dash = ""
+  if style.linestyle == "dashed" then
+    dash = ' stroke-dasharray="6 4"'
+  elseif style.linestyle == "dotted" then
+    dash = ' stroke-dasharray="1.5 3"'
+  end
+  local opacity = style.alpha < 1 and
+    string.format(' stroke-opacity="%s"', util.fmt(style.alpha)) or ""
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"',
+      util.escape_xml(style.label))
+  end
+  local outer = contour_rmax(figure._polar, contour)
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-polar-contour" data-rows="%d" data-cols="%d" data-levels="%d" data-vmin="%s" data-vmax="%s" data-rmin="%s" data-rmax="%s" data-theta-min="%s" data-theta-max="%s"%s>',
+    contour.rows, contour.cols, #contour.levels, util.fmt(contour.vmin),
+    util.fmt(contour.vmax), util.fmt(contour.rmin), util.fmt(outer),
+    util.fmt(contour.theta_min), util.fmt(contour.theta_max), label)
+
+  for _, level_data in ipairs(contour.levels) do
+    buf[#buf + 1] = string.format(
+      '   <g class="polar-contour-level" data-level="%s">',
+      util.fmt(level_data.level))
+    for _, segment in ipairs(level_data.segments) do
+      local theta0 = contour.theta_min +
+        (contour.theta_max - contour.theta_min) * segment[1]
+      local theta1 = contour.theta_min +
+        (contour.theta_max - contour.theta_min) * segment[3]
+      local radius0 = contour.rmin + (outer - contour.rmin) * segment[2]
+      local radius1 = contour.rmin + (outer - contour.rmin) * segment[4]
+      -- A straight line in (theta, r) space is a spiral in the projected
+      -- frame.  Subdivide each marching-squares edge so long contours stay
+      -- visually curved instead of becoming coarse chords.
+      local angular = math.abs(theta1 - theta0)
+      local radial = math.abs(radius1 - radius0) / cfg.rmax
+      local steps = math.max(2, math.ceil(angular / (math.pi / 48)),
+        math.ceil(radial * geom.radius / 5))
+      if steps > 64 then steps = 64 end
+      local points = {}
+      for step = 0, steps do
+        local t = step / steps
+        local u = segment[1] + (segment[3] - segment[1]) * t
+        local v = segment[2] + (segment[4] - segment[2]) * t
+        local x, y = contour_position(figure, cfg, geom, contour, u, v)
+        points[#points + 1] = util.fmt(x) .. " " .. util.fmt(y)
+      end
+      buf[#buf + 1] = string.format(
+        '    <path class="polar-contour-line" d="M %s L %s" fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"%s%s/>',
+        points[1], table.concat(points, " L ", 2), style.color,
+        util.fmt(style.linewidth), dash, opacity)
+    end
+    if contour.labels and #level_data.segments > 0 then
+      -- Label the segment farthest from the origin.  A first-segment choice
+      -- tends to pile several labels on top of each other at the center of a
+      -- radial field.
+      local best, best_radius = nil, -1
+      for _, segment in ipairs(level_data.segments) do
+        local mid_u = (segment[1] + segment[3]) / 2
+        local mid_v = (segment[2] + segment[4]) / 2
+        local radius = math.abs(contour.rmin +
+          (outer - contour.rmin) * mid_v)
+        if radius > best_radius then
+          best, best_radius = { mid_u, mid_v }, radius
+        end
+      end
+      local x, y = contour_position(figure, cfg, geom, contour, best[1],
+        best[2])
+      local label = util.fmt_tick(level_data.level)
+      -- Keep the whole label inside the polar clip; a label chosen at the
+      -- frame would otherwise be cut in half by the circular clip path.
+      local dx, dy = x - geom.cx, y - geom.cy
+      local distance = math.sqrt(dx * dx + dy * dy)
+      local limit = geom.radius - text.measure(label, 10) / 2 - 4
+      if limit > 0 and distance > limit then
+        x = geom.cx + dx / distance * limit
+        y = geom.cy + dy / distance * limit
+      end
+      buf[#buf + 1] = string.format(
+        '    <text class="polar-contour-label" x="%s" y="%s" font-size="10" fill="%s" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round">%s</text>',
+        util.fmt(x), util.fmt(y + 3), style.color, label)
+    end
+    buf[#buf + 1] = '   </g>'
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_errorbar(series, figure, cfg, geom, buf)
   local style = series.style
   local cap = style.capsize or 4
@@ -757,14 +945,82 @@ local function render_theta_labels(figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+-- Radial tick labels normally sit on the vertical spoke.  The outermost one
+-- would cross the frame, so its baseline is capped a few pixels inside.
+local function radius_label_baseline(geom, fraction)
+  local y = geom.cy - geom.radius * fraction + 4
+  local limit = geom.cy - geom.radius + 13
+  if y < limit then return limit, true end
+  return y, false
+end
+
 local function render_radius_labels(cfg, geom, buf)
   buf[#buf + 1] = '  <g class="r-ticks">'
   for index, value in ipairs(cfg.rticks) do
-    local y = geom.cy - geom.radius * value / cfg.rmax + 4
+    local fraction = value / cfg.rmax
+    local y, clamped = radius_label_baseline(geom, fraction)
     buf[#buf + 1] = string.format(
-      '   <text class="r-tick" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round">%s</text>',
+      '   <text class="r-tick" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" data-fraction="%s" data-clamped="%s">%s</text>',
       util.fmt(geom.cx + 6), util.fmt(y), TEXT_COLOR,
+      util.fmt(fraction), clamped and "true" or "false",
       util.escape_xml(cfg.rlabels[index]))
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+-- Vertical colorbar for the heatmap that requested one.  It is drawn outside
+-- the polar clip so the bar and its labels stay crisp at the canvas edge.
+local function render_colorbar(figure, geom, buf)
+  local heatmap = colorbar_heatmap(figure)
+  if heatmap == nil then return end
+  local x, y, width, height = colorbar_geometry(geom)
+  local vmin, vmax = heatmap.vmin, heatmap.vmax
+  local tick_count = heatmap.colorbar_ticks or 3
+
+  buf[#buf + 1] = string.format(
+    '  <g class="polar-colorbar" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-x="%s" data-y="%s" data-width="%s" data-height="%s">',
+    util.fmt(vmin), util.fmt(vmax), tick_count, util.fmt(x), util.fmt(y),
+    util.fmt(width), util.fmt(height))
+
+  local steps = 40
+  for index = 1, steps do
+    local value = vmax - (vmax - vmin) * ((index - 0.5) / steps)
+    buf[#buf + 1] = string.format(
+      '   <rect class="colorbar-step" x="%s" y="%s" width="%s" height="%s" fill="%s"/>',
+      util.fmt(x), util.fmt(y + height * (index - 1) / steps),
+      util.fmt(width), util.fmt(height / steps + 0.5),
+      colors.heat(value, vmin, vmax))
+  end
+  buf[#buf + 1] = string.format(
+    '   <rect class="colorbar-frame" x="%s" y="%s" width="%s" height="%s" fill="none" stroke="%s" stroke-width="1"/>',
+    util.fmt(x - 0.5), util.fmt(y - 0.5), util.fmt(width + 1),
+    util.fmt(height + 1), AXIS_COLOR)
+
+  local max_label = 0
+  for index = 0, tick_count - 1 do
+    local fraction = index / (tick_count - 1)
+    local value = vmin + (vmax - vmin) * fraction
+    local tick_y = y + height - height * fraction
+    local label = colorbar_value(value)
+    local measured = text.measure(label, 10)
+    if measured > max_label then max_label = measured end
+    buf[#buf + 1] = string.format(
+      '   <line class="colorbar-tick" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+      util.fmt(x + width), util.fmt(tick_y), util.fmt(x + width + 4),
+      util.fmt(tick_y), AXIS_COLOR)
+    buf[#buf + 1] = string.format(
+      '   <text class="colorbar-label" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start">%s</text>',
+      util.fmt(x + width + 8), util.fmt(tick_y + 3.5), TEXT_COLOR,
+      util.escape_xml(label))
+  end
+  if heatmap.colorbar_label ~= nil and heatmap.colorbar_label ~= "" then
+    local label_x = x + width + 8 + max_label + 14
+    local label_y = y + height / 2
+    buf[#buf + 1] = string.format(
+      '   <text class="colorbar-title" x="%s" y="%s" font-size="11" fill="%s" text-anchor="middle" transform="rotate(-90 %s %s)">%s</text>',
+      util.fmt(label_x), util.fmt(label_y), TEXT_COLOR,
+      util.fmt(label_x), util.fmt(label_y),
+      util.escape_xml(heatmap.colorbar_label))
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -937,6 +1193,18 @@ local function legend_entries(figure)
         kind = "heatmap",
         color = colors.heat((heatmap.vmin + heatmap.vmax) / 2,
           heatmap.vmin, heatmap.vmax),
+        vmin = heatmap.vmin,
+        vmax = heatmap.vmax,
+        label = label,
+      }
+    end
+  end
+  for _, contour in ipairs(figure._polar.contours or {}) do
+    local label = contour.style.label
+    if label ~= nil and label ~= "" then
+      entries[#entries + 1] = {
+        kind = "contour",
+        color = contour.style.color,
         label = label,
       }
     end
@@ -1035,7 +1303,7 @@ local function tick_boxes(figure, cfg, geom)
     theta_boxes[index] = text_box(x, y, cfg.theta_labels[index], 11, anchor)
   end
   for index, value in ipairs(cfg.rticks) do
-    local y = geom.cy - geom.radius * value / cfg.rmax + 4
+    local y = radius_label_baseline(geom, value / cfg.rmax)
     radius_boxes[index] = text_box(geom.cx + 6, y, cfg.rlabels[index], 10,
       "start")
   end
@@ -1053,6 +1321,29 @@ local function legend_plan(figure, cfg, geom)
   local title_box = nil
   if figure._title ~= nil then
     title_box = text.bounds(geom.width / 2, 30, figure._title, 18, "middle")
+  end
+
+  -- Keep the legend out of the reserved colorbar column as well.
+  local colorbar_box = nil
+  local bar_heatmap = colorbar_heatmap(figure)
+  if bar_heatmap ~= nil then
+    local bx, by, bw, bh = colorbar_geometry(geom)
+    local ticks = bar_heatmap.colorbar_ticks or 3
+    local max_label = 0
+    for index = 0, ticks - 1 do
+      local value = bar_heatmap.vmin +
+        (bar_heatmap.vmax - bar_heatmap.vmin) * index / (ticks - 1)
+      local measured = text.measure(colorbar_value(value), 10)
+      if measured > max_label then max_label = measured end
+    end
+    local extra = 0
+    if bar_heatmap.colorbar_label ~= nil and
+        bar_heatmap.colorbar_label ~= "" then
+      extra = 18
+    end
+    colorbar_box = {
+      x = bx, y = by, width = bw + 8 + max_label + extra, height = bh,
+    }
   end
 
   local data_points = {}
@@ -1155,6 +1446,9 @@ local function legend_plan(figure, cfg, geom)
     if title_box ~= nil then
       label_overlap = label_overlap + overlap_area(box, title_box)
     end
+    if colorbar_box ~= nil then
+      label_overlap = label_overlap + overlap_area(box, colorbar_box)
+    end
     penalty = penalty + label_overlap * 10000
 
     local outside_samples = 0
@@ -1228,15 +1522,25 @@ local function legend_plan(figure, cfg, geom)
   }
 end
 
-local function polar_swatch(kind, color, x, y, buf)
+local function polar_swatch(entry, x, y, buf)
+  local kind, color = entry.kind, entry.color
   if kind == "scatter" then
     buf[#buf + 1] = string.format(
       '   <circle cx="%s" cy="%s" r="4" fill="%s"/>',
       util.fmt(x + 10), util.fmt(y), color)
   elseif kind == "heatmap" then
-    buf[#buf + 1] = string.format(
-      '   <rect x="%s" y="%s" width="20" height="10" rx="1" fill="%s"/>',
-      util.fmt(x), util.fmt(y - 5), color)
+    -- A stepped gradient swatch communicates the field range better than a
+    -- single midpoint color, matching the new polar colorbar.
+    local vmin = entry.vmin or 0
+    local vmax = entry.vmax or vmin
+    local steps = 5
+    for step = 1, steps do
+      local value = vmin + (vmax - vmin) * (step - 0.5) / steps
+      buf[#buf + 1] = string.format(
+        '   <rect class="legend-swatch-step" x="%s" y="%s" width="%s" height="10" fill="%s"/>',
+        util.fmt(x + (step - 1) * 20 / steps), util.fmt(y - 5),
+        util.fmt(20 / steps + 0.2), colors.heat(value, vmin, vmax))
+    end
   elseif kind == "bar" then
     buf[#buf + 1] = string.format(
       '   <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
@@ -1283,7 +1587,7 @@ local function render_legend(figure, cfg, geom, buf)
     local row = (index - 1) % plan.rows + 1
     local entry_x = x + 8 + (column - 1) * (plan.col_width + 8)
     local entry_y = y + 12 + plan.title_height + (row - 1) * 20
-    polar_swatch(entry.kind, entry.color, entry_x, entry_y, buf)
+    polar_swatch(entry, entry_x, entry_y, buf)
     buf[#buf + 1] = string.format(
       '   <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
       util.fmt(entry_x + 28), util.fmt(entry_y + 4), TEXT_COLOR,
@@ -1350,6 +1654,9 @@ function M.to_svg(figure)
   for _, heatmap in ipairs(state.heatmaps or {}) do
     render_heatmap(heatmap, figure, cfg, geom, buf)
   end
+  for _, contour in ipairs(state.contours or {}) do
+    render_contour(contour, figure, cfg, geom, buf)
+  end
   for _, series in ipairs(state.series) do
     if series.kind == "line" then
       render_line(series, figure, cfg, geom, buf)
@@ -1366,6 +1673,7 @@ function M.to_svg(figure)
   -- layer so bars and filled heatmap cells cannot hide the numbers.
   render_radius_labels(cfg, geom, buf)
   render_annotations(figure, cfg, geom, buf)
+  render_colorbar(figure, geom, buf)
   add('  </g>')
   render_legend(figure, cfg, geom, buf)
   add(' </g>')
@@ -1430,6 +1738,30 @@ local function copy_annotation(annotation)
     }
   end
   return copy
+end
+
+-- Map normalized contour segments back to data-space (theta, r) pairs for
+-- non-SVG backends.  `outer` is the resolved effective radial extent.
+local function contour_scene_levels(contour, outer)
+  local span = contour.theta_max - contour.theta_min
+  local radial = outer - contour.rmin
+  local levels = {}
+  for level_index, level_data in ipairs(contour.levels) do
+    local segments = {}
+    for segment_index, segment in ipairs(level_data.segments) do
+      segments[segment_index] = {
+        contour.theta_min + span * segment[1],
+        contour.rmin + radial * segment[2],
+        contour.theta_min + span * segment[3],
+        contour.rmin + radial * segment[4],
+      }
+    end
+    levels[level_index] = {
+      level = level_data.level,
+      segments = segments,
+    }
+  end
+  return levels
 end
 
 -- Renderer-agnostic polar scene.  Grid values are included so a non-SVG
@@ -1501,16 +1833,21 @@ function M.to_scene(figure)
       entries = {},
     }
     for index, entry in ipairs(entries) do
-      exported.entries[index] = {
+      local exported_entry = {
         kind = entry.kind,
         label = entry.label,
         color = entry.color,
       }
+      if entry.kind == "heatmap" then
+        exported_entry.vmin = entry.vmin
+        exported_entry.vmax = entry.vmax
+      end
+      exported.entries[index] = exported_entry
     end
     scene.polar.legend = exported
   end
 
-  for _, heatmap in ipairs(state.heatmaps or {}) do
+  for heatmap_index, heatmap in ipairs(state.heatmaps or {}) do
     scene.polar.heatmaps[#scene.polar.heatmaps + 1] = {
       kind = "heatmap",
       rows = heatmap.rows,
@@ -1524,7 +1861,47 @@ function M.to_scene(figure)
       theta_max = heatmap.theta_max,
       alpha = heatmap.alpha,
       label = heatmap.label,
+      colorbar = heatmap.colorbar and true or false,
     }
+  end
+
+  local bar_heatmap = colorbar_heatmap(figure)
+  if bar_heatmap ~= nil then
+    local tick_count = bar_heatmap.colorbar_ticks or 3
+    local values = {}
+    for index = 1, tick_count do
+      values[index] = bar_heatmap.vmin +
+        (bar_heatmap.vmax - bar_heatmap.vmin) * (index - 1) /
+        (tick_count - 1)
+    end
+    scene.polar.colorbar = {
+      orientation = "vertical",
+      vmin = bar_heatmap.vmin,
+      vmax = bar_heatmap.vmax,
+      ticks = values,
+      label = bar_heatmap.colorbar_label,
+    }
+  end
+
+  if #(state.contours or {}) > 0 then
+    scene.polar.contours = {}
+    for _, contour in ipairs(state.contours) do
+      local outer = contour_rmax(state, contour)
+      scene.polar.contours[#scene.polar.contours + 1] = {
+        kind = "contour",
+        rows = contour.rows,
+        cols = contour.cols,
+        vmin = contour.vmin,
+        vmax = contour.vmax,
+        rmin = contour.rmin,
+        rmax = outer,
+        theta_min = contour.theta_min,
+        theta_max = contour.theta_max,
+        labels = contour.labels,
+        style = copy_style(contour.style),
+        levels = contour_scene_levels(contour, outer),
+      }
+    end
   end
 
   for _, series in ipairs(state.series) do

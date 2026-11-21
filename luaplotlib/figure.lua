@@ -94,6 +94,27 @@ local POLAR_HEATMAP_OPTIONS = {
   theta_max = true,
   alpha = true,
   label = true,
+  colorbar = true,
+  colorbar_label = true,
+  colorbar_ticks = true,
+  degrees = true,
+  theta_unit = true,
+}
+
+local POLAR_CONTOUR_OPTIONS = {
+  vmin = true,
+  vmax = true,
+  levels = true,
+  color = true,
+  linewidth = true,
+  linestyle = true,
+  alpha = true,
+  label = true,
+  labels = true,
+  rmin = true,
+  rmax = true,
+  theta_min = true,
+  theta_max = true,
   degrees = true,
   theta_unit = true,
 }
@@ -547,6 +568,46 @@ local function checked_theta_scalar(value, opts, name)
   return number
 end
 
+-- Resolve the rectangular (theta, r) domain shared by polar field plots
+-- (heatmaps and contours).  Angles are returned in radians; `name` prefixes
+-- validation errors so callers keep their own wording.
+local function checked_field_extent(opts, name)
+  local rmin = 0
+  if opts.rmin ~= nil then
+    rmin = util.check_number(opts.rmin, name .. " rmin", 0)
+  end
+  local rmax = nil
+  if opts.rmax ~= nil then
+    rmax = util.check_number(opts.rmax, name .. " rmax", 0)
+    if rmax <= rmin then
+      fail(name .. " rmax must be greater than rmin")
+    end
+  end
+
+  local unit = checked_theta_unit(opts, name)
+  local theta_min, theta_max
+  if unit == "degrees" then
+    theta_min = opts.theta_min == nil and 0 or
+      util.check_number(opts.theta_min, name .. " theta_min")
+    theta_max = opts.theta_max == nil and 360 or
+      util.check_number(opts.theta_max, name .. " theta_max")
+    theta_min = theta_min * math.pi / 180
+    theta_max = theta_max * math.pi / 180
+  else
+    theta_min = opts.theta_min == nil and 0 or
+      util.check_number(opts.theta_min, name .. " theta_min")
+    theta_max = opts.theta_max == nil and 2 * math.pi or
+      util.check_number(opts.theta_max, name .. " theta_max")
+  end
+  if theta_max <= theta_min then
+    fail(name .. " theta_max must be greater than theta_min")
+  end
+  if theta_max - theta_min > 2 * math.pi + 1e-9 then
+    fail(name .. " theta span must be at most 2*pi radians")
+  end
+  return rmin, rmax, theta_min, theta_max
+end
+
 local function ensure_polar_state(self)
   if self._pie ~= nil then
     fail("cannot combine pie and polar plots in one figure")
@@ -877,39 +938,8 @@ function Figure:polar_heatmap(values, opts)
   end
   if maximum <= minimum then maximum = minimum + 1 end
 
-  local rmin = 0
-  if opts.rmin ~= nil then
-    rmin = util.check_number(opts.rmin, "polar heatmap rmin", 0)
-  end
-  local rmax = nil
-  if opts.rmax ~= nil then
-    rmax = util.check_number(opts.rmax, "polar heatmap rmax", 0)
-    if rmax <= rmin then
-      fail("polar heatmap rmax must be greater than rmin")
-    end
-  end
-
-  local unit = checked_theta_unit(opts, "polar heatmap")
-  local theta_min, theta_max
-  if unit == "degrees" then
-    theta_min = opts.theta_min == nil and 0 or
-      util.check_number(opts.theta_min, "polar heatmap theta_min")
-    theta_max = opts.theta_max == nil and 360 or
-      util.check_number(opts.theta_max, "polar heatmap theta_max")
-    theta_min = theta_min * math.pi / 180
-    theta_max = theta_max * math.pi / 180
-  else
-    theta_min = opts.theta_min == nil and 0 or
-      util.check_number(opts.theta_min, "polar heatmap theta_min")
-    theta_max = opts.theta_max == nil and 2 * math.pi or
-      util.check_number(opts.theta_max, "polar heatmap theta_max")
-  end
-  if theta_max <= theta_min then
-    fail("polar heatmap theta_max must be greater than theta_min")
-  end
-  if theta_max - theta_min > 2 * math.pi + 1e-9 then
-    fail("polar heatmap theta span must be at most 2*pi radians")
-  end
+  local rmin, rmax, theta_min, theta_max =
+    checked_field_extent(opts, "polar heatmap")
 
   local alpha = 1
   if opts.alpha ~= nil then
@@ -917,6 +947,21 @@ function Figure:polar_heatmap(values, opts)
   end
   if opts.label ~= nil then
     util.check_string(opts.label, "polar heatmap label", true)
+  end
+
+  local colorbar = false
+  if opts.colorbar ~= nil then
+    util.check_boolean(opts.colorbar, "polar heatmap colorbar")
+    colorbar = opts.colorbar
+  end
+  if opts.colorbar_label ~= nil then
+    util.check_string(opts.colorbar_label,
+      "polar heatmap colorbar_label", true)
+  end
+  local colorbar_ticks = 3
+  if opts.colorbar_ticks ~= nil then
+    colorbar_ticks = util.check_integer(opts.colorbar_ticks,
+      "polar heatmap colorbar_ticks", 2, 9)
   end
 
   local state = ensure_polar_state(self)
@@ -933,6 +978,161 @@ function Figure:polar_heatmap(values, opts)
     theta_max = theta_max,
     alpha = alpha,
     label = opts.label,
+    colorbar = colorbar,
+    colorbar_label = opts.colorbar_label,
+    colorbar_ticks = colorbar_ticks,
+  }
+  return self
+end
+
+-- Project contour isolines of a rectangular value matrix onto the polar axes.
+-- The matrix shares the heatmap orientation: rows run from the inner radius to
+-- the outer radius and columns sweep from theta_min to theta_max.  Marching
+-- squares runs over the matrix corners, so the contours span the full field
+-- extent and can be overlaid on a heatmap from the same matrix.
+function Figure:polar_contour(values, opts)
+  opts = util.check_options(opts, POLAR_CONTOUR_OPTIONS, "polar contour")
+  local rows, cols, matrix = data.matrix(values, "polar contour values")
+  if rows < 2 or cols < 2 then
+    fail("polar contour values must be at least 2x2")
+  end
+
+  local minimum, maximum = math.huge, -math.huge
+  for row = 1, rows do
+    for col = 1, cols do
+      local value = matrix[row][col]
+      if value < minimum then minimum = value end
+      if value > maximum then maximum = value end
+    end
+  end
+  if opts.vmin ~= nil then
+    minimum = util.check_number(opts.vmin, "polar contour vmin")
+  end
+  if opts.vmax ~= nil then
+    maximum = util.check_number(opts.vmax, "polar contour vmax")
+  end
+  if maximum <= minimum then maximum = minimum + 1 end
+
+  local levels = opts.levels
+  if levels == nil then levels = 5 end
+  if type(levels) == "number" then
+    levels = util.check_integer(levels, "polar contour levels", 1, 50)
+    local list = {}
+    for index = 1, levels do
+      list[index] = minimum + (maximum - minimum) * index / (levels + 1)
+    end
+    levels = list
+  elseif type(levels) ~= "table" or #levels == 0 then
+    fail("polar contour levels must be a positive count or a non-empty table")
+  end
+  local checked_levels = {}
+  for index = 1, #levels do
+    checked_levels[index] = util.check_number(levels[index],
+      "polar contour levels[" .. index .. "]")
+  end
+
+  local linewidth = 1.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "polar contour linewidth", 0)
+  end
+  local linestyle = opts.linestyle or "solid"
+  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+    fail("polar contour linestyle must be one of solid, dashed, dotted, or none")
+  end
+  local alpha = 1
+  if opts.alpha ~= nil then
+    alpha = util.check_alpha(opts.alpha, "polar contour alpha")
+  end
+  if opts.labels ~= nil then
+    util.check_boolean(opts.labels, "polar contour labels")
+  end
+  if opts.label ~= nil then
+    util.check_string(opts.label, "polar contour label", true)
+  end
+
+  local color = opts.color and
+    util.check_color(opts.color, "polar contour color") or
+    colors.next(self._color_serial)
+  if opts.color == nil then self._color_serial = self._color_serial + 1 end
+
+  local rmin, rmax, theta_min, theta_max =
+    checked_field_extent(opts, "polar contour")
+
+  -- Segment endpoints are stored in normalized field coordinates (0..1 on
+  -- both axes) so a later polar_config.rmax stretches contours and heatmaps
+  -- together.  The renderer and scene exporter map them to data radians and
+  -- radii.
+  local column_scale = cols - 1
+  local row_scale = rows - 1
+  local level_data = {}
+  for level_index = 1, #checked_levels do
+    local level = checked_levels[level_index]
+    local segments = {}
+    local function crossing(a, b, x0, y0, x1, y1)
+      local da, db = a - level, b - level
+      if da == 0 or db == 0 or da * db > 0 then return nil end
+      local t = da / (da - db)
+      return {
+        (x0 + (x1 - x0) * t) / column_scale,
+        (y0 + (y1 - y0) * t) / row_scale,
+      }
+    end
+    for row = 1, rows - 1 do
+      for col = 1, cols - 1 do
+        local x0, y0 = col - 1, row - 1
+        local v0, v1 = matrix[row][col], matrix[row][col + 1]
+        local v2, v3 = matrix[row + 1][col + 1], matrix[row + 1][col]
+        local intersections = {}
+        local function add(point)
+          if point ~= nil then intersections[#intersections + 1] = point end
+        end
+        add(crossing(v0, v1, x0, y0, x0 + 1, y0))
+        add(crossing(v1, v2, x0 + 1, y0, x0 + 1, y0 + 1))
+        add(crossing(v2, v3, x0 + 1, y0 + 1, x0, y0 + 1))
+        add(crossing(v3, v0, x0, y0 + 1, x0, y0))
+        if #intersections == 2 then
+          segments[#segments + 1] = {
+            intersections[1][1], intersections[1][2],
+            intersections[2][1], intersections[2][2],
+          }
+        elseif #intersections == 4 then
+          segments[#segments + 1] = {
+            intersections[1][1], intersections[1][2],
+            intersections[2][1], intersections[2][2],
+          }
+          segments[#segments + 1] = {
+            intersections[3][1], intersections[3][2],
+            intersections[4][1], intersections[4][2],
+          }
+        end
+      end
+    end
+    level_data[#level_data + 1] = {
+      level = level,
+      segments = segments,
+    }
+  end
+
+  local state = ensure_polar_state(self)
+  state.contours[#state.contours + 1] = {
+    kind = "contour",
+    rows = rows,
+    cols = cols,
+    levels = level_data,
+    vmin = minimum,
+    vmax = maximum,
+    rmin = rmin,
+    rmax = rmax,
+    theta_min = theta_min,
+    theta_max = theta_max,
+    labels = opts.labels == true,
+    style = {
+      color = color,
+      label = opts.label,
+      linewidth = linewidth,
+      linestyle = linestyle,
+      alpha = alpha,
+    },
   }
   return self
 end

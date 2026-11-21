@@ -203,6 +203,8 @@ local test_files = {
   "test_polar_polish.lua",
   "test_polar_heatmap.lua",
   "test_polar_annotations.lua",
+  "test_polar_contour.lua",
+  "test_polar_colorbar.lua",
   "test_polar_text.lua",
   "test_area_step_stem.lua",
   "test_twiny.lua",
