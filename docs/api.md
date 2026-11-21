@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.14.0`. This document describes the public Lua API implemented
+Version: `4.15.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.14.0"`
+- `plt._VERSION` — currently `"4.15.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -163,15 +163,58 @@ the grid. Cells use the same viridis-like palette as Cartesian heatmaps.
 | `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
 | `alpha` | number in [0, 1] | `1` |
 | `label` | string | no legend entry |
+| `colorbar` | boolean | `false` |
+| `colorbar_label` | string | no colorbar title |
+| `colorbar_ticks` | integer in [2, 9] | `3` |
 
 The optional `rmax` fixes the heatmap's own outer radius. If it is omitted, a
 configured `polar_config.rmax` is used; without either, each matrix row is one
 radial unit. Heatmaps render beneath line/scatter/bar/error-bar series, so a
 curve or annotation can be overlaid. A full-turn heatmap is drawn as a disk
 for its innermost band and as annuli otherwise; partial sweeps draw sector
-cells. Heatmaps participate in `fig:legend()` with a `"heatmap"` swatch and in
-scene export under `polar.heatmaps`. Explicit `rmax` values that do not cover
-a heatmap or data extent raise an error when rendered.
+cells. Heatmaps participate in `fig:legend()` with a stepped gradient swatch
+and in scene export under `polar.heatmaps`. Explicit `rmax` values that do not
+cover a heatmap or data extent raise an error when rendered.
+
+`colorbar = true` reserves a canvas column to the right of the polar circle and
+draws a vertical `polar-colorbar` group with a stepped palette, a frame, evenly
+spaced tick marks from `vmin` to `vmax`, and an optional rotated
+`colorbar_label`. Tick labels use three significant digits. The polar circle is
+reduced to make room, and the legend planner treats the colorbar column as
+occupied. At most one heatmap per polar figure can request a colorbar;
+`fig:to_scene()` exports it as `polar.colorbar`.
+
+### `fig:polar_contour(values, opts)`
+
+Draw isolines of a rectangular matrix over the polar axes. The matrix has the
+same orientation as `fig:polar_heatmap` (rows run outward, columns sweep with
+data theta) and must be at least 2x2. Marching squares runs over the matrix
+corners, so a contour from the same matrix overlays the heatmap extent. The
+projected segments are sampled in `(theta, r)` space and rendered as curved
+paths, clipped to the polar circle. Contours render above heatmaps and below
+line/scatter/bar/error-bar series.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `levels` | positive integer ≤ 50 or non-empty number array | `5` |
+| `color` | color string | next palette color |
+| `linewidth` | number ≥ 0 | `1.5` |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
+| `alpha` | number in [0, 1] | `1` |
+| `labels` | boolean | `false` |
+| `label` | string | no legend entry |
+| `vmin` / `vmax` | finite number | matrix minimum / maximum |
+| `rmin` / `rmax` | number ≥ 0 / number > `rmin` | `0` / configured `rmax`, else `rows` |
+| `theta_min` / `theta_max` | finite numbers, span ≤ `2*pi` | `0` / `2*pi` |
+| `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
+
+`labels = true` draws one white-haloed level label per contour, choosing the
+segment farthest from the origin and pulling the text inside the circular clip.
+Contours extend the automatic radial limit exactly like heatmaps; an explicit
+`polar_config.rmax` must cover them. Labelled contours participate in
+`fig:legend()` and scene export under `polar.contours`. Levels that exactly
+equal a matrix sample are ambiguous in marching squares and can drop that
+degenerate branch; use a level between sample values.
 
 ### `fig:polar_errorbar(theta, r, rerr, opts)`
 
@@ -676,19 +719,21 @@ Polar figures are created with `plt.polar(theta, r, opts)` or by calling
 `theta_unit = "degrees"` is passed; `r` may be negative. `fig:polar_scatter`,
 `fig:polar_bar`, and `fig:polar_errorbar` add markers, radial wedges, and
 radial/angular uncertainty; `fig:polar_heatmap` projects a matrix as annular
-cells. `fig:polar_annotate` (or `fig:annotate` on a polar figure) adds text and
+cells; `fig:polar_contour` overlays projected isolines of the same matrix.
+`fig:polar_annotate` (or `fig:annotate` on a polar figure) adds text and
 optional arrows at `(theta, r)` coordinates. `fig:polar_config` changes the
 zero location, theta direction, radial limit, and explicit grids.
 
 The radial limit is selected automatically from the largest absolute radius,
-including the extents of radial error bars, annotation targets, and heatmaps;
-the default angular grid has spokes every 45 degrees and the radial grid uses
-"nice" steps. An explicit `rmax` must cover every series value, error-bar
-extent, annotation target, heatmap extent, and `rgrids` entry. The polar
-renderer draws the grid and tick labels itself, so `grid`, `xlim`/`ylim`,
-`xscale`/`yscale`, and twin axes do not apply. Radial tick numbers draw above
-the series with a white halo so filled bars and heatmaps do not hide them. The
-title, facecolor, ARIA label, `to_html`, and `savefig` remain available, and
+including the extents of radial error bars, annotation targets, heatmaps, and
+contours; the default angular grid has spokes every 45 degrees and the radial
+grid uses "nice" steps. An explicit `rmax` must cover every series value,
+error-bar extent, annotation target, heatmap/contour extent, and `rgrids`
+entry. The polar renderer draws the grid and tick labels itself, so `grid`,
+`xlim`/`ylim`, `xscale`/`yscale`, and twin axes do not apply. Radial tick
+numbers draw above the series with a white halo so filled bars and heatmaps do
+not hide them; the outermost baseline is clamped inside the frame. The title,
+facecolor, ARIA label, `to_html`, and `savefig` remain available, and
 `to_scene()` exports the polar schema described below.
 
 The SVG root sets `data-polar="true"`, `data-theta-unit="radians"`,
@@ -696,9 +741,11 @@ The SVG root sets `data-polar="true"`, `data-theta-unit="radians"`,
 `data-cx`, `data-cy`, `data-radius`, and `data-rmax` for tests and for
 coordinate-aware tooling. Series are clipped to the polar circle and rendered
 with classes `polar-line`, `polar-scatter`, `polar-bar`,
-`polar-errorbar-r`, `polar-errorbar-theta`, `polar-errorbar-cap`, and
-`polar-frame`, plus `polar-spoke`, `polar-circle`, `theta-tick`, `r-tick`,
-`annotation-text`, and `polar-legend` for the grid, annotations, and legend.
+`polar-errorbar-r`, `polar-errorbar-theta`, `polar-errorbar-cap`,
+`polar-contour-line`, `polar-contour-label`, and `polar-frame`, plus
+`polar-spoke`, `polar-circle`, `theta-tick`, `r-tick`, `annotation-text`,
+`polar-legend`, and `polar-colorbar` for the grid, annotations, legend, and
+colorbar. Heatmap legend swatches use `legend-swatch-step`.
 
 ## 3-D axes
 
@@ -710,9 +757,11 @@ across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
 ## Limitations
 
 - SVG is the primary backend; PNG/PDF require the optional `rsvg-convert`.
-- Polar axes support line/scatter/bar/error-bar series and annotations;
-  contour/heatmap projections and polar twin axes are not implemented. Legend
-  placement uses estimated text metrics, not a full text-measurement engine.
+- Polar axes support line/scatter/bar/error-bar series, heatmaps with one
+  colorbar, contours, and annotations; polar twin axes are not implemented.
+  Contour levels that exactly equal a matrix sample can drop that degenerate
+  branch. Legend placement uses estimated text metrics, not a full
+  text-measurement engine.
 - 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
@@ -816,6 +865,29 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         { kind = "errorbar", label = "errors", color = "#ff7f0e" },
       },
     },
+    colorbar = {
+      orientation = "vertical",
+      vmin = 11, vmax = 48,
+      ticks = { 11, 23.5, 36, 48 },
+      label = "value",
+    },
+    heatmaps = {
+      { kind = "heatmap", rows = 4, cols = 8, values = {...},
+        vmin = 11, vmax = 48, rmin = 0, rmax = 4,
+        theta_min = 0, theta_max = 6.283, alpha = 1,
+        label = "field", colorbar = true },
+    },
+    contours = {
+      { kind = "contour", rows = 4, cols = 8,
+        vmin = 11, vmax = 48, rmin = 0, rmax = 4,
+        theta_min = 0, theta_max = 6.283, labels = false,
+        style = { color = "#111111", linewidth = 1.5,
+          linestyle = "solid", alpha = 1 },
+        levels = {
+          { level = 18.2, segments = { { theta0, r0, theta1, r1 }, ... } },
+          -- ...
+        } },
+    },
     series = {
       { kind = "line", theta = {...}, r = {...}, style = {...} },
       { kind = "scatter", theta = {...}, r = {...},
@@ -842,8 +914,18 @@ top-level `legend` remains a boolean for compatibility with earlier scenes.
 `polar.heatmaps` is present when the figure contains projected heatmaps. Each
 entry carries `kind = "heatmap"`, `rows`, `cols`, `values` (a row-major copy),
 `vmin`, `vmax`, `rmin`, the effective `rmax`, `theta_min`, `theta_max`,
-`alpha`, and the optional `label`. Values are copied, so later mutation of the
-caller's matrix does not change an exported scene.
+`alpha`, the optional `label`, and `colorbar = true` when that heatmap owns the
+figure colorbar. Values are copied, so later mutation of the caller's matrix
+does not change an exported scene.
+`polar.colorbar` is present when a heatmap requested one; it carries
+`orientation = "vertical"`, `vmin`, `vmax`, the exact `ticks` values (ascending),
+and the optional `label`. `polar.contours` is present when the figure contains
+contours. Each entry carries `kind = "contour"`, `rows`, `cols`, `vmin`,
+`vmax`, `rmin`, the effective `rmax`, `theta_min`, `theta_max`, `labels`,
+`style`, and `levels`. Each level has a `level` value and `segments`; every
+segment is a flat `{ theta0, r0, theta1, r1 }` array in data units, ready for a
+backend to project. Heatmap legend entries also carry `vmin`/`vmax` so a
+gradient swatch can be reconstructed.
 Polar `annotations` use theta/r coordinates instead of Cartesian x/y, mirroring
 the Cartesian annotation schema. The `rmax`, tick arrays, and labels reflect the
 same resolution rules as the SVG renderer, so another backend does not need to

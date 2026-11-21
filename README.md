@@ -54,6 +54,7 @@ luajit examples/polar.lua
 luajit examples/polar_bars.lua
 luajit examples/polar_annotations.lua
 luajit examples/polar_heatmap.lua
+luajit examples/polar_contour.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -141,20 +142,27 @@ wedges with optional per-bar widths and colors, and
 uncertainty. `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
 projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
 `theta_min`/`theta_max`; it renders beneath the other series, so lines and
-annotations can be overlaid. `fig:polar_annotate` (or `fig:annotate` on a
-polar figure) places text and leader arrows at `(theta, r)` coordinates.
+annotations can be overlaid. Pass `colorbar = true` to a heatmap to add a
+vertical colorbar with `colorbar_label` and `colorbar_ticks`.
+`fig:polar_contour(values, opts)` draws marching-squares isolines of the same
+matrix, projected as curved paths; explicit or automatic `levels`, `labels`,
+and the shared heatmap extent options keep contours aligned with the field.
+`fig:polar_annotate` (or `fig:annotate` on a polar figure) places text and
+leader arrows at `(theta, r)` coordinates.
 Annotation target radii extend the automatic `rmax`; with an explicit limit, a
 target outside it raises an error. Annotation text may sit outside the circle
 but is shifted back inside the canvas when it would leave the viewport.
 `fig:polar_config` sets the zero location (`"E"`, `"N"`, `"W"`, `"S"`),
 clockwise/counterclockwise direction, explicit `rmax`, and custom
 angular/radial grids; pass `degrees = true` to any polar series method to
-supply theta in degrees. Labelled polar series and heatmaps participate in
-`fig:legend()`, which is placed so it does not cover the angular tick labels
-(`loc = "best"` searches for the least obstructed spot). Legend columns and
-titles are sized from UTF-8-aware Helvetica/Arial advance widths, so wide
-glyphs reserve more room than narrow ones. `fig:to_scene()` exports the polar
-grid, series, heatmaps, annotations, and legend entries for non-SVG backends.
+supply theta in degrees. Labelled polar series, heatmaps, and contours
+participate in `fig:legend()`, which is placed so it does not cover the angular
+tick labels or the reserved colorbar column (`loc = "best"` searches for the
+least obstructed spot). Heatmap legend swatches are stepped gradients.
+Legend columns and titles are sized from UTF-8-aware Helvetica/Arial advance
+widths, so wide glyphs reserve more room than narrow ones. `fig:to_scene()`
+exports the polar grid, series, heatmaps, contours, colorbar, annotations, and
+legend entries for non-SVG backends.
 A figure cannot mix Cartesian and polar content.
 
 ```lua
@@ -174,6 +182,14 @@ local field = {
 fig:polar_heatmap(field, {
   rmax = 6,
   label = "projected field",
+  colorbar = true,
+  colorbar_label = "value",
+})
+fig:polar_contour(field, {
+  levels = { 0.4, 0.8 },
+  color = "#111111",
+  labels = true,
+  label = "isolines",
 })
 ```
 
@@ -270,20 +286,21 @@ make examples
 # examples/output/polar-bars.svg
 # examples/output/polar-annotations.svg
 # examples/output/polar-heatmap.svg
+# examples/output/polar-contour.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.14.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.15.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar/error-bar/heatmap plots with configurable orientation
-and grids, polar annotations with canvas clamping, measured-text polar legends,
-annotations, linear/log/date axes, twin x/y axes,
-3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value
-labels, legends, reference lines, axis-specific grid lines, 3-D scene export,
-per-point scatter sizes/colors, histogram density, multi-column legends,
+polar line/scatter/bar/error-bar/heatmap/contour plots with configurable
+orientation and grids, polar heatmap colorbars, polar annotations with canvas
+clamping, measured-text polar legends, annotations, linear/log/date axes, twin
+x/y axes, 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors,
+value labels, legends, reference lines, axis-specific grid lines, 3-D scene
+export, per-point scatter sizes/colors, histogram density, multi-column legends,
 marker shapes, shaded spans, log helpers, optional PNG/PDF export, and scene
 export. See [docs/stability.md](docs/stability.md) for the API policy.
 
@@ -292,11 +309,12 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
 - **Polar axes are focused.** Polar figures support line, scatter, bar,
-  error-bar, and heatmap-series projections plus annotations, with automatic or
-  explicit radial limits, configurable zero location/direction, custom angular
-  and radial grids, and measured-text label-aware legends; Cartesian and polar
-  content cannot share a figure. Polar contour lines and polar twin axes are
-  not implemented.
+  error-bar, heatmap, and contour projections plus annotations, with automatic
+  or explicit radial limits, configurable zero location/direction, custom
+  angular and radial grids, one vertical heatmap colorbar per figure, and
+  measured-text label-aware legends; Cartesian and polar content cannot share
+  a figure. Polar twin axes are not implemented, and contour levels that
+  exactly equal a matrix sample can miss that degenerate contour branch.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.

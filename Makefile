@@ -19,6 +19,7 @@ examples:
 	@$(LUA) examples/polar_bars.lua
 	@$(LUA) examples/polar_annotations.lua
 	@$(LUA) examples/polar_heatmap.lua
+	@$(LUA) examples/polar_contour.lua
 
 visual-qa:
 	@./scripts/visual-qa.sh
