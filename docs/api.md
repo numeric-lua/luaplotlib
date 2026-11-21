@@ -256,6 +256,16 @@ receives the data value and returns a string.
 Formats x tick labels as calendar dates from Unix timestamps. `format` uses
 `os.date` syntax and defaults to `"%Y-%m-%d"`.
 
+### `fig:axhspan(y1, y2[, opts])` / `fig:axvspan(x1, x2[, opts])`
+
+Shade a horizontal or vertical data-coordinate band. Options: `color`, `alpha`,
+and `label`. The span extends the reduced axis range.
+
+### `fig:loglog(x, y[, opts])` / `semilogx` / `semilogy`
+
+Convenience wrappers that select log scales and then call `plot`. `loglog` sets
+both axes, `semilogx` sets x, and `semilogy` sets y.
+
 ### `fig:axhline(y[, opts])` / `fig:axvline(x[, opts])`
 
 Draw a horizontal or vertical reference line in data coordinates. Options:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 4.7.0
+
+- `axhspan` / `axvspan` shaded data bands;
+- `loglog`, `semilogx`, and `semilogy` convenience wrappers;
+- 126 tests.
+
 ## 4.6.0
 
 - per-point scatter radii and fill colors;

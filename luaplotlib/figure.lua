@@ -1736,6 +1736,54 @@ local function reference_style(figure, opts, name)
   return style
 end
 
+local SPAN_OPTIONS = { color = true, alpha = true, label = true }
+
+function Figure:axhspan(y1, y2, opts)
+  if type(y1) ~= "number" or type(y2) ~= "number" then
+    fail("axhspan bounds must be numbers")
+  end
+  if y1 > y2 then y1, y2 = y2, y1 end
+  opts = util.check_options(opts, SPAN_OPTIONS, "axhspan")
+  self._series[#self._series + 1] = {
+    kind = "axhspan", y1 = y1, y2 = y2,
+    style = {
+      color = util.check_color(opts.color or "#cccccc", "axhspan color"),
+      alpha = opts.alpha and util.check_alpha(opts.alpha, "axhspan alpha") or 0.3,
+      label = opts.label,
+    },
+  }
+  return self
+end
+
+function Figure:axvspan(x1, x2, opts)
+  if type(x1) ~= "number" or type(x2) ~= "number" then
+    fail("axvspan bounds must be numbers")
+  end
+  if x1 > x2 then x1, x2 = x2, x1 end
+  opts = util.check_options(opts, SPAN_OPTIONS, "axvspan")
+  self._series[#self._series + 1] = {
+    kind = "axvspan", x1 = x1, x2 = x2,
+    style = {
+      color = util.check_color(opts.color or "#cccccc", "axvspan color"),
+      alpha = opts.alpha and util.check_alpha(opts.alpha, "axvspan alpha") or 0.3,
+      label = opts.label,
+    },
+  }
+  return self
+end
+
+function Figure:loglog(x, y, opts)
+  self:xscale("log"); self:yscale("log"); self:plot(x, y, opts); return self
+end
+
+function Figure:semilogx(x, y, opts)
+  self:xscale("log"); self:yscale("linear"); self:plot(x, y, opts); return self
+end
+
+function Figure:semilogy(x, y, opts)
+  self:xscale("linear"); self:yscale("log"); self:plot(x, y, opts); return self
+end
+
 function Figure:axhline(y, opts)
   if type(y) ~= "number" or y ~= y or y == math.huge or y == -math.huge then
     fail("axhline y must be a finite number")

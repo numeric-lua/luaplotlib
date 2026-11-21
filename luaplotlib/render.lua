@@ -90,6 +90,12 @@ local function data_extents(fig, xscale, yscale)
       include_x(series.cols, series_index, 1, "image")
       include_y(0, series_index, 1, "image")
       include_y(series.rows, series_index, 1, "image")
+    elseif series.kind == "axhspan" then
+      include_y(series.y1, series_index, 1, "axhspan")
+      include_y(series.y2, series_index, 1, "axhspan")
+    elseif series.kind == "axvspan" then
+      include_x(series.x1, series_index, 1, "axvspan")
+      include_x(series.x2, series_index, 1, "axvspan")
     elseif series.kind == "axhline" then
       include_y(series.y, series_index, 1, "axhline")
     elseif series.kind == "axvline" then
@@ -493,6 +499,24 @@ local function render_colorbar(series, geom, buf)
     '   <text x="%s" y="%s" font-size="10" text-anchor="start">%s</text>',
     util.fmt(x + 22), util.fmt(y + height), util.fmt_tick(series.vmin))
   buf[#buf + 1] = '  </g>'
+end
+
+local function render_span(series, map_x, map_y, geom, buf)
+  local style = series.style
+  local x1, x2, y1, y2
+  if series.kind == "axhspan" then
+    x1, x2 = geom.left, geom.right
+    y1, y2 = map_y(series.y1), map_y(series.y2)
+  else
+    x1, x2 = map_x(series.x1), map_x(series.x2)
+    y1, y2 = geom.top, geom.bottom
+  end
+  local left, right = math.min(x1, x2), math.max(x1, x2)
+  local top, bottom = math.min(y1, y2), math.max(y1, y2)
+  buf[#buf + 1] = string.format(
+    '  <rect class="span %s" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="%s"/>',
+    series.kind, util.fmt(left), util.fmt(top), util.fmt(right - left),
+    util.fmt(bottom - top), style.color, util.fmt(style.alpha))
 end
 
 local function render_reference(series, map_x, map_y, geom, buf)
@@ -1331,6 +1355,8 @@ function M.to_svg(fig)
   for _, series in ipairs(fig._series) do
     if series.kind == "image" then
       render_image(series, map_x, map_y, buf)
+    elseif series.kind == "axhspan" or series.kind == "axvspan" then
+      render_span(series, map_x, map_y, geom, buf)
     elseif series.kind == "axhline" or series.kind == "axvline" then
       render_reference(series, map_x, map_y, geom, buf)
     elseif series.kind == "line" then
