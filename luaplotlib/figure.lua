@@ -59,6 +59,32 @@ local POLAR_BAR_OPTIONS = {
   theta_unit = true,
 }
 
+local POLAR_ANNOTATE_OPTIONS = {
+  xytext = true,
+  color = true,
+  fontsize = true,
+  align = true,
+  arrow = true,
+  degrees = true,
+  theta_unit = true,
+}
+
+local POLAR_ERRORBAR_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  linestyle = true,
+  marker = true,
+  markersize = true,
+  alpha = true,
+  capsize = true,
+  elinewidth = true,
+  ecolor = true,
+  thetaerr = true,
+  degrees = true,
+  theta_unit = true,
+}
+
 local SCATTER_OPTIONS = {
   color = true,
   label = true,
@@ -229,6 +255,7 @@ local LEGEND_LOCATIONS = {
   ["upper left"] = true,
   ["lower right"] = true,
   ["lower left"] = true,
+  ["best"] = true,
 }
 
 local SCALES = {
@@ -468,8 +495,8 @@ function Figure:plot(x, y, opts)
   return self
 end
 
-local function checked_theta_values(value, opts, name)
-  local values = data.sequence(value, name)
+-- Resolve the theta unit shared by every polar series and annotation method.
+local function checked_theta_unit(opts, name)
   local unit = opts.theta_unit
   if unit ~= nil then
     if unit ~= "radians" and unit ~= "degrees" then
@@ -484,12 +511,27 @@ local function checked_theta_values(value, opts, name)
   else
     unit = "radians"
   end
-  if unit == "degrees" then
+  return unit
+end
+
+local function checked_theta_values(value, opts, name)
+  local values = data.sequence(value, name)
+  if checked_theta_unit(opts, name) == "degrees" then
     for index = 1, #values do
       values[index] = values[index] * math.pi / 180
     end
   end
   return values
+end
+
+-- Scalar theta values are accepted by annotations, which mark one point
+-- rather than a whole series.
+local function checked_theta_scalar(value, opts, name)
+  local number = util.check_number(value, name)
+  if checked_theta_unit(opts, name) == "degrees" then
+    number = number * math.pi / 180
+  end
+  return number
 end
 
 local function ensure_polar_state(self)
@@ -498,6 +540,9 @@ local function ensure_polar_state(self)
   end
   if #self._series > 0 then
     fail("cannot mix cartesian and polar series in one figure; create a separate figure")
+  end
+  if #self._annotations > 0 then
+    fail("cannot mix cartesian annotations and polar series in one figure; create a separate figure")
   end
   return polar.ensure(self)
 end
@@ -691,6 +736,160 @@ function Figure:polar_bar(theta, r, opts)
   return self
 end
 
+-- Add radial and/or angular error bars to polar points.  `rerr` is a scalar or
+-- one non-negative radial error per point.  Angular errors use the `thetaerr`
+-- option, with the same scalar-or-array rules; they are interpreted in the
+-- same unit as `theta`.
+function Figure:polar_errorbar(theta, r, rerr, opts)
+  opts = util.check_options(opts, POLAR_ERRORBAR_OPTIONS, "polar errorbar")
+  local tv = checked_theta_values(theta, opts, "polar errorbar theta")
+  local rv = data.sequence(r, "polar errorbar r")
+  if #tv ~= #rv then
+    fail(string.format(
+      "polar errorbar theta and r must have the same length (%d ~= %d)",
+      #tv, #rv))
+  end
+  if rerr == nil then
+    fail("polar errorbar requires rerr")
+  end
+
+  local angular_unit = checked_theta_unit(opts, "polar errorbar")
+  local function errors(value, name, angular)
+    local result
+    if type(value) == "number" then
+      util.check_number(value, name)
+      result = {}
+      for index = 1, #tv do result[index] = value end
+    else
+      result = data.sequence(value, name)
+    end
+    if #result ~= #tv then
+      fail(string.format("%s must have one entry per point (%d ~= %d)",
+        name, #result, #tv))
+    end
+    for index = 1, #result do
+      local error = util.check_number(result[index],
+        name .. "[" .. index .. "]")
+      if error < 0 then
+        fail(name .. "[" .. index .. "] must be non-negative")
+      end
+      if angular then
+        if angular_unit == "degrees" then
+          error = error * math.pi / 180
+        end
+        if error > 2 * math.pi + 1e-12 then
+          fail(name .. " must be at most 2*pi radians")
+        end
+      end
+      result[index] = error
+    end
+    return result
+  end
+
+  local radial = errors(rerr, "polar errorbar rerr", false)
+  local angular
+  if opts.thetaerr ~= nil then
+    angular = errors(opts.thetaerr, "polar errorbar thetaerr", true)
+  end
+
+  local linewidth = 1.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "polar errorbar linewidth", 0)
+  end
+  local linestyle = opts.linestyle or "solid"
+  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+    fail("polar errorbar linestyle must be one of solid, dashed, dotted, or none")
+  end
+  local marker = checked_marker(opts.marker == nil and "circle" or opts.marker,
+    "polar errorbar")
+  local markersize = 4
+  if opts.markersize ~= nil then
+    markersize = util.check_number(opts.markersize, "polar errorbar markersize", 0.1)
+  end
+  local capsize = 4
+  if opts.capsize ~= nil then
+    capsize = util.check_number(opts.capsize, "polar errorbar capsize", 0)
+  end
+  local elinewidth = 1
+  if opts.elinewidth ~= nil then
+    elinewidth = util.check_number(opts.elinewidth, "polar errorbar elinewidth", 0)
+  end
+
+  local style = checked_style(self, opts, "polar errorbar")
+  style.linewidth = linewidth
+  style.linestyle = linestyle
+  style.marker = marker
+  style.markersize = markersize
+  style.capsize = capsize
+  style.elinewidth = elinewidth
+  if opts.ecolor ~= nil then
+    style.ecolor = util.check_color(opts.ecolor, "polar errorbar ecolor")
+  else
+    style.ecolor = style.color
+  end
+
+  local state = ensure_polar_state(self)
+  state.series[#state.series + 1] = {
+    kind = "errorbar",
+    theta = tv,
+    r = rv,
+    rerr = radial,
+    thetaerr = angular,
+    style = style,
+  }
+  return self
+end
+
+-- Add text at a data (theta, r) position.  `xytext` optionally moves the text
+-- to another polar coordinate and draws a leader arrow back to the target;
+-- degrees/theta_unit apply to both angles.
+function Figure:polar_annotate(text, theta, r, opts)
+  util.check_string(text, "polar annotate text", true)
+  if r == nil then
+    fail("polar annotate requires text, theta, and r")
+  end
+  opts = util.check_options(opts, POLAR_ANNOTATE_OPTIONS, "polar annotate")
+  local target_theta = checked_theta_scalar(theta, opts, "polar annotate theta")
+  local target_r = util.check_number(r, "polar annotate r")
+
+  local xytext = checked_xytext(opts.xytext)
+  if xytext ~= nil then
+    local text_theta = util.check_number(xytext[1],
+      "polar annotate xytext theta")
+    local text_r = util.check_number(xytext[2], "polar annotate xytext r")
+    if checked_theta_unit(opts, "polar annotate") == "degrees" then
+      text_theta = text_theta * math.pi / 180
+    end
+    xytext = { text_theta, text_r }
+  end
+
+  local color = DEFAULT_ANNOTATION_COLOR
+  if opts.color ~= nil then
+    color = util.check_color(opts.color, "polar annotate color")
+  end
+  local fontsize = DEFAULT_ANNOTATION_FONTSIZE
+  if opts.fontsize ~= nil then
+    fontsize = util.check_number(opts.fontsize, "polar annotate fontsize", 0.1)
+  end
+  local align = opts.align or "left"
+  if type(align) ~= "string" or not ANNOTATION_ALIGNS[align] then
+    fail("polar annotate align must be one of left, center, or right")
+  end
+
+  local state = ensure_polar_state(self)
+  state.annotations[#state.annotations + 1] = {
+    text = text,
+    theta = target_theta,
+    r = target_r,
+    xytext = xytext,
+    color = color,
+    fontsize = fontsize,
+    align = align,
+    arrow = checked_arrow(opts.arrow, color),
+  }
+  return self
+end
+
 -- Configure polar orientation, radial limits, and explicit angular/radial
 -- grids.  Theta grid values are in degrees of the data theta coordinate;
 -- theta_zero accepts E/N/W/S or a display offset in radians.
@@ -700,6 +899,9 @@ function Figure:polar_config(opts)
   end
   if #self._series > 0 then
     fail("cannot mix cartesian and polar series in one figure; create a separate figure")
+  end
+  if #self._annotations > 0 then
+    fail("cannot mix cartesian annotations and polar axes in one figure; create a separate figure")
   end
   polar.configure(self, opts)
   return self
@@ -1972,6 +2174,11 @@ end
 -- to (x, y). Options are validated eagerly; axis-scale checks happen at render
 -- time, when the axes are known.
 function Figure:annotate(text, x, y, opts)
+  -- In polar mode the same call annotates a (theta, r) position, which keeps
+  -- the familiar annotate API usable for both coordinate systems.
+  if self._polar ~= nil then
+    return self:polar_annotate(text, x, y, opts)
+  end
   util.check_string(text, "annotate text", true)
   if y == nil then
     fail("annotate requires text, x, and y")
@@ -2208,7 +2415,7 @@ function Figure:legend(opts)
     if opts.loc ~= nil then
       util.check_string(opts.loc, "legend loc")
       if not LEGEND_LOCATIONS[opts.loc] then
-        fail("legend loc must be one of 'upper right', 'upper left', 'lower right', or 'lower left'")
+        fail("legend loc must be one of 'upper right', 'upper left', 'lower right', 'lower left', or 'best'")
       end
     end
     if opts.frame ~= nil then
