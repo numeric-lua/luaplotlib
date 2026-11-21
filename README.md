@@ -51,6 +51,7 @@ luajit examples/bars.lua
 luajit examples/heatmap.lua
 luajit examples/subplots.lua
 luajit examples/polar.lua
+luajit examples/polar_bars.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -132,7 +133,8 @@ fig:savefig("polar.svg")
 default 640x480 canvas. Polar figures draw concentric radial grid circles and
 angular spokes with degree labels; the radial limit automatically covers the
 largest absolute radius. `fig:polar_scatter` adds polar markers with per-point
-sizes and colors, and labelled polar line/scatter series participate in
+sizes and colors, and `fig:polar_bar` draws radial bar wedges with optional
+per-bar widths and colors. Labelled polar series participate in
 `fig:legend()`. A figure cannot mix Cartesian and polar series.
 
 Annotations use data coordinates and can include a leader arrow:
@@ -220,7 +222,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 `4.11.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line plots, annotations, linear/log/date axes, twin x/y axes,
+polar line/scatter/bar plots, annotations, linear/log/date axes, twin x/y axes,
 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value
 labels, legends, reference lines, axis-specific grid lines, 3-D scene export,
 per-point scatter sizes/colors, histogram density, multi-column legends,
@@ -231,8 +233,8 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
-- **Polar axes are basic.** Polar figures support line series with automatic
-  radial limits, fixed 45-degree angular grid labels, and radial grid circles;
+- **Polar axes are basic.** Polar figures support line, scatter, and bar series with automatic radial
+  limits, fixed 45-degree angular grid labels, and radial grid circles;
   Cartesian and polar series cannot share a figure.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;

@@ -117,6 +117,16 @@ Polar scatter and line entries with labels participate in `fig:legend()`. The
 polar legend supports the same `loc`, `frame`, `ncol`, and `title` options as
 the Cartesian renderer.
 
+### `fig:polar_bar(theta, r, opts)`
+
+Draw radial bar wedges. `theta` and `r` must be the same length; `r` values must
+be non-negative. `width` is the angular span of each bar in radians and defaults
+to `0.8`; it may be a single number or an array with one width per bar. Widths
+must be greater than zero and at most `2*pi`; a full-turn bar is rendered as a
+disk. `colors` may provide one fill color per bar, while `color`, `alpha`,
+`edgecolor`, and `label` behave like Cartesian bars. `color` and `colors` cannot
+be combined.
+
 ### `fig:barh(labels_or_y, values, opts)`
 
 Horizontal bars for a single numeric series. Category labels are placed on the

@@ -44,6 +44,15 @@ local POLAR_SCATTER_OPTIONS = {
   marker = true,
 }
 
+local POLAR_BAR_OPTIONS = {
+  color = true,
+  colors = true,
+  label = true,
+  width = true,
+  alpha = true,
+  edgecolor = true,
+}
+
 local SCATTER_OPTIONS = {
   color = true,
   label = true,
@@ -569,6 +578,84 @@ function Figure:polar_scatter(theta, r, opts)
     kind = "scatter",
     theta = tv,
     r = rv,
+    style = style,
+  }
+  return self
+end
+
+-- Add polar bars.  Each bar is a wedge spanning `width` radians (0.8 by
+-- default) from its theta position; widths may also be a per-bar array.
+function Figure:polar_bar(theta, r, opts)
+  opts = util.check_options(opts, POLAR_BAR_OPTIONS, "polar bar")
+  local tv = data.sequence(theta, "polar bar theta")
+  local rv = data.sequence(r, "polar bar r")
+  if #tv ~= #rv then
+    fail(string.format(
+      "polar bar theta and r must have the same length (%d ~= %d)",
+      #tv, #rv))
+  end
+  for index = 1, #rv do
+    if rv[index] < 0 then
+      fail("polar bar r values must be non-negative")
+    end
+  end
+
+  local function checked_width(value)
+    local width = util.check_number(value, "polar bar width")
+    if width <= 0 then
+      fail("polar bar width must be positive")
+    end
+    if width > 2 * math.pi + 1e-12 then
+      fail("polar bar width must be at most 2*pi radians")
+    end
+    return width
+  end
+
+  local widths = {}
+  if opts.width == nil then
+    for index = 1, #tv do widths[index] = 0.8 end
+  elseif type(opts.width) == "table" then
+    if #opts.width ~= #tv then
+      fail("polar bar width array must match the number of bars")
+    end
+    for index = 1, #tv do
+      widths[index] = checked_width(opts.width[index])
+    end
+  else
+    local width = checked_width(opts.width)
+    for index = 1, #tv do widths[index] = width end
+  end
+
+  local bar_colors
+  if opts.colors ~= nil then
+    if type(opts.colors) ~= "table" or #opts.colors ~= #tv then
+      fail("polar bar colors must have one entry per bar")
+    end
+    if opts.color ~= nil then
+      fail("polar bar color and colors cannot both be set")
+    end
+    bar_colors = {}
+    for index = 1, #tv do
+      bar_colors[index] = util.check_color(opts.colors[index],
+        "polar bar colors[" .. index .. "]")
+    end
+  end
+
+  local style_opts = opts
+  if bar_colors ~= nil then
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.color = bar_colors[1]
+  end
+  local style = checked_style(self, style_opts, "polar bar")
+
+  local state = ensure_polar_state(self)
+  state.series[#state.series + 1] = {
+    kind = "bar",
+    theta = tv,
+    r = rv,
+    widths = widths,
+    colors = bar_colors,
     style = style,
   }
   return self

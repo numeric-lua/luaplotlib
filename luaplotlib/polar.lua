@@ -270,6 +270,50 @@ local function render_scatter(series, figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function render_bar(series, figure, cfg, geom, buf)
+  local style = series.style
+  local opacity = ""
+  if style.alpha < 1 then
+    local alpha = util.fmt(style.alpha)
+    opacity = string.format(' fill-opacity="%s" stroke-opacity="%s"',
+      alpha, alpha)
+  end
+  local edge = style.edgecolor or "#ffffff"
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', util.escape_xml(style.label))
+  end
+  local sweep = (figure._polar.theta_direction or 1) < 0 and 1 or 0
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-polar-bar"%s>', label)
+  for index = 1, #series.theta do
+    local value = series.r[index]
+    if value > 0 then
+      local width = series.widths[index] or series.width or 0.8
+      local color = series.colors and series.colors[index] or style.color
+      local radius = geom.radius * value / cfg.rmax
+      if width >= 2 * math.pi - 1e-9 then
+        buf[#buf + 1] = string.format(
+          '   <circle class="polar-bar" cx="%s" cy="%s" r="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+          util.fmt(geom.cx), util.fmt(geom.cy), util.fmt(radius), color,
+          edge, opacity)
+      else
+        local x1, y1 = M.point(figure, cfg, geom, series.theta[index], value)
+        local x2, y2 = M.point(figure, cfg, geom,
+          series.theta[index] + width, value)
+        local large = width > math.pi and 1 or 0
+        buf[#buf + 1] = string.format(
+          '   <path class="polar-bar" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="1"%s/>',
+          util.fmt(geom.cx), util.fmt(geom.cy), util.fmt(x1), util.fmt(y1),
+          util.fmt(radius), util.fmt(radius), large, sweep, util.fmt(x2),
+          util.fmt(y2), color, edge, opacity)
+      end
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_grid(figure, cfg, geom, buf)
   local state = figure._polar
   buf[#buf + 1] = string.format(
@@ -490,6 +534,8 @@ function M.to_svg(figure)
       render_line(series, figure, cfg, geom, buf)
     elseif series.kind == "scatter" then
       render_scatter(series, figure, cfg, geom, buf)
+    elseif series.kind == "bar" then
+      render_bar(series, figure, cfg, geom, buf)
     end
   end
   add('  </g>')

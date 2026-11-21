@@ -16,6 +16,7 @@ examples:
 	@$(LUA) examples/annotations.lua
 	@$(LUA) examples/bars.lua
 	@$(LUA) examples/polar.lua
+	@$(LUA) examples/polar_bars.lua
 
 clean:
 	@rm -rf -- examples/output tests/output
