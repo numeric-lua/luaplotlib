@@ -99,7 +99,7 @@ optional horizontal error bars.
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `color` | color string | next palette color |
+| `color` | color string or array of color strings | next palette color |
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `1.5` |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
@@ -123,7 +123,7 @@ Draw one SVG circle per point.
 | --- | --- | --- |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
-| `size` | number > 0 | `4` |
+| `size` | number > 0 or array of numbers | `4` |
 | `markersize` | number > 0 | alias/precedence after `size` |
 | `s` | number > 0 | additional size alias |
 | `alpha` | number in [0, 1] | `1` |
@@ -131,9 +131,9 @@ Draw one SVG circle per point.
 | `linewidth` | number ≥ 0 | `1` when an outline is present |
 
 `size`/`markersize`/`s` are a circle **radius in SVG user units**, not
-matplotlib's area-in-points-squared convention. The last listed aliases are
-only used when the earlier ones are absent. Use `color` and `edgecolor`
-deliberately: `color` is the fill.
+matplotlib's area-in-points-squared convention. Arrays must match the number
+of points. `color` may also be an array of fill colors. The last listed size
+aliases are only used when the earlier ones are absent.
 
 ### `fig:hist(values, opts)`
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.6.0 (unreleased)
+
+- per-point scatter radii and fill colors;
+- 121 tests.
+
+## 4.5.0
+
+- fixed 3-D automatic bounds producing NaN coordinates;
+- corrected 1-D surface x/y mapping and validation;
+- format-aware `savefig` for `.svg`, `.png`, and `.pdf`;
+- axis-specific grid lines;
+- `axhline` / `axvline` reference lines;
+- refreshed API/README docs; 120 tests.
+
 ## 4.4.0
 
 - optional PNG/PDF export through the system `rsvg-convert`;

@@ -573,10 +573,12 @@ local function render_scatter(series, map_x, map_y, buf)
 
   buf[#buf + 1] = string.format('  <g class="series series-scatter"%s>', label)
   for i = 1, #series.x do
+    local radius = style.radii and style.radii[i] or style.radius
+    local color = style.colors and style.colors[i] or style.color
     buf[#buf + 1] = string.format(
       '   <circle class="point" cx="%s" cy="%s" r="%s" fill="%s"%s%s/>',
       util.fmt(map_x(series.x[i])), util.fmt(map_y(series.y[i])),
-      util.fmt(style.radius), style.color, fade, outline)
+      util.fmt(radius), color, fade, outline)
   end
   buf[#buf + 1] = '  </g>'
 end

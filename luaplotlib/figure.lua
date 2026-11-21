@@ -431,6 +431,7 @@ function Figure:scatter(x, y, opts)
   end
 
   local radius = 4
+  local radii
   local radius_arg = opts.size
   if radius_arg == nil then
     radius_arg = opts.markersize
@@ -438,7 +439,16 @@ function Figure:scatter(x, y, opts)
   if radius_arg == nil then
     radius_arg = opts.s
   end
-  if radius_arg ~= nil then
+  if type(radius_arg) == "table" then
+    if #radius_arg ~= #xv then
+      fail("scatter size array must match the number of points")
+    end
+    radii = {}
+    for i = 1, #radius_arg do
+      radii[i] = util.check_number(radius_arg[i], "scatter size", 0.1)
+    end
+    radius = radii[1] or radius
+  elseif radius_arg ~= nil then
     radius = util.check_number(radius_arg, "scatter size", 0.1)
   end
 
@@ -447,8 +457,24 @@ function Figure:scatter(x, y, opts)
     linewidth = util.check_number(opts.linewidth, "scatter linewidth", 0)
   end
 
-  local style = checked_style(self, opts, "scatter")
+  local point_colors
+  local style_opts = opts
+  if type(opts.color) == "table" then
+    if #opts.color ~= #xv then
+      fail("scatter color array must match the number of points")
+    end
+    point_colors = {}
+    for i = 1, #opts.color do
+      point_colors[i] = util.check_color(opts.color[i], "scatter color")
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.color = point_colors[1]
+  end
+  local style = checked_style(self, style_opts, "scatter")
   style.radius = radius
+  style.radii = radii
+  style.colors = point_colors
   style.linewidth = linewidth
 
   self._series[#self._series + 1] = {

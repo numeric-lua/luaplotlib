@@ -283,3 +283,17 @@ test("axhline and axvline render reference lines", function()
   local ok = pcall(function() fig:axhline("x") end)
   assert_equal(ok, false)
 end)
+
+test("scatter supports per-point sizes and colors", function()
+  local fig = plt.figure()
+  fig:scatter({ 1, 2, 3 }, { 1, 2, 3 }, {
+    s = { 2, 5, 8 }, color = { "#ff0000", "#00ff00", "#0000ff" },
+  })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'r="2"'); assert_contains(svg, 'r="5"'); assert_contains(svg, 'r="8"')
+  assert_contains(svg, 'fill="#ff0000"'); assert_contains(svg, 'fill="#0000ff"')
+  local ok = pcall(function() fig:scatter({1,2}, {1,2}, { s = { 1 } }) end)
+  assert_equal(ok, false)
+  ok = pcall(function() fig:scatter({1,2}, {1,2}, { color = { "#fff" } }) end)
+  assert_equal(ok, false)
+end)

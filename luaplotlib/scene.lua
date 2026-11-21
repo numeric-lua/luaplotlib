@@ -150,6 +150,13 @@ function M.from_figure(figure)
     if series.kind == "line" or series.kind == "scatter" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
+      if series.style.radii then
+        copy.radii = copy_array(series.style.radii)
+      end
+      if series.style.colors then
+        copy.colors = {}
+        for i, color in ipairs(series.style.colors) do copy.colors[i] = color end
+      end
       update_xy_range(state, copy)
     elseif series.kind == "errorbar" then
       copy.x = copy_array(series.x)
