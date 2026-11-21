@@ -30,6 +30,8 @@ local POLAR_LINE_OPTIONS = {
   marker = true,
   markersize = true,
   alpha = true,
+  degrees = true,
+  theta_unit = true,
 }
 
 local POLAR_SCATTER_OPTIONS = {
@@ -42,6 +44,8 @@ local POLAR_SCATTER_OPTIONS = {
   edgecolor = true,
   linewidth = true,
   marker = true,
+  degrees = true,
+  theta_unit = true,
 }
 
 local POLAR_BAR_OPTIONS = {
@@ -51,6 +55,8 @@ local POLAR_BAR_OPTIONS = {
   width = true,
   alpha = true,
   edgecolor = true,
+  degrees = true,
+  theta_unit = true,
 }
 
 local SCATTER_OPTIONS = {
@@ -462,6 +468,30 @@ function Figure:plot(x, y, opts)
   return self
 end
 
+local function checked_theta_values(value, opts, name)
+  local values = data.sequence(value, name)
+  local unit = opts.theta_unit
+  if unit ~= nil then
+    if unit ~= "radians" and unit ~= "degrees" then
+      fail(name .. " unit must be 'radians' or 'degrees'")
+    end
+    if opts.degrees ~= nil then
+      fail(name .. " degrees and theta_unit cannot both be set")
+    end
+  elseif opts.degrees ~= nil then
+    util.check_boolean(opts.degrees, name .. " degrees")
+    unit = opts.degrees and "degrees" or "radians"
+  else
+    unit = "radians"
+  end
+  if unit == "degrees" then
+    for index = 1, #values do
+      values[index] = values[index] * math.pi / 180
+    end
+  end
+  return values
+end
+
 local function ensure_polar_state(self)
   if self._pie ~= nil then
     fail("cannot combine pie and polar plots in one figure")
@@ -477,7 +507,7 @@ end
 -- rejected so that a typo cannot silently produce an empty plot.
 function Figure:polar(theta, r, opts)
   opts = util.check_options(opts, POLAR_LINE_OPTIONS, "polar")
-  local tv = data.sequence(theta, "polar theta")
+  local tv = checked_theta_values(theta, opts, "polar theta")
   local rv = data.sequence(r, "polar r")
   if #tv ~= #rv then
     fail(string.format(
@@ -518,7 +548,7 @@ end
 -- colors may be a single value or one value per point.
 function Figure:polar_scatter(theta, r, opts)
   opts = util.check_options(opts, POLAR_SCATTER_OPTIONS, "polar scatter")
-  local tv = data.sequence(theta, "polar scatter theta")
+  local tv = checked_theta_values(theta, opts, "polar scatter theta")
   local rv = data.sequence(r, "polar scatter r")
   if #tv ~= #rv then
     fail(string.format(
@@ -587,7 +617,7 @@ end
 -- default) from its theta position; widths may also be a per-bar array.
 function Figure:polar_bar(theta, r, opts)
   opts = util.check_options(opts, POLAR_BAR_OPTIONS, "polar bar")
-  local tv = data.sequence(theta, "polar bar theta")
+  local tv = checked_theta_values(theta, opts, "polar bar theta")
   local rv = data.sequence(r, "polar bar r")
   if #tv ~= #rv then
     fail(string.format(
@@ -658,6 +688,20 @@ function Figure:polar_bar(theta, r, opts)
     colors = bar_colors,
     style = style,
   }
+  return self
+end
+
+-- Configure polar orientation, radial limits, and explicit angular/radial
+-- grids.  Theta grid values are in degrees of the data theta coordinate;
+-- theta_zero accepts E/N/W/S or a display offset in radians.
+function Figure:polar_config(opts)
+  if self._pie ~= nil then
+    fail("cannot combine pie and polar plots in one figure")
+  end
+  if #self._series > 0 then
+    fail("cannot mix cartesian and polar series in one figure; create a separate figure")
+  end
+  polar.configure(self, opts)
   return self
 end
 

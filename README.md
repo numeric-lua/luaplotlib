@@ -134,8 +134,12 @@ default 640x480 canvas. Polar figures draw concentric radial grid circles and
 angular spokes with degree labels; the radial limit automatically covers the
 largest absolute radius. `fig:polar_scatter` adds polar markers with per-point
 sizes and colors, and `fig:polar_bar` draws radial bar wedges with optional
-per-bar widths and colors. Labelled polar series participate in
-`fig:legend()`. A figure cannot mix Cartesian and polar series.
+per-bar widths and colors. `fig:polar_config` sets the zero location
+(`"E"`, `"N"`, `"W"`, `"S"`), clockwise/counterclockwise direction, explicit
+`rmax`, and custom angular/radial grids; pass `degrees = true` to any polar
+series method to supply theta in degrees. Labelled polar series participate in
+`fig:legend()`, and `fig:to_scene()` exports the polar grid and series geometry
+for non-SVG backends. A figure cannot mix Cartesian and polar series.
 
 Annotations use data coordinates and can include a leader arrow:
 
@@ -233,9 +237,9 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
-- **Polar axes are basic.** Polar figures support line, scatter, and bar series with automatic radial
-  limits, fixed 45-degree angular grid labels, and radial grid circles;
-  Cartesian and polar series cannot share a figure.
+- **Polar axes are basic.** Polar figures support line, scatter, and bar series with automatic or explicit
+  radial limits, configurable zero location/direction, and custom angular and
+  radial grids; Cartesian and polar series cannot share a figure.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.

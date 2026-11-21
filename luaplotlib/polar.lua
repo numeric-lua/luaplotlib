@@ -36,6 +36,23 @@ local ZERO_OFFSETS = {
   S = -math.pi / 2,
 }
 
+local DIRECTIONS = {
+  counterclockwise = 1,
+  ccw = 1,
+  clockwise = -1,
+  cw = -1,
+}
+
+local CONFIG_OPTIONS = {
+  theta_zero = true,
+  theta_direction = true,
+  rmax = true,
+  thetagrids = true,
+  thetagrid_labels = true,
+  rgrids = true,
+  rgrid_labels = true,
+}
+
 local function fail(message)
   util.fail(message, 3)
 end
@@ -95,6 +112,113 @@ local function automatic_rvalues(rmax)
     values[#values + 1] = rmax
   end
   return values
+end
+
+local function checked_grid(value, name, allow_zero)
+  if type(value) ~= "table" or #value == 0 then
+    fail(name .. " must be a non-empty table")
+  end
+  local result = {}
+  for index = 1, #value do
+    local number = util.check_number(value[index],
+      name .. "[" .. index .. "]")
+    if allow_zero then
+      if number < 0 then
+        fail(name .. " values must be non-negative")
+      end
+    elseif number <= 0 then
+      fail(name .. " values must be positive")
+    end
+    result[index] = number
+  end
+  return result
+end
+
+local function checked_labels(value, name, count)
+  if type(value) ~= "table" or #value ~= count then
+    fail(string.format("%s must have one entry per grid value (%d ~= %d)",
+      name, type(value) == "table" and #value or 0, count))
+  end
+  local result = {}
+  for index = 1, count do
+    result[index] = util.check_string(value[index],
+      name .. "[" .. index .. "]", true)
+  end
+  return result
+end
+
+-- Validate and apply `fig:polar_config` options.  Orientation values are
+-- stored directly on the polar state; grid angles remain in degrees in data
+-- theta coordinates, while theta_zero is a display offset in radians.
+function M.configure(figure, opts)
+  opts = util.check_options(opts, CONFIG_OPTIONS, "polar_config")
+  local state = M.ensure(figure)
+
+  if opts.theta_zero ~= nil then
+    local value = opts.theta_zero
+    if type(value) == "string" then
+      local offset = ZERO_OFFSETS[string.upper(value)]
+      if offset == nil then
+        fail("polar_config theta_zero must be E, N, W, S, or a number in radians")
+      end
+      state.theta_zero = offset
+    elseif type(value) == "number" then
+      state.theta_zero = util.check_number(value,
+        "polar_config theta_zero")
+    else
+      fail("polar_config theta_zero must be E, N, W, S, or a number in radians")
+    end
+  end
+
+  if opts.theta_direction ~= nil then
+    if type(opts.theta_direction) ~= "string" then
+      fail("polar_config theta_direction must be 'counterclockwise' or 'clockwise'")
+    end
+    local direction = DIRECTIONS[string.lower(opts.theta_direction)]
+    if direction == nil then
+      fail("polar_config theta_direction must be 'counterclockwise' or 'clockwise'")
+    end
+    state.theta_direction = direction
+  end
+
+  if opts.rmax ~= nil then
+    local rmax = util.check_number(opts.rmax, "polar_config rmax")
+    if rmax <= 0 then
+      fail("polar_config rmax must be positive")
+    end
+    state.rmax = rmax
+  end
+
+  if opts.thetagrids ~= nil then
+    state.thetagrids = checked_grid(opts.thetagrids,
+      "polar_config thetagrids", true)
+    if opts.thetagrid_labels == nil then
+      state.thetagrid_labels = nil
+    end
+  end
+  if opts.thetagrid_labels ~= nil then
+    if state.thetagrids == nil then
+      fail("polar_config thetagrid_labels requires thetagrids")
+    end
+    state.thetagrid_labels = checked_labels(opts.thetagrid_labels,
+      "polar_config thetagrid_labels", #state.thetagrids)
+  end
+
+  if opts.rgrids ~= nil then
+    state.rgrids = checked_grid(opts.rgrids, "polar_config rgrids", false)
+    if opts.rgrid_labels == nil then
+      state.rgrid_labels = nil
+    end
+  end
+  if opts.rgrid_labels ~= nil then
+    if state.rgrids == nil then
+      fail("polar_config rgrid_labels requires rgrids")
+    end
+    state.rgrid_labels = checked_labels(opts.rgrid_labels,
+      "polar_config rgrid_labels", #state.rgrids)
+  end
+
+  return state
 end
 
 -- Resolve the radial limit, radial grid, and angular grid used by both the
@@ -544,6 +668,93 @@ function M.to_svg(figure)
   add(' </g>')
   add('</svg>')
   return table.concat(buf, "\n") .. "\n"
+end
+
+local function copy_array(source)
+  local result = {}
+  for index = 1, #source do result[index] = source[index] end
+  return result
+end
+
+local function copy_style(style)
+  return {
+    color = style.color,
+    edgecolor = style.edgecolor,
+    alpha = style.alpha,
+    label = style.label,
+    linewidth = style.linewidth,
+    linestyle = style.linestyle,
+    marker = style.marker,
+    markersize = style.markersize,
+    radius = style.radius,
+  }
+end
+
+-- Renderer-agnostic polar scene.  Grid values are included so a non-SVG
+-- backend can draw the same axes without reimplementing the "nice" tick rules.
+function M.to_scene(figure)
+  local cfg = M.resolve(figure)
+  local state = figure._polar
+  local scene = {
+    version = 1,
+    type = "luaplotlib",
+    orientation = "polar",
+    width = figure.width,
+    height = figure.height,
+    dpi = figure.dpi,
+    title = figure._title,
+    grid = true,
+    legend = figure._legend_requested and true or false,
+    series = {},
+    polar = {
+      theta_unit = "radians",
+      theta_zero = state.theta_zero,
+      theta_direction = state.theta_direction < 0 and "clockwise" or
+        "counterclockwise",
+      rmin = 0,
+      rmax = cfg.rmax,
+      theta_ticks = {},
+      r_ticks = {},
+      series = {},
+    },
+  }
+
+  for index, angle in ipairs(cfg.theta_angles) do
+    scene.polar.theta_ticks[index] = {
+      value = angle,
+      degrees = angle * 180 / math.pi,
+      label = cfg.theta_labels[index],
+    }
+  end
+  for index, value in ipairs(cfg.rticks) do
+    scene.polar.r_ticks[index] = {
+      value = value,
+      label = cfg.rlabels[index],
+    }
+  end
+
+  for _, series in ipairs(state.series) do
+    local copy = {
+      kind = series.kind,
+      theta = copy_array(series.theta),
+      r = copy_array(series.r),
+      style = copy_style(series.style),
+    }
+    if series.kind == "scatter" then
+      if series.style.radii then
+        copy.radii = copy_array(series.style.radii)
+      end
+      if series.style.colors then
+        copy.colors = copy_array(series.style.colors)
+      end
+    elseif series.kind == "bar" then
+      copy.widths = copy_array(series.widths)
+      if series.colors then copy.colors = copy_array(series.colors) end
+    end
+    scene.polar.series[#scene.polar.series + 1] = copy
+  end
+
+  return scene
 end
 
 return M

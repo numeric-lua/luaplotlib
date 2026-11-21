@@ -95,6 +95,9 @@ Draw a polar line series. `theta` is in radians; negative `r` values are drawn
 on the opposite side of the origin. Both arrays must be non-empty, finite, and
 the same length. Options are `color`, `label`, `linewidth`, `linestyle`,
 `marker`, `markersize`, and `alpha`, with the same validation as `plot`.
+`degrees = true` (or `theta_unit = "degrees"`) interprets the theta values as
+degrees and converts them to radians immediately; the two options cannot be
+combined.
 
 `plt.polar` creates a default 640x480 figure and returns it. `fig:polar` adds a
 series to an existing figure; calling it more than once adds more polar line
@@ -111,7 +114,8 @@ or x. `size` (or its `markersize`/`s` aliases) is a marker radius in SVG user
 units and may be a single number or an array with one radius per point. `color`
 may be a single color or an array with one fill color per point; `alpha`,
 `edgecolor`, and `linewidth` behave like Cartesian `scatter`. Sizes and color
-arrays must match the number of points.
+arrays must match the number of points. `degrees`/`theta_unit` are accepted as
+in `fig:polar`.
 
 Polar scatter and line entries with labels participate in `fig:legend()`. The
 polar legend supports the same `loc`, `frame`, `ncol`, and `title` options as
@@ -125,7 +129,28 @@ to `0.8`; it may be a single number or an array with one width per bar. Widths
 must be greater than zero and at most `2*pi`; a full-turn bar is rendered as a
 disk. `colors` may provide one fill color per bar, while `color`, `alpha`,
 `edgecolor`, and `label` behave like Cartesian bars. `color` and `colors` cannot
-be combined.
+be combined. `degrees`/`theta_unit` are accepted as in `fig:polar`.
+
+### `fig:polar_config(opts)`
+
+Configure a polar figure before or after adding series. It returns the figure
+for chaining.
+
+| Option | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `theta_zero` | `"E"`, `"N"`, `"W"`, `"S"`, or number | `"E"` | Display location of theta=0; a number is a display offset in radians |
+| `theta_direction` | `"counterclockwise"`, `"ccw"`, `"clockwise"`, or `"cw"` | `"counterclockwise"` | Direction of increasing theta |
+| `rmax` | number > 0 | automatic | Explicit radial limit; data and `rgrids` above it raise an error when rendered |
+| `thetagrids` | non-empty array of numbers | 0, 45, ..., 315 | Angular grid positions in **degrees of the data theta coordinate** |
+| `thetagrid_labels` | array of strings | `"0°"`, `"45°"`, ... | Labels matching `thetagrids` |
+| `rgrids` | non-empty array of positive numbers | automatic | Explicit radial grid circles |
+| `rgrid_labels` | array of strings | formatted values | Labels matching `rgrids` |
+
+`thetagrid_labels` requires `thetagrids` and `rgrid_labels` requires `rgrids`;
+the label array must match the corresponding grid length. `theta_zero` rotates
+the display without changing the theta data or the degree labels. A figure
+cannot switch between Cartesian and polar mode, so `polar_config` rejects a
+figure that already has Cartesian series.
 
 ### `fig:barh(labels_or_y, values, opts)`
 
@@ -555,21 +580,26 @@ includes, but is not limited to:
 ## Polar axes
 
 Polar figures are created with `plt.polar(theta, r, opts)` or by calling
-`fig:polar(theta, r, opts)`. `theta` is in radians and `r` may be negative.
+`fig:polar(theta, r, opts)`. `theta` is in radians unless `degrees = true` or
+`theta_unit = "degrees"` is passed; `r` may be negative. `fig:polar_scatter`
+and `fig:polar_bar` add markers and radial wedges. `fig:polar_config` changes
+the zero location, theta direction, radial limit, and explicit grids.
+
 The radial limit is selected automatically from the largest absolute radius;
 the default angular grid has spokes every 45 degrees and the radial grid uses
-"nice" steps.
+"nice" steps. An explicit `rmax` must cover every series value and `rgrids`
+entry. The polar renderer draws the grid and tick labels itself, so `grid`,
+`xlim`/`ylim`, `xscale`/`yscale`, and twin axes do not apply. The title,
+facecolor, ARIA label, `to_html`, and `savefig` remain available, and
+`to_scene()` exports the polar schema described below.
 
 The SVG root sets `data-polar="true"`, `data-theta-unit="radians"`,
 `data-theta-zero`, and `data-theta-direction`. The `polar` group exposes
 `data-cx`, `data-cy`, `data-radius`, and `data-rmax` for tests and for
 coordinate-aware tooling. Series are clipped to the polar circle and rendered
-with classes `polar-line` and `polar-frame`, plus `polar-spoke`,
-`polar-circle`, `theta-tick`, and `r-tick` for the grid.
-
-Polar figures do not use Cartesian `xlim`/`ylim`, `xscale`/`yscale`, twin
-axes, or `xlabel`/`ylabel`. The title, facecolor, ARIA label, `to_html`, and
-`savefig` remain available.
+with classes `polar-line`, `polar-scatter`, `polar-bar`, and `polar-frame`,
+plus `polar-spoke`, `polar-circle`, `theta-tick`, `r-tick`, and
+`polar-legend` for the grid and legend.
 
 ## 3-D axes
 
@@ -635,3 +665,55 @@ affect the exported limits. Bar series always keep category centers in `x`.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
 series expose the per-bar `bottom`, `top`, and `stack` arrays so a backend does
 not have to infer the layout from the rendered SVG.
+
+### Polar scenes
+
+Polar figures export a different scene shape. `orientation = "polar"` marks the
+schema, the Cartesian `series` array is empty, and geometry lives under
+`polar`:
+
+```lua
+{
+  version = 1,
+  type = "luaplotlib",
+  orientation = "polar",
+  width = 620, height = 620, dpi = 100,
+  title = "Polar rose",
+  grid = true,
+  legend = false,
+  series = {},
+  polar = {
+    theta_unit = "radians",
+    theta_zero = 0,                     -- display offset in radians
+    theta_direction = "counterclockwise",
+    rmin = 0,
+    rmax = 6,
+    theta_ticks = {
+      { value = 0, degrees = 0, label = "0°" },
+      { value = 0.7853981633974483, degrees = 45, label = "45°" },
+      -- ...
+    },
+    r_ticks = {
+      { value = 1.2, label = "1.2" },
+      { value = 2.4, label = "2.4" },
+      -- ...
+    },
+    series = {
+      { kind = "line", theta = {...}, r = {...}, style = {...} },
+      { kind = "scatter", theta = {...}, r = {...},
+        radii = {...}, colors = {...}, style = {...} },
+      { kind = "bar", theta = {...}, r = {...},
+        widths = {...}, colors = {...}, style = {...} },
+    },
+  },
+}
+```
+
+`theta_ticks` values are data theta radians; `degrees` is included for display.
+`theta_zero` is the display offset in radians (`"N"` becomes `pi/2`) and
+`theta_direction` is always the string `"counterclockwise"` or `"clockwise"`.
+Scatter series include `radii`/`colors` only when per-point arrays were
+supplied, and bar series always include `widths` plus `colors` when per-bar
+colors were supplied. The `rmax`, tick arrays, and labels reflect the same
+resolution rules as the SVG renderer, so another backend does not need to
+reimplement automatic limits or "nice" tick selection.

@@ -21,7 +21,8 @@ implementation details unless a document names them as public.
 - SVG element class names and the scene schema are versioned; backends should
   prefer the scene export over scraping SVG.
 - The scene format is `version = 1`; additive fields may appear in minor
-  releases.
+  releases. Polar figures set `orientation = "polar"` and store geometry under
+  `polar` while Cartesian scenes keep their existing shape.
 
 ## Scope
 

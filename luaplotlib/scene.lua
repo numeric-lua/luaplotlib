@@ -107,6 +107,9 @@ function M.from_figure(figure)
   if type(figure) ~= "table" then
     error("scene.from_figure expects a Figure", 2)
   end
+  if figure._polar ~= nil then
+    return require("luaplotlib.polar").to_scene(figure)
+  end
   local scene = {
     version = 1,
     type = "luaplotlib",
