@@ -1,5 +1,24 @@
 # Changelog
 
+## 4.15.0
+
+- `fig:polar_contour` draws projected marching-squares isolines of a matrix,
+  with count or explicit `levels`, palette/linewidth/linestyle/alpha styling,
+  optional white-haloed level labels, the same `rmin`/`rmax` and
+  `theta_min`/`theta_max` projections as `polar_heatmap`, automatic radial-limit
+  coverage, legend entries, and `polar.contours` scene export;
+- polar heatmaps accept `colorbar = true` with `colorbar_label` and
+  `colorbar_ticks` (2-9), reserving a canvas column for a vertical stepped bar
+  with compact tick labels; at most one colorbar is allowed per polar figure,
+  the legend planner avoids it, and `to_scene()` exports `polar.colorbar`;
+- polar polish: the outermost radial tick label is clamped inside the frame and
+  exposes `data-fraction`/`data-clamped`, heatmap legend swatches render as
+  five-step gradients with `vmin`/`vmax` scene metadata, colorbar ticks use
+  three significant digits, and contour labels pick the farthest segment and
+  clamp inside the circular clip;
+- new `examples/polar_contour.lua`, `make examples`/`scripts/visual-qa.sh`
+  coverage for the contour example, expanded API/README/docs, and 203 tests.
+
 ## 4.14.0
 
 - `fig:polar_heatmap` (alias `fig:polar_pcolormesh`) projects a rows-by-columns
