@@ -1089,6 +1089,50 @@ local function build_streamplot(series, figure, cfg)
   }
 end
 
+-- The series layer clips streamplot paths and glyphs to the polar circle.
+-- Arrow triangles are built in screen space, so a large `head` can put a
+-- vertex outside that circle even when the anchor is inside.  Project such
+-- vertices back onto the circle: every rendered vertex then lies inside the
+-- frame, and the scene export can report the same clipping flags without
+-- relying on SVG's clip path.
+local function stream_clip_vertex(geom, x, y)
+  local dx, dy = x - geom.cx, y - geom.cy
+  local distance = math.sqrt(dx * dx + dy * dy)
+  -- Coordinates are formatted to three decimals; keep a small inward margin
+  -- so rounding cannot push a clipped vertex back over the frame circle.
+  local limit = geom.radius - 0.001
+  if distance <= limit or distance < 1e-12 then
+    return x, y, false
+  end
+  local scale = limit / distance
+  return geom.cx + dx * scale, geom.cy + dy * scale, true
+end
+
+-- One arrow triangle in SVG user units.  Returns the three vertices and
+-- whether any of them had to be pulled back to the clip circle.
+local function stream_arrow_geometry(figure, cfg, geom, arrow, head)
+  local x, y = M.point(figure, cfg, geom, arrow.theta, arrow.r)
+  local radians = math.rad(arrow.angle)
+  local ux, uy = math.cos(radians), math.sin(radians)
+  local half = head * 0.45
+  local px, py = -uy * half, ux * half
+  local tip_x = x + ux * head * 0.5
+  local tip_y = y + uy * head * 0.5
+  local neck_x = x - ux * head * 0.5
+  local neck_y = y - uy * head * 0.5
+  local left_x, left_y = neck_x + px, neck_y + py
+  local right_x, right_y = neck_x - px, neck_y - py
+  local clipped = false
+  local outside
+  tip_x, tip_y, outside = stream_clip_vertex(geom, tip_x, tip_y)
+  clipped = clipped or outside
+  left_x, left_y, outside = stream_clip_vertex(geom, left_x, left_y)
+  clipped = clipped or outside
+  right_x, right_y, outside = stream_clip_vertex(geom, right_x, right_y)
+  clipped = clipped or outside
+  return tip_x, tip_y, left_x, left_y, right_x, right_y, clipped
+end
+
 local function render_streamplot(series, figure, cfg, geom, buf)
   local built = build_streamplot(series, figure, cfg)
   local style = series.style
@@ -1103,8 +1147,23 @@ local function render_streamplot(series, figure, cfg, geom, buf)
     label = string.format(' data-label="%s"', util.escape_xml(style.label))
   end
   local arrow_count = 0
-  for _, points in ipairs(built.lines) do
-    arrow_count = arrow_count + #(points.arrows or {})
+  local clipped_arrow_count = 0
+  local arrow_geometry = {}
+  for line_index, points in ipairs(built.lines) do
+    local line_geometry = {}
+    for arrow_index, arrow in ipairs(points.arrows or {}) do
+      local tip_x, tip_y, left_x, left_y, right_x, right_y, clipped =
+        stream_arrow_geometry(figure, cfg, geom, arrow, style.head)
+      line_geometry[arrow_index] = {
+        tip_x = tip_x, tip_y = tip_y,
+        left_x = left_x, left_y = left_y,
+        right_x = right_x, right_y = right_y,
+        clipped = clipped,
+      }
+      arrow_count = arrow_count + 1
+      if clipped then clipped_arrow_count = clipped_arrow_count + 1 end
+    end
+    arrow_geometry[line_index] = line_geometry
   end
   local dash = ""
   if style.linestyle == "dashed" then
@@ -1114,9 +1173,10 @@ local function render_streamplot(series, figure, cfg, geom, buf)
   end
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-polar-streamplot" data-cols="%d" data-rows="%d" data-lines="%d" data-points="%d" data-arrow-count="%d" data-step="%s" data-step-mode="%s" data-density="%s" data-max-steps="%d" data-max-lines="%d" data-max-points="%d" data-arrows="%s" data-head="%s" data-linestyle="%s" data-arrow-fraction="%s" data-closed-lines="%d" data-arc-length-unit="data_radius_units" data-periodic="%s" data-truncated="%s"%s>',
+    '  <g class="series series-polar-streamplot" data-cols="%d" data-rows="%d" data-lines="%d" data-points="%d" data-arrow-count="%d" data-clipped-arrow-count="%d" data-step="%s" data-step-mode="%s" data-density="%s" data-max-steps="%d" data-max-lines="%d" data-max-points="%d" data-arrows="%s" data-head="%s" data-linestyle="%s" data-arrow-fraction="%s" data-closed-lines="%d" data-arc-length-unit="data_radius_units" data-clip="polar-circle" data-periodic="%s" data-truncated="%s"%s>',
     #series.theta, #series.r, #built.lines, built.points, arrow_count,
-    util.fmt(built.step), built.automatic and "auto" or "explicit",
+    clipped_arrow_count, util.fmt(built.step),
+    built.automatic and "auto" or "explicit",
     util.fmt(series.density), series.max_steps, series.max_lines,
     series.max_points, series.arrows and "true" or "false",
     util.fmt(style.head), style.linestyle, util.fmt(series.arrow_fraction),
@@ -1125,9 +1185,14 @@ local function render_streamplot(series, figure, cfg, geom, buf)
 
   for line_index, points in ipairs(built.lines) do
     local arrows = points.arrows or {}
+    local geometries = arrow_geometry[line_index] or {}
+    local line_clipped = 0
+    for _, geometry in ipairs(geometries) do
+      if geometry.clipped then line_clipped = line_clipped + 1 end
+    end
     buf[#buf + 1] = string.format(
-      '   <g class="polar-streamline" data-index="%d" data-points="%d" data-arrows="%d" data-closed="%s" data-seed-theta="%s" data-seed-r="%s" data-arc-length="%s">',
-      line_index, #points, #arrows,
+      '   <g class="polar-streamline" data-index="%d" data-points="%d" data-arrows="%d" data-clipped-arrows="%d" data-closed="%s" data-seed-theta="%s" data-seed-r="%s" data-arc-length="%s">',
+      line_index, #points, #arrows, line_clipped,
       points.closed and "true" or "false",
       util.fmt(points.seed_theta), util.fmt(points.seed_r),
       util.fmt(points.arc_length))
@@ -1143,24 +1208,17 @@ local function render_streamplot(series, figure, cfg, geom, buf)
         table.concat(commands, " "), style.color,
         util.fmt(style.linewidth), dash, stroke_opacity)
     end
-    for _, arrow in ipairs(arrows) do
-      local x, y = M.point(figure, cfg, geom, arrow.theta, arrow.r)
-      local radians = math.rad(arrow.angle)
-      local ux, uy = math.cos(radians), math.sin(radians)
-      local half = style.head * 0.45
-      local px, py = -uy * half, ux * half
-      local tip_x = x + ux * style.head * 0.5
-      local tip_y = y + uy * style.head * 0.5
-      local neck_x = x - ux * style.head * 0.5
-      local neck_y = y - uy * style.head * 0.5
+    for arrow_index, arrow in ipairs(arrows) do
+      local geometry = geometries[arrow_index]
       buf[#buf + 1] = string.format(
-        '    <polygon class="polar-stream-arrow" data-index="%d" data-fraction="%s" data-theta="%s" data-r="%s" data-angle="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
+        '    <polygon class="polar-stream-arrow" data-index="%d" data-fraction="%s" data-theta="%s" data-r="%s" data-angle="%s" data-clipped="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
         arrow.index, util.fmt(arrow.fraction),
         util.fmt(arrow.theta), util.fmt(arrow.r),
         util.fmt(arrow.angle),
-        util.fmt(tip_x), util.fmt(tip_y),
-        util.fmt(neck_x + px), util.fmt(neck_y + py),
-        util.fmt(neck_x - px), util.fmt(neck_y - py),
+        geometry.clipped and "true" or "false",
+        util.fmt(geometry.tip_x), util.fmt(geometry.tip_y),
+        util.fmt(geometry.left_x), util.fmt(geometry.left_y),
+        util.fmt(geometry.right_x), util.fmt(geometry.right_y),
         style.color, fill_opacity)
     end
     buf[#buf + 1] = '   </g>'
@@ -2601,6 +2659,9 @@ function M.to_scene(figure)
         label = entry.label,
         color = entry.color,
       }
+      if entry.linestyle ~= nil then
+        exported_entry.linestyle = entry.linestyle
+      end
       if entry.kind == "heatmap" then
         exported_entry.vmin = entry.vmin
         exported_entry.vmax = entry.vmax
@@ -2713,6 +2774,10 @@ function M.to_scene(figure)
       copy.drawn = quiver_drawn(series, indices)
     elseif series.kind == "streamplot" then
       local built = build_streamplot(series, figure, cfg)
+      local stream_geom
+      local stream_geom_ready = false
+      copy.cols = #series.theta
+      copy.rows = #series.r
       copy.u = copy_matrix(series.u)
       copy.v = copy_matrix(series.v)
       copy.components = "tangential_radial"
@@ -2730,9 +2795,12 @@ function M.to_scene(figure)
       copy.head = series.style.head
       copy.closed_line_count = built.closed_count
       copy.arc_length_unit = "data_radius_units"
+      copy.clip = "polar_circle"
       copy.truncated = built.truncated
       copy.line_count = #built.lines
       copy.point_count = built.points
+      copy.arrow_count = 0
+      copy.clipped_arrow_count = 0
       copy.lines = {}
       for line_index, points in ipairs(built.lines) do
         local exported = {
@@ -2743,6 +2811,8 @@ function M.to_scene(figure)
           seed_theta = points.seed_theta,
           seed_r = points.seed_r,
           arc_length = points.arc_length,
+          arrow_count = 0,
+          clipped_arrows = 0,
           arrows = {},
         }
         for point_index, point in ipairs(points) do
@@ -2750,14 +2820,35 @@ function M.to_scene(figure)
           exported.r[point_index] = point.r
         end
         for arrow_index, arrow in ipairs(points.arrows or {}) do
+          local clipped = false
+          if series.arrows and series.style.head > 0 then
+            if not stream_geom_ready then
+              stream_geom_ready = true
+              local ok
+              ok, stream_geom = pcall(layout, figure)
+              if not ok then stream_geom = nil end
+            end
+            if stream_geom ~= nil then
+              local _, _, _, _, _, _, is_clipped = stream_arrow_geometry(
+                figure, cfg, stream_geom, arrow, series.style.head)
+              clipped = is_clipped
+            end
+          end
           exported.arrows[arrow_index] = {
             index = arrow.index,
             fraction = arrow.fraction,
             theta = arrow.theta,
             r = arrow.r,
             angle = arrow.angle,
+            clipped = clipped,
           }
+          exported.arrow_count = exported.arrow_count + 1
+          if clipped then
+            exported.clipped_arrows = exported.clipped_arrows + 1
+            copy.clipped_arrow_count = copy.clipped_arrow_count + 1
+          end
         end
+        copy.arrow_count = copy.arrow_count + exported.arrow_count
         copy.lines[line_index] = exported
       end
     end
