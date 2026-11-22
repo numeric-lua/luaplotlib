@@ -207,6 +207,7 @@ local test_files = {
   "test_polar_colorbar.lua",
   "test_polar_quiver.lua",
   "test_polar_streamplot.lua",
+  "test_cartesian_isolation.lua",
   "test_polar_text.lua",
   "test_area_step_stem.lua",
   "test_twiny.lua",
