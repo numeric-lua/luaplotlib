@@ -608,6 +608,129 @@ local function render_bar(series, figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+-- Arrow glyphs for polar vector fields.  `u` is the component toward
+-- increasing data theta and `v` points outward along the radius.  The local
+-- basis is orthonormal, so the screen-space direction is just the rotated
+-- component pair.  Glyph lengths use SVG user units to stay legible when the
+-- radial limit changes, and large fields are decimated before rendering.
+local QUIVER_AUTO_LENGTH = 18
+local QUIVER_PIVOTS = { tail = 0, middle = 0.5, tip = 1 }
+
+local function quiver_magnitude(series, index)
+  local u, v = series.u[index], series.v[index]
+  local magnitude = math.sqrt(u * u + v * v)
+  if series.normalize and magnitude > 0 then return 1 end
+  return magnitude
+end
+
+local function quiver_scale(series)
+  if series.scale ~= nil then
+    return series.scale, false
+  end
+  local maximum = 0
+  for index = 1, #series.theta do
+    local magnitude = quiver_magnitude(series, index)
+    if magnitude > maximum then maximum = magnitude end
+  end
+  if maximum <= 0 then return 1, true end
+  return QUIVER_AUTO_LENGTH / maximum, true
+end
+
+local function quiver_indices(series)
+  local stride = math.max(1,
+    math.ceil(#series.theta / series.max_arrows))
+  local indices = {}
+  for index = 1, #series.theta, stride do
+    indices[#indices + 1] = index
+  end
+  return indices, stride
+end
+
+local function quiver_drawn(series, indices)
+  local drawn = 0
+  for _, index in ipairs(indices) do
+    if quiver_magnitude(series, index) > 1e-12 then
+      drawn = drawn + 1
+    end
+  end
+  return drawn
+end
+
+local function render_quiver(series, figure, cfg, geom, buf)
+  local style = series.style
+  local scale, automatic = quiver_scale(series)
+  local indices, stride = quiver_indices(series)
+  local drawn = quiver_drawn(series, indices)
+  local direction = figure._polar.theta_direction or 1
+  local pivot = QUIVER_PIVOTS[series.pivot] or 0
+  local stroke_opacity, fill_opacity = "", ""
+  if style.alpha < 1 then
+    local alpha = util.fmt(style.alpha)
+    stroke_opacity = string.format(' stroke-opacity="%s"', alpha)
+    fill_opacity = string.format(' fill-opacity="%s"', alpha)
+  end
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', util.escape_xml(style.label))
+  end
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-polar-quiver" data-count="%d" data-drawn="%d" data-stride="%d" data-max-arrows="%d" data-scale="%s" data-scale-mode="%s" data-pivot="%s" data-normalize="%s"%s>',
+    #series.theta, drawn, stride, series.max_arrows, util.fmt(scale),
+    automatic and "auto" or "explicit", series.pivot,
+    series.normalize and "true" or "false", label)
+
+  for _, index in ipairs(indices) do
+    local u, v = series.u[index], series.v[index]
+    local raw = math.sqrt(u * u + v * v)
+    if raw > 1e-12 then
+      local magnitude = quiver_magnitude(series, index)
+      local theta, r = series.theta[index], series.r[index]
+      local display = M.theta_to_display(figure, theta)
+      local cosine, sine = math.cos(display), math.sin(display)
+      -- Local basis in SVG user space (y grows downward).  Increasing data
+      -- theta is counterclockwise unless the figure is configured clockwise.
+      local dx = v * cosine - direction * u * sine
+      local dy = -v * sine - direction * u * cosine
+      local ux, uy = dx / raw, dy / raw
+      local length = magnitude * scale
+      local x, y = M.point(figure, cfg, geom, theta, r)
+      local tail_x = x - ux * length * pivot
+      local tail_y = y - uy * length * pivot
+      local tip_x = tail_x + ux * length
+      local tip_y = tail_y + uy * length
+      local head = math.min(style.head or 0, length)
+      local neck_x = tip_x - ux * head
+      local neck_y = tip_y - uy * head
+      local angle = math.deg(math.atan2(dy, dx))
+
+      buf[#buf + 1] = string.format(
+        '   <g class="polar-quiver-arrow" data-index="%d" data-magnitude="%s" data-theta="%s" data-r="%s" data-angle="%s">',
+        index, util.fmt(magnitude), util.fmt(theta), util.fmt(r),
+        util.fmt(angle))
+      if style.linewidth > 0 and length - head > 1e-9 then
+        buf[#buf + 1] = string.format(
+          '    <line class="polar-quiver-shaft" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s" stroke-linecap="round"%s/>',
+          util.fmt(tail_x), util.fmt(tail_y), util.fmt(neck_x),
+          util.fmt(neck_y), style.color, util.fmt(style.linewidth),
+          stroke_opacity)
+      end
+      if head > 1e-9 then
+        local half = head * 0.45
+        local px, py = -uy * half, ux * half
+        buf[#buf + 1] = string.format(
+          '    <polygon class="polar-quiver-head" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
+          util.fmt(tip_x), util.fmt(tip_y),
+          util.fmt(neck_x + px), util.fmt(neck_y + py),
+          util.fmt(neck_x - px), util.fmt(neck_y - py),
+          style.color, fill_opacity)
+      end
+      buf[#buf + 1] = '   </g>'
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_heatmap(heatmap, figure, cfg, geom, buf)
   local state = figure._polar
   local outer_value = heatmap_rmax(state, heatmap)
@@ -1672,6 +1795,14 @@ local function polar_swatch(entry, x, y, buf)
         util.fmt(x + (step - 1) * 20 / steps), util.fmt(y - 5),
         util.fmt(20 / steps + 0.2), colors.heat(value, vmin, vmax))
     end
+  elseif kind == "quiver" then
+    buf[#buf + 1] = string.format(
+      '   <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
+      util.fmt(x), util.fmt(y), util.fmt(x + 14), util.fmt(y), color)
+    buf[#buf + 1] = string.format(
+      '   <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
+      util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
+      util.fmt(x + 13), util.fmt(y + 3.5), color)
   elseif kind == "bar" then
     buf[#buf + 1] = string.format(
       '   <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
@@ -1803,6 +1934,8 @@ function M.to_svg(figure)
       render_bar(series, figure, cfg, geom, buf)
     elseif series.kind == "errorbar" then
       render_errorbar(series, figure, cfg, geom, buf)
+    elseif series.kind == "quiver" then
+      render_quiver(series, figure, cfg, geom, buf)
     end
   end
   add('  </g>')
@@ -1844,6 +1977,7 @@ local function copy_style(style)
     capsize = style.capsize,
     elinewidth = style.elinewidth,
     ecolor = style.ecolor,
+    head = style.head,
   }
 end
 
@@ -2100,6 +2234,21 @@ function M.to_scene(figure)
       if series.thetaerr ~= nil then
         copy.thetaerr = copy_array(series.thetaerr)
       end
+    elseif series.kind == "quiver" then
+      local resolved, automatic = quiver_scale(series)
+      local indices, stride = quiver_indices(series)
+      copy.u = copy_array(series.u)
+      copy.v = copy_array(series.v)
+      copy.components = "tangential_radial"
+      copy.scale = series.scale
+      copy.auto_scale = automatic
+      copy.resolved_scale = resolved
+      copy.scale_unit = "svg_user_units_per_magnitude"
+      copy.pivot = series.pivot
+      copy.max_arrows = series.max_arrows
+      copy.normalize = series.normalize
+      copy.stride = stride
+      copy.drawn = quiver_drawn(series, indices)
     end
     scene.polar.series[#scene.polar.series + 1] = copy
   end

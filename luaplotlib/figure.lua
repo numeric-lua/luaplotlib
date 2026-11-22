@@ -85,6 +85,20 @@ local POLAR_ERRORBAR_OPTIONS = {
   theta_unit = true,
 }
 
+local POLAR_QUIVER_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  alpha = true,
+  head = true,
+  scale = true,
+  pivot = true,
+  max_arrows = true,
+  normalize = true,
+  degrees = true,
+  theta_unit = true,
+}
+
 local POLAR_HEATMAP_OPTIONS = {
   vmin = true,
   vmax = true,
@@ -283,6 +297,12 @@ local LINESTYLES = {
   dashed = true,
   dotted = true,
   none = true,
+}
+
+local QUIVER_PIVOTS = {
+  tail = true,
+  middle = true,
+  tip = true,
 }
 
 local LEGEND_LOCATIONS = {
@@ -910,6 +930,76 @@ function Figure:polar_errorbar(theta, r, rerr, opts)
     r = rv,
     rerr = radial,
     thetaerr = angular,
+    style = style,
+  }
+  return self
+end
+
+-- Draw one arrow per (theta, r) position.  `u` is the component in the
+-- direction of increasing data theta (counterclockwise by default) and `v` is
+-- the radial component pointing outward; both keep their sign.  Arrow glyphs
+-- are sized in SVG user units, so `scale` is user units per unit magnitude and
+-- defaults to an automatic scale whose longest arrow is 18 units.  Large
+-- fields are decimated deterministically to `max_arrows` glyphs.
+function Figure:polar_quiver(theta, r, u, v, opts)
+  opts = util.check_options(opts, POLAR_QUIVER_OPTIONS, "polar quiver")
+  local tv = checked_theta_values(theta, opts, "polar quiver theta")
+  local rv = data.sequence(r, "polar quiver r")
+  local uv = data.sequence(u, "polar quiver u")
+  local vv = data.sequence(v, "polar quiver v")
+  local count = #tv
+  if #rv ~= count or #uv ~= count or #vv ~= count then
+    fail(string.format(
+      "polar quiver theta, r, u, and v must have the same length " ..
+      "(%d, %d, %d, %d)", count, #rv, #uv, #vv))
+  end
+
+  local linewidth = 1.2
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth,
+      "polar quiver linewidth", 0)
+  end
+  local head = 5
+  if opts.head ~= nil then
+    head = util.check_number(opts.head, "polar quiver head", 0)
+  end
+  local scale = nil
+  if opts.scale ~= nil then
+    scale = util.check_number(opts.scale, "polar quiver scale")
+    if scale <= 0 then
+      fail("polar quiver scale must be positive")
+    end
+  end
+  local pivot = opts.pivot or "tail"
+  if type(pivot) ~= "string" or not QUIVER_PIVOTS[pivot] then
+    fail("polar quiver pivot must be 'tail', 'middle', or 'tip'")
+  end
+  local max_arrows = 512
+  if opts.max_arrows ~= nil then
+    max_arrows = util.check_integer(opts.max_arrows,
+      "polar quiver max_arrows", 1, 4096)
+  end
+  local normalize = false
+  if opts.normalize ~= nil then
+    normalize = util.check_boolean(opts.normalize,
+      "polar quiver normalize")
+  end
+
+  local style = checked_style(self, opts, "polar quiver")
+  style.linewidth = linewidth
+  style.head = head
+
+  local state = ensure_polar_state(self)
+  state.series[#state.series + 1] = {
+    kind = "quiver",
+    theta = tv,
+    r = rv,
+    u = uv,
+    v = vv,
+    scale = scale,
+    pivot = pivot,
+    max_arrows = max_arrows,
+    normalize = normalize,
     style = style,
   }
   return self
