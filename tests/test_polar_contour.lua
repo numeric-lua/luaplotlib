@@ -114,6 +114,92 @@ test("polar contour supports explicit levels, styles, and partial sweeps",
     "segments should use the explicit radial range")
 end)
 
+test("polar contour labels rotate along the local tangent inside the frame",
+    function()
+  local figure = plt.figure({ width = 600, height = 600 })
+  figure:polar_contour(field(4, 8), { levels = 3, labels = true })
+  local svg = figure:to_svg()
+
+  local cx, cy, radius = svg:match(
+    'class="polar" data%-cx="([^"]+)" data%-cy="([^"]+)" data%-radius="([^"]+)"')
+  assert_true(cx ~= nil, "expected polar geometry")
+  cx, cy, radius = tonumber(cx), tonumber(cy), tonumber(radius)
+
+  local labels = 0
+  local seen_levels = {}
+  for attributes in svg:gmatch(
+      '<text class="polar%-contour%-label" ([^>]*)>') do
+    labels = labels + 1
+    local x = tonumber(attributes:match(' x="([^"]+)"'))
+    local y = tonumber(attributes:match(' y="([^"]+)"'))
+    local angle = tonumber(attributes:match('data%-angle="([^"]+)"'))
+    local level = attributes:match('data%-level="([^"]+)"')
+    assert_true(x ~= nil and y ~= nil and angle ~= nil and level ~= nil,
+      "contour label should expose position, angle, and level")
+    assert_true(angle > -90 and angle <= 90,
+      "contour labels should stay upright")
+    seen_levels[level] = true
+
+    local dx, dy = x - cx, y - cy
+    assert_true(math.sqrt(dx * dx + dy * dy) <= radius,
+      "contour label should stay inside the circular frame")
+  end
+  assert_equal(labels, 3)
+  assert_equal(count(svg, 'class="polar%-contour%-label"'), 3)
+  local level_count = 0
+  for _ in pairs(seen_levels) do level_count = level_count + 1 end
+  assert_equal(level_count, 3)
+  assert_well_formed_svg(svg)
+end)
+
+test("polar contour labels avoid placing text on top of each other", function()
+  local figure = plt.figure({ width = 600, height = 600 })
+  figure:polar_contour(field(4, 8), { levels = 3, labels = true })
+  figure:polar_contour(field(4, 8), {
+    levels = 3, labels = true, color = "#d62728",
+  })
+  local svg = figure:to_svg()
+
+  local positions = {}
+  local labels = 0
+  for attributes in svg:gmatch(
+      '<text class="polar%-contour%-label" ([^>]*)>') do
+    labels = labels + 1
+    local x = tonumber(attributes:match(' x="([^"]+)"'))
+    local y = tonumber(attributes:match(' y="([^"]+)"'))
+    local key = string.format("%.1f,%.1f", x, y)
+    assert_true(positions[key] == nil,
+      "two contour labels were placed at the same position")
+    positions[key] = true
+  end
+  assert_equal(labels, 6)
+  assert_well_formed_svg(svg)
+end)
+
+test("polar contour scene exports preferred label anchors", function()
+  local figure = plt.figure({ width = 600, height = 600 })
+  figure:polar_contour(field(3, 6), {
+    levels = { 12.5, 22.5 }, labels = true,
+    theta_min = 0, theta_max = 180, degrees = true,
+    rmin = 1, rmax = 5,
+  })
+  local scene = figure:to_scene()
+  local contour = scene.polar.contours[1]
+  local first = contour.levels[1].label
+  assert_true(first ~= nil, "expected a scene label anchor")
+  assert_equal(first.text, "12.5")
+  assert_equal(first.u >= 0 and first.u <= 1, true)
+  assert_equal(first.v >= 0 and first.v <= 1, true)
+  assert_true(first.theta >= 0 and first.theta <= math.pi)
+  assert_true(first.r >= 1 and first.r <= 5)
+  assert_true(first.angle > -90 and first.angle <= 90)
+  assert_true(contour.levels[2].label ~= nil)
+
+  local plain = plt.figure({ width = 500, height = 500 })
+  plain:polar_contour(field(3, 6), { levels = 2 })
+  assert_equal(plain:to_scene().polar.contours[1].levels[1].label, nil)
+end)
+
 test("polar contour follows automatic and late radial limits", function()
   local automatic = plt.figure({ width = 500, height = 500 })
   automatic:polar_contour(field(12, 8))

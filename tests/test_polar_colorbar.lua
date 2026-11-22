@@ -61,6 +61,7 @@ test("polar colorbar is opt-in and shrinks the circle to reserve space", functio
   assert_contains(svg, 'class="polar-colorbar"')
   assert_contains(svg,
     'data-orientation="vertical" data-vmin="11" data-vmax="48" data-ticks="4"')
+  assert_contains(svg, 'data-tick-source="uniform"')
   assert_equal(count(svg, 'class="colorbar%-step"'), 40)
   assert_equal(count(svg, 'class="colorbar%-label"'), 4)
   assert_contains(svg, 'class="colorbar-frame"')
@@ -80,6 +81,109 @@ test("polar colorbar is opt-in and shrinks the circle to reserve space", functio
   assert_true(box.y + box.height <= 600, "colorbar must stay on the canvas")
   assert_true(box.y + box.height / 2 > box.y + box.height / 3,
     "expected a vertical orientation")
+end)
+
+test("polar colorbar accepts explicit nice tick values", function()
+  local figure = plt.figure({ width = 600, height = 600 })
+  figure:polar_heatmap(field(4, 8), {
+    colorbar = true,
+    colorbar_label = "level",
+    colorbar_tick_values = { 11, 20, 30, 48 },
+  })
+  local svg = figure:to_svg()
+
+  assert_contains(svg, 'data-ticks="4" data-tick-source="explicit"')
+  local labels = {}
+  for y, value, fraction in svg:gmatch(
+      '<text class="colorbar%-label" x="[^"]+" y="([^"]+)"[^>]-data%-value="([^"]+)" data%-fraction="([^"]+)"') do
+    labels[#labels + 1] = {
+      y = tonumber(y), value = tonumber(value), fraction = tonumber(fraction),
+    }
+  end
+  assert_equal(#labels, 4)
+  table.sort(labels, function(first, second) return first.y > second.y end)
+  assert_equal(labels[1].value, 11)
+  assert_equal(labels[2].value, 20)
+  assert_equal(labels[3].value, 30)
+  assert_equal(labels[4].value, 48)
+  assert_true(math.abs(labels[1].fraction) < 1e-12)
+  assert_true(math.abs(labels[4].fraction - 1) < 1e-12)
+  assert_true(labels[1].y > labels[4].y,
+    "the smallest explicit tick should sit at the bottom")
+  assert_contains(svg, '>20<')
+  assert_well_formed_svg(svg)
+
+  local scene = figure:to_scene()
+  local bar = scene.polar.colorbar
+  assert_equal(bar.tick_source, "explicit")
+  assert_equal(#bar.ticks, 4)
+  assert_equal(bar.ticks[1], 11)
+  assert_equal(bar.ticks[2], 20)
+  assert_equal(bar.ticks[3], 30)
+  assert_equal(bar.ticks[4], 48)
+  assert_equal(bar.tick_labels[1], "11")
+  assert_equal(bar.tick_labels[4], "48")
+  assert_true(math.abs(bar.tick_fractions[2] - 9 / 37) < 1e-9)
+  assert_equal(scene.polar.heatmaps[1].colorbar_tick_values[3], 30)
+end)
+
+test("polar colorbar validates explicit tick values", function()
+  local function figure()
+    return plt.figure({ width = 500, height = 500 })
+  end
+  assert_error("cannot both be set", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_ticks = 3,
+      colorbar_tick_values = { 11, 22 },
+    })
+  end)
+  assert_error("must be a table", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = 3,
+    })
+  end)
+  assert_error("2 to 12 entries", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = { 11 },
+    })
+  end)
+  assert_error("2 to 12 entries", function()
+    local values = {}
+    for index = 1, 13 do values[index] = 11 + (index - 1) * 0.9 end
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = values,
+    })
+  end)
+  assert_error("must be a number", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = { 11, "22" },
+    })
+  end)
+  assert_error("must be greater than", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = { 11, 22, 22 },
+    })
+  end)
+  assert_error("must be greater than", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = { 22, 11 },
+    })
+  end)
+  assert_error("must be within vmin and vmax", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = { 10, 22 },
+    })
+  end)
+  assert_error("must be within vmin and vmax", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_values = { 11, 23 },
+    })
+  end)
+  assert_error("unsupported polar heatmap option", function()
+    figure():polar_heatmap(field(2, 2), {
+      colorbar = true, colorbar_tick_value = { 11, 22 },
+    })
+  end)
 end)
 
 test("polar colorbar ticks run from vmin at the bottom to vmax at the top",
@@ -109,6 +213,9 @@ test("polar colorbar ticks run from vmin at the bottom to vmax at the top",
   assert_equal(#bar.ticks, 4)
   assert_equal(bar.ticks[1], 11)
   assert_equal(bar.ticks[4], 48)
+  assert_equal(bar.tick_source, "uniform")
+  assert_equal(bar.tick_labels[1], "11")
+  assert_equal(bar.tick_labels[4], "48")
   assert_equal(scene.polar.heatmaps[1].colorbar, true)
 end)
 
