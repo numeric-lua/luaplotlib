@@ -103,6 +103,7 @@ local POLAR_STREAMPLOT_OPTIONS = {
   color = true,
   label = true,
   linewidth = true,
+  linestyle = true,
   alpha = true,
   density = true,
   step = true,
@@ -110,6 +111,7 @@ local POLAR_STREAMPLOT_OPTIONS = {
   max_lines = true,
   max_points = true,
   arrows = true,
+  arrow_fraction = true,
   head = true,
   degrees = true,
   theta_unit = true,
@@ -1105,9 +1107,20 @@ function Figure:polar_streamplot(theta, r, u, v, opts)
   if opts.arrows ~= nil then
     arrows = util.check_boolean(opts.arrows, "polar streamplot arrows")
   end
+  local arrow_fraction = 0.5
+  if opts.arrow_fraction ~= nil then
+    arrow_fraction = util.check_number(opts.arrow_fraction,
+      "polar streamplot arrow_fraction", 0.05, 0.95)
+  end
+  local linestyle = opts.linestyle or "solid"
+  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+    fail("polar streamplot linestyle must be one of solid, dashed, dotted, " ..
+      "or none")
+  end
 
   local style = checked_style(self, opts, "polar streamplot")
   style.linewidth = linewidth
+  style.linestyle = linestyle
   style.head = head
 
   local state = ensure_polar_state(self)
@@ -1123,6 +1136,7 @@ function Figure:polar_streamplot(theta, r, u, v, opts)
     max_lines = max_lines,
     max_points = max_points,
     arrows = arrows,
+    arrow_fraction = arrow_fraction,
     style = style,
   }
   return self

@@ -742,6 +742,9 @@ local STREAM_SEED_ANGULAR = 9
 local STREAM_SEED_RADIAL = 5
 local STREAM_BINS_COLS = 24
 local STREAM_BINS_ROWS = 12
+-- A candidate that retraces an earlier line this much is dropped.  The seed
+-- bin can be empty while the rest of a closed orbit is already covered.
+local STREAM_MAX_OVERLAP = 0.5
 
 local function streamplot_periodic(series)
   return series.theta[#series.theta] - series.theta[1] >=
@@ -882,19 +885,47 @@ local function stream_canonical_point(figure, point)
   return point.r * math.cos(display), -point.r * math.sin(display)
 end
 
--- One arrow per streamline, near the middle.  The angle is computed from
--- canonical screen coordinates, so it is independent of the canvas size.
-local function stream_arrows(figure, points)
+-- Polyline length in data-radius units.  Theta values are continuous for a
+-- wrapped line, so the physical-plane distance needs no seam correction and
+-- is unchanged by theta_zero/theta_direction or by the uniform SVG scale.
+local function stream_arc_metrics(figure, points)
+  local distances = { 0 }
+  local total = 0
+  local previous_x, previous_y = stream_canonical_point(figure, points[1])
+  for index = 2, #points do
+    local x, y = stream_canonical_point(figure, points[index])
+    local dx, dy = x - previous_x, y - previous_y
+    total = total + math.sqrt(dx * dx + dy * dy)
+    distances[index] = total
+    previous_x, previous_y = x, y
+  end
+  return distances, total
+end
+
+-- One arrow per streamline.  The anchor is selected by arc length rather than
+-- by point index, so uneven spacing, a trimmed tail, or a closing segment
+-- cannot pull the glyph away from the requested fraction of the line.  The
+-- angle comes from canonical screen coordinates and is canvas-independent.
+local function stream_arrows(figure, points, distances, total, fraction)
   local arrows = {}
-  if #points < 3 then return arrows end
-  local index = math.max(2,
-    math.min(#points - 1, math.floor(#points * 0.55) + 1))
+  if #points < 3 or total <= 1e-12 then return arrows end
+  fraction = math.max(0, math.min(1, fraction or 0.5))
+  local target = total * fraction
+  local index, best_delta = nil, nil
+  for candidate = 1, #points - 1 do
+    local midpoint = (distances[candidate] + distances[candidate + 1]) * 0.5
+    local delta = math.abs(midpoint - target)
+    if best_delta == nil or delta < best_delta then
+      index, best_delta = candidate, delta
+    end
+  end
   local x1, y1 = stream_canonical_point(figure, points[index])
   local x2, y2 = stream_canonical_point(figure, points[index + 1])
   local dx, dy = x2 - x1, y2 - y1
   if dx * dx + dy * dy < 1e-18 then return arrows end
   arrows[1] = {
     index = index,
+    fraction = distances[index] / total,
     theta = points[index].theta,
     r = points[index].r,
     angle = math.deg(math.atan2(dy, dx)),
@@ -933,6 +964,19 @@ local function stream_bin(series, theta, radial)
   return row * STREAM_BINS_COLS + column
 end
 
+-- Fraction of a candidate line that falls in already-covered bins.  Closed
+-- orbits can be re-seeded at a new phase whose own bin is empty; without this
+-- check the whole loop would be drawn again a fraction of a turn later.
+local function stream_overlap(series, points, occupied)
+  local covered = 0
+  for _, point in ipairs(points) do
+    if occupied[stream_bin(series, point.theta, point.r)] then
+      covered = covered + 1
+    end
+  end
+  return covered / #points
+end
+
 local function build_streamplot(series, figure, cfg)
   local periodic = streamplot_periodic(series)
   local step, automatic = streamplot_step(series)
@@ -948,6 +992,7 @@ local function build_streamplot(series, figure, cfg)
   local occupied = {}
   local lines = {}
   local point_count = 0
+  local closed_count = 0
   local truncated = false
 
   for row = 1, seed_rows do
@@ -997,23 +1042,34 @@ local function build_streamplot(series, figure, cfg)
             end
           end
           local remaining = series.max_points - point_count
+          local line_closed = closed
           if #combined > remaining then
             local trimmed = {}
             for index = 1, remaining do
               trimmed[index] = combined[index]
             end
             combined = trimmed
+            line_closed = false
             truncated = true
           end
-          if #combined >= 3 then
+          if #combined >= 3 and
+              stream_overlap(series, combined, occupied) <=
+              STREAM_MAX_OVERLAP then
             for _, point in ipairs(combined) do
               occupied[stream_bin(series, point.theta, point.r)] = true
             end
+            local distances, arc_length = stream_arc_metrics(figure, combined)
+            combined.arc_length = arc_length
+            combined.seed_theta = seed_theta
+            combined.seed_r = radial
+            combined.closed = line_closed
             if series.arrows and series.style.head > 0 then
-              combined.arrows = stream_arrows(figure, combined)
+              combined.arrows = stream_arrows(figure, combined, distances,
+                arc_length, series.arrow_fraction)
             else
               combined.arrows = {}
             end
+            if line_closed then closed_count = closed_count + 1 end
             lines[#lines + 1] = combined
             point_count = point_count + #combined
           end
@@ -1028,6 +1084,7 @@ local function build_streamplot(series, figure, cfg)
     step = step,
     automatic = automatic,
     periodic = periodic,
+    closed_count = closed_count,
     truncated = truncated,
   }
 end
@@ -1049,22 +1106,32 @@ local function render_streamplot(series, figure, cfg, geom, buf)
   for _, points in ipairs(built.lines) do
     arrow_count = arrow_count + #(points.arrows or {})
   end
+  local dash = ""
+  if style.linestyle == "dashed" then
+    dash = ' stroke-dasharray="6 4"'
+  elseif style.linestyle == "dotted" then
+    dash = ' stroke-dasharray="1.5 3"'
+  end
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-polar-streamplot" data-cols="%d" data-rows="%d" data-lines="%d" data-points="%d" data-arrow-count="%d" data-step="%s" data-step-mode="%s" data-density="%s" data-max-steps="%d" data-max-lines="%d" data-max-points="%d" data-arrows="%s" data-head="%s" data-periodic="%s" data-truncated="%s"%s>',
+    '  <g class="series series-polar-streamplot" data-cols="%d" data-rows="%d" data-lines="%d" data-points="%d" data-arrow-count="%d" data-step="%s" data-step-mode="%s" data-density="%s" data-max-steps="%d" data-max-lines="%d" data-max-points="%d" data-arrows="%s" data-head="%s" data-linestyle="%s" data-arrow-fraction="%s" data-closed-lines="%d" data-arc-length-unit="data_radius_units" data-periodic="%s" data-truncated="%s"%s>',
     #series.theta, #series.r, #built.lines, built.points, arrow_count,
     util.fmt(built.step), built.automatic and "auto" or "explicit",
     util.fmt(series.density), series.max_steps, series.max_lines,
     series.max_points, series.arrows and "true" or "false",
-    util.fmt(style.head), built.periodic and "true" or "false",
+    util.fmt(style.head), style.linestyle, util.fmt(series.arrow_fraction),
+    built.closed_count, built.periodic and "true" or "false",
     built.truncated and "true" or "false", label)
 
   for line_index, points in ipairs(built.lines) do
     local arrows = points.arrows or {}
     buf[#buf + 1] = string.format(
-      '   <g class="polar-streamline" data-index="%d" data-points="%d" data-arrows="%d">',
-      line_index, #points, #arrows)
-    if style.linewidth > 0 then
+      '   <g class="polar-streamline" data-index="%d" data-points="%d" data-arrows="%d" data-closed="%s" data-seed-theta="%s" data-seed-r="%s" data-arc-length="%s">',
+      line_index, #points, #arrows,
+      points.closed and "true" or "false",
+      util.fmt(points.seed_theta), util.fmt(points.seed_r),
+      util.fmt(points.arc_length))
+    if style.linewidth > 0 and style.linestyle ~= "none" then
       local commands = {}
       for point_index, point in ipairs(points) do
         local x, y = M.point(figure, cfg, geom, point.theta, point.r)
@@ -1072,9 +1139,9 @@ local function render_streamplot(series, figure, cfg, geom, buf)
           point_index == 1 and "M" or "L", util.fmt(x), util.fmt(y))
       end
       buf[#buf + 1] = string.format(
-        '    <path class="polar-streamline-path" d="%s" fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"%s/>',
+        '    <path class="polar-streamline-path" d="%s" fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"%s%s/>',
         table.concat(commands, " "), style.color,
-        util.fmt(style.linewidth), stroke_opacity)
+        util.fmt(style.linewidth), dash, stroke_opacity)
     end
     for _, arrow in ipairs(arrows) do
       local x, y = M.point(figure, cfg, geom, arrow.theta, arrow.r)
@@ -1087,8 +1154,9 @@ local function render_streamplot(series, figure, cfg, geom, buf)
       local neck_x = x - ux * style.head * 0.5
       local neck_y = y - uy * style.head * 0.5
       buf[#buf + 1] = string.format(
-        '    <polygon class="polar-stream-arrow" data-index="%d" data-theta="%s" data-r="%s" data-angle="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
-        arrow.index, util.fmt(arrow.theta), util.fmt(arrow.r),
+        '    <polygon class="polar-stream-arrow" data-index="%d" data-fraction="%s" data-theta="%s" data-r="%s" data-angle="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
+        arrow.index, util.fmt(arrow.fraction),
+        util.fmt(arrow.theta), util.fmt(arrow.r),
         util.fmt(arrow.angle),
         util.fmt(tip_x), util.fmt(tip_y),
         util.fmt(neck_x + px), util.fmt(neck_y + py),
@@ -1822,6 +1890,7 @@ local function legend_entries(figure)
       entries[#entries + 1] = {
         kind = series.kind,
         color = series.style.color,
+        linestyle = series.style.linestyle,
         label = label,
       }
     end
@@ -2177,10 +2246,19 @@ local function polar_swatch(entry, x, y, buf)
       util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
       util.fmt(x + 13), util.fmt(y + 3.5), color)
   elseif kind == "streamplot" then
-    buf[#buf + 1] = string.format(
-      '   <path class="legend-swatch-streamplot" d="M %s %s Q %s %s %s %s T %s %s" fill="none" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
-      util.fmt(x), util.fmt(y), util.fmt(x + 5), util.fmt(y - 5),
-      util.fmt(x + 10), util.fmt(y), util.fmt(x + 16), util.fmt(y), color)
+    local dash = ""
+    if entry.linestyle == "dashed" then
+      dash = ' stroke-dasharray="6 4"'
+    elseif entry.linestyle == "dotted" then
+      dash = ' stroke-dasharray="1.5 3"'
+    end
+    if entry.linestyle ~= "none" then
+      buf[#buf + 1] = string.format(
+        '   <path class="legend-swatch-streamplot" d="M %s %s Q %s %s %s %s T %s %s" fill="none" stroke="%s" stroke-width="2" stroke-linecap="round"%s/>',
+        util.fmt(x), util.fmt(y), util.fmt(x + 5), util.fmt(y - 5),
+        util.fmt(x + 10), util.fmt(y), util.fmt(x + 16), util.fmt(y),
+        color, dash)
+    end
     buf[#buf + 1] = string.format(
       '   <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
       util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
@@ -2648,7 +2726,10 @@ function M.to_scene(figure)
       copy.max_lines = series.max_lines
       copy.max_points = series.max_points
       copy.arrows = series.arrows
+      copy.arrow_fraction = series.arrow_fraction
       copy.head = series.style.head
+      copy.closed_line_count = built.closed_count
+      copy.arc_length_unit = "data_radius_units"
       copy.truncated = built.truncated
       copy.line_count = #built.lines
       copy.point_count = built.points
@@ -2658,6 +2739,10 @@ function M.to_scene(figure)
           theta = {},
           r = {},
           points = #points,
+          closed = points.closed and true or false,
+          seed_theta = points.seed_theta,
+          seed_r = points.seed_r,
+          arc_length = points.arc_length,
           arrows = {},
         }
         for point_index, point in ipairs(points) do
@@ -2666,6 +2751,8 @@ function M.to_scene(figure)
         end
         for arrow_index, arrow in ipairs(points.arrows or {}) do
           exported.arrows[arrow_index] = {
+            index = arrow.index,
+            fraction = arrow.fraction,
             theta = arrow.theta,
             r = arrow.r,
             angle = arrow.angle,
