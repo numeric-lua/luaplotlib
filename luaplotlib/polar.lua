@@ -447,6 +447,22 @@ local function colorbar_value(value)
   return (formatted:gsub("e%+0*", "e"):gsub("e%-0*", "e-"))
 end
 
+-- Resolve the labelled colorbar ticks.  Explicit values let callers request
+-- "nice" ticks (for example -1.2, -0.6, 0, 0.6, 1.2) instead of an even
+-- subdivision of an arbitrary data range.
+local function colorbar_ticks(heatmap)
+  if heatmap.colorbar_tick_values ~= nil then
+    return heatmap.colorbar_tick_values
+  end
+  local count = heatmap.colorbar_ticks or 3
+  local values = {}
+  for index = 1, count do
+    values[index] = heatmap.vmin +
+      (heatmap.vmax - heatmap.vmin) * (index - 1) / (count - 1)
+  end
+  return values
+end
+
 local function layout(figure)
   local width, height = figure.width, figure.height
   local top = 22
@@ -699,8 +715,122 @@ local function contour_position(figure, cfg, geom, contour, u, v)
   return x, y, theta, radius
 end
 
-local function render_contour(contour, figure, cfg, geom, buf)
+-- Forward declaration: the contour label planner is defined before the
+-- shared geometry helpers, but uses the same overlap test as the legend.
+local overlap_area
+
+-- Direction of a contour segment in SVG user space, in degrees.  The polar
+-- projection scales theta and r uniformly, so the tangent direction is
+-- independent of the canvas geometry; the scene exporter relies on that.
+local function contour_segment_angle(figure, cfg, geom, contour, segment)
+  local u0, v0 = segment[1], segment[2]
+  local du = segment[3] - segment[1]
+  local dv = segment[4] - segment[2]
+  local x0, y0 = contour_position(figure, cfg, geom, contour,
+    u0 + du * 0.4, v0 + dv * 0.4)
+  local x1, y1 = contour_position(figure, cfg, geom, contour,
+    u0 + du * 0.6, v0 + dv * 0.6)
+  local angle = math.deg(math.atan2(y1 - y0, x1 - x0))
+  -- Keep labels upright: rotate by the equivalent angle in (-90, 90].
+  if angle > 90 then
+    angle = angle - 180
+  elseif angle <= -90 then
+    angle = angle + 180
+  end
+  return angle
+end
+
+-- Axis-aligned bounds of a rotated label, used for collision checks and for
+-- keeping the whole label inside the circular clip.  The half height covers
+-- the cap height of the 10 px label font plus the white contrast halo.
+local function contour_label_box(x, y, value, angle)
+  local half_width = text.measure(value, 10) / 2
+  local half_height = 6
+  local radians = math.rad(angle)
+  local cosine = math.abs(math.cos(radians))
+  local sine = math.abs(math.sin(radians))
+  local extent_x = half_width * cosine + half_height * sine + 2
+  local extent_y = half_width * sine + half_height * cosine + 2
+  return {
+    x = x - extent_x,
+    y = y - extent_y,
+    width = extent_x * 2,
+    height = extent_y * 2,
+  }, extent_x, extent_y
+end
+
+-- Pick a label anchor for one contour level.  Candidates are the midpoints of
+-- every marching-squares segment; the farthest candidate that stays inside the
+-- circle and clear of already placed labels, radial ticks, and annotations
+-- wins.  Skipping a label is preferable to drawing unreadable overlapping
+-- text.
+local function contour_label_plan(figure, cfg, geom, contour, level_data,
+    occupied)
+  if not contour.labels or #level_data.segments == 0 then return nil end
+  local value = util.fmt_tick(level_data.level)
+  local outer = contour_rmax(figure._polar, contour)
+  local radial = outer - contour.rmin
+  local best = nil
+
+  for _, segment in ipairs(level_data.segments) do
+    local u = (segment[1] + segment[3]) / 2
+    local v = (segment[2] + segment[4]) / 2
+    local x, y = contour_position(figure, cfg, geom, contour, u, v)
+    local angle = contour_segment_angle(figure, cfg, geom, contour, segment)
+    local box, extent_x, extent_y = contour_label_box(x, y, value, angle)
+
+    local dx, dy = x - geom.cx, y - geom.cy
+    local distance = math.sqrt(dx * dx + dy * dy)
+    local fits = true
+    if distance > 0 then
+      -- Shrink the anchor radially by the rotated box extent along that
+      -- direction so the label never crosses the frame.
+      local phi = math.atan2(dy, dx)
+      local radial_extent = math.abs(extent_x * math.cos(phi)) +
+        math.abs(extent_y * math.sin(phi))
+      local limit = geom.radius - radial_extent - 1
+      if limit <= 0 then
+        fits = false
+      elseif distance > limit then
+        x = geom.cx + dx / distance * limit
+        y = geom.cy + dy / distance * limit
+        box = contour_label_box(x, y, value, angle)
+      end
+    end
+
+    if fits then
+      for _, other in ipairs(occupied) do
+        if overlap_area(box, other) > 0 then
+          fits = false
+          break
+        end
+      end
+    end
+
+    if fits then
+      local radius = math.abs(contour.rmin + radial * v)
+      if best == nil or radius > best.radius then
+        best = {
+          level = level_data.level,
+          text = value,
+          x = x,
+          y = y,
+          angle = angle,
+          box = box,
+          u = u,
+          v = v,
+          radius = radius,
+        }
+      end
+    end
+  end
+
+  return best
+end
+
+local function render_contour(contour, figure, cfg, geom, buf, occupied)
   local style = contour.style
+  local plans = {}
   local dash = ""
   if style.linestyle == "dashed" then
     dash = ' stroke-dasharray="6 4"'
@@ -754,39 +884,22 @@ local function render_contour(contour, figure, cfg, geom, buf)
         points[1], table.concat(points, " L ", 2), style.color,
         util.fmt(style.linewidth), dash, opacity)
     end
-    if contour.labels and #level_data.segments > 0 then
-      -- Label the segment farthest from the origin.  A first-segment choice
-      -- tends to pile several labels on top of each other at the center of a
-      -- radial field.
-      local best, best_radius = nil, -1
-      for _, segment in ipairs(level_data.segments) do
-        local mid_u = (segment[1] + segment[3]) / 2
-        local mid_v = (segment[2] + segment[4]) / 2
-        local radius = math.abs(contour.rmin +
-          (outer - contour.rmin) * mid_v)
-        if radius > best_radius then
-          best, best_radius = { mid_u, mid_v }, radius
-        end
-      end
-      local x, y = contour_position(figure, cfg, geom, contour, best[1],
-        best[2])
-      local label = util.fmt_tick(level_data.level)
-      -- Keep the whole label inside the polar clip; a label chosen at the
-      -- frame would otherwise be cut in half by the circular clip path.
-      local dx, dy = x - geom.cx, y - geom.cy
-      local distance = math.sqrt(dx * dx + dy * dy)
-      local limit = geom.radius - text.measure(label, 10) / 2 - 4
-      if limit > 0 and distance > limit then
-        x = geom.cx + dx / distance * limit
-        y = geom.cy + dy / distance * limit
-      end
+    local plan = contour_label_plan(figure, cfg, geom, contour, level_data,
+      occupied)
+    if plan ~= nil then
+      occupied[#occupied + 1] = plan.box
+      plans[#plans + 1] = plan
+      local baseline = plan.y + 3
       buf[#buf + 1] = string.format(
-        '    <text class="polar-contour-label" x="%s" y="%s" font-size="10" fill="%s" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round">%s</text>',
-        util.fmt(x), util.fmt(y + 3), style.color, label)
+        '    <text class="polar-contour-label" data-level="%s" data-angle="%s" x="%s" y="%s" font-size="10" fill="%s" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" transform="rotate(%s %s %s)">%s</text>',
+        util.fmt(plan.level), util.fmt(plan.angle), util.fmt(plan.x),
+        util.fmt(baseline), style.color, util.fmt(plan.angle),
+        util.fmt(plan.x), util.fmt(baseline), util.escape_xml(plan.text))
     end
     buf[#buf + 1] = '   </g>'
   end
   buf[#buf + 1] = '  </g>'
+  return plans
 end
 
 local function render_errorbar(series, figure, cfg, geom, buf)
@@ -975,11 +1088,14 @@ local function render_colorbar(figure, geom, buf)
   if heatmap == nil then return end
   local x, y, width, height = colorbar_geometry(geom)
   local vmin, vmax = heatmap.vmin, heatmap.vmax
-  local tick_count = heatmap.colorbar_ticks or 3
+  local values = colorbar_ticks(heatmap)
+  local source = heatmap.colorbar_tick_values ~= nil and "explicit" or
+    "uniform"
+  local span = vmax - vmin
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-colorbar" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-x="%s" data-y="%s" data-width="%s" data-height="%s">',
-    util.fmt(vmin), util.fmt(vmax), tick_count, util.fmt(x), util.fmt(y),
+    '  <g class="polar-colorbar" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-tick-source="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s">',
+    util.fmt(vmin), util.fmt(vmax), #values, source, util.fmt(x), util.fmt(y),
     util.fmt(width), util.fmt(height))
 
   local steps = 40
@@ -997,21 +1113,20 @@ local function render_colorbar(figure, geom, buf)
     util.fmt(height + 1), AXIS_COLOR)
 
   local max_label = 0
-  for index = 0, tick_count - 1 do
-    local fraction = index / (tick_count - 1)
-    local value = vmin + (vmax - vmin) * fraction
+  for _, value in ipairs(values) do
+    local fraction = (value - vmin) / span
     local tick_y = y + height - height * fraction
     local label = colorbar_value(value)
     local measured = text.measure(label, 10)
     if measured > max_label then max_label = measured end
     buf[#buf + 1] = string.format(
-      '   <line class="colorbar-tick" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+      '   <line class="colorbar-tick" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" data-value="%s" data-fraction="%s"/>',
       util.fmt(x + width), util.fmt(tick_y), util.fmt(x + width + 4),
-      util.fmt(tick_y), AXIS_COLOR)
+      util.fmt(tick_y), AXIS_COLOR, util.fmt(value), util.fmt(fraction))
     buf[#buf + 1] = string.format(
-      '   <text class="colorbar-label" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start">%s</text>',
+      '   <text class="colorbar-label" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start" data-value="%s" data-fraction="%s">%s</text>',
       util.fmt(x + width + 8), util.fmt(tick_y + 3.5), TEXT_COLOR,
-      util.escape_xml(label))
+      util.fmt(value), util.fmt(fraction), util.escape_xml(label))
   end
   if heatmap.colorbar_label ~= nil and heatmap.colorbar_label ~= "" then
     local label_x = x + width + 8 + max_label + 14
@@ -1154,7 +1269,7 @@ local function text_box(x, baseline, value, fontsize, anchor)
   return text.bounds(x, baseline, value, fontsize, anchor)
 end
 
-local function overlap_area(first, second)
+function overlap_area(first, second)
   local left = math.max(first.x, second.x)
   local right = math.min(first.x + first.width, second.x + second.width)
   if right <= left then return 0 end
@@ -1310,7 +1425,23 @@ local function tick_boxes(figure, cfg, geom)
   return theta_boxes, radius_boxes
 end
 
-local function legend_plan(figure, cfg, geom)
+-- Boxes that contour labels should keep clear of: radial tick labels (drawn
+-- above the series) and annotation text.  Angular labels live outside the
+-- circle, so contour labels clamped inside the frame cannot reach them.
+local function polar_label_obstacles(figure, cfg, geom)
+  local _, radius_boxes = tick_boxes(figure, cfg, geom)
+  local boxes = {}
+  for _, box in ipairs(radius_boxes) do
+    boxes[#boxes + 1] = box
+  end
+  for _, annotation in ipairs(figure._polar.annotations or {}) do
+    local layout = annotation_layout(figure, cfg, geom, annotation)
+    boxes[#boxes + 1] = layout.box
+  end
+  return boxes
+end
+
+local function legend_plan(figure, cfg, geom, extra_boxes)
   if not figure._legend_requested then return nil end
   local entries = legend_entries(figure)
   if #entries == 0 then return nil end
@@ -1328,11 +1459,8 @@ local function legend_plan(figure, cfg, geom)
   local bar_heatmap = colorbar_heatmap(figure)
   if bar_heatmap ~= nil then
     local bx, by, bw, bh = colorbar_geometry(geom)
-    local ticks = bar_heatmap.colorbar_ticks or 3
     local max_label = 0
-    for index = 0, ticks - 1 do
-      local value = bar_heatmap.vmin +
-        (bar_heatmap.vmax - bar_heatmap.vmin) * index / (ticks - 1)
+    for _, value in ipairs(colorbar_ticks(bar_heatmap)) do
       local measured = text.measure(colorbar_value(value), 10)
       if measured > max_label then max_label = measured end
     end
@@ -1449,6 +1577,9 @@ local function legend_plan(figure, cfg, geom)
     if colorbar_box ~= nil then
       label_overlap = label_overlap + overlap_area(box, colorbar_box)
     end
+    for _, extra in ipairs(extra_boxes or {}) do
+      label_overlap = label_overlap + overlap_area(box, extra)
+    end
     penalty = penalty + label_overlap * 10000
 
     local outside_samples = 0
@@ -1560,8 +1691,8 @@ local function polar_swatch(entry, x, y, buf)
   end
 end
 
-local function render_legend(figure, cfg, geom, buf)
-  local plan = legend_plan(figure, cfg, geom)
+local function render_legend(figure, cfg, geom, buf, extra_boxes)
+  local plan = legend_plan(figure, cfg, geom, extra_boxes)
   if plan == nil then return end
   local x, y = plan.x, plan.y
   local opts = plan.opts
@@ -1654,8 +1785,14 @@ function M.to_svg(figure)
   for _, heatmap in ipairs(state.heatmaps or {}) do
     render_heatmap(heatmap, figure, cfg, geom, buf)
   end
+  local label_obstacles = polar_label_obstacles(figure, cfg, geom)
+  local contour_label_boxes = {}
   for _, contour in ipairs(state.contours or {}) do
-    render_contour(contour, figure, cfg, geom, buf)
+    local plans = render_contour(contour, figure, cfg, geom, buf,
+      label_obstacles)
+    for _, plan in ipairs(plans) do
+      contour_label_boxes[#contour_label_boxes + 1] = plan.box
+    end
   end
   for _, series in ipairs(state.series) do
     if series.kind == "line" then
@@ -1675,7 +1812,7 @@ function M.to_svg(figure)
   render_annotations(figure, cfg, geom, buf)
   render_colorbar(figure, geom, buf)
   add('  </g>')
-  render_legend(figure, cfg, geom, buf)
+  render_legend(figure, cfg, geom, buf, contour_label_boxes)
   add(' </g>')
   add('</svg>')
   return table.concat(buf, "\n") .. "\n"
@@ -1741,8 +1878,11 @@ local function copy_annotation(annotation)
 end
 
 -- Map normalized contour segments back to data-space (theta, r) pairs for
--- non-SVG backends.  `outer` is the resolved effective radial extent.
-local function contour_scene_levels(contour, outer)
+-- non-SVG backends.  `outer` is the resolved effective radial extent.  When
+-- labels are enabled each level also exposes its preferred anchor (the
+-- farthest segment midpoint) in data coordinates plus the upright screen-space
+-- tangent angle; the SVG renderer may skip a label that would collide.
+local function contour_scene_levels(contour, outer, figure, cfg)
   local span = contour.theta_max - contour.theta_min
   local radial = outer - contour.rmin
   local levels = {}
@@ -1756,9 +1896,36 @@ local function contour_scene_levels(contour, outer)
         contour.rmin + radial * segment[4],
       }
     end
+    local label = nil
+    if contour.labels and #level_data.segments > 0 then
+      local best, best_radius = nil, -1
+      for _, segment in ipairs(level_data.segments) do
+        local mid_u = (segment[1] + segment[3]) / 2
+        local mid_v = (segment[2] + segment[4]) / 2
+        local radius = math.abs(contour.rmin + radial * mid_v)
+        if radius > best_radius then
+          best, best_radius = segment, radius
+        end
+      end
+      local u = (best[1] + best[3]) / 2
+      local v = (best[2] + best[4]) / 2
+      -- Geometry only scales and translates the projection, so a canonical
+      -- unit circle yields the same tangent direction as the real canvas.
+      local angle = contour_segment_angle(figure, cfg,
+        { cx = 0, cy = 0, radius = 1 }, contour, best)
+      label = {
+        text = util.fmt_tick(level_data.level),
+        theta = contour.theta_min + span * u,
+        r = contour.rmin + radial * v,
+        angle = angle,
+        u = u,
+        v = v,
+      }
+    end
     levels[level_index] = {
       level = level_data.level,
       segments = segments,
+      label = label,
     }
   end
   return levels
@@ -1862,23 +2029,30 @@ function M.to_scene(figure)
       alpha = heatmap.alpha,
       label = heatmap.label,
       colorbar = heatmap.colorbar and true or false,
+      colorbar_ticks = heatmap.colorbar_ticks,
+      colorbar_tick_values = heatmap.colorbar_tick_values and
+        copy_array(heatmap.colorbar_tick_values) or nil,
     }
   end
 
   local bar_heatmap = colorbar_heatmap(figure)
   if bar_heatmap ~= nil then
-    local tick_count = bar_heatmap.colorbar_ticks or 3
-    local values = {}
-    for index = 1, tick_count do
-      values[index] = bar_heatmap.vmin +
-        (bar_heatmap.vmax - bar_heatmap.vmin) * (index - 1) /
-        (tick_count - 1)
+    local values = colorbar_ticks(bar_heatmap)
+    local labels, fractions = {}, {}
+    local span = bar_heatmap.vmax - bar_heatmap.vmin
+    for index, value in ipairs(values) do
+      labels[index] = colorbar_value(value)
+      fractions[index] = (value - bar_heatmap.vmin) / span
     end
     scene.polar.colorbar = {
       orientation = "vertical",
       vmin = bar_heatmap.vmin,
       vmax = bar_heatmap.vmax,
       ticks = values,
+      tick_labels = labels,
+      tick_fractions = fractions,
+      tick_source = bar_heatmap.colorbar_tick_values ~= nil and "explicit" or
+        "uniform",
       label = bar_heatmap.colorbar_label,
     }
   end
@@ -1899,7 +2073,7 @@ function M.to_scene(figure)
         theta_max = contour.theta_max,
         labels = contour.labels,
         style = copy_style(contour.style),
-        levels = contour_scene_levels(contour, outer),
+        levels = contour_scene_levels(contour, outer, figure, cfg),
       }
     end
   end

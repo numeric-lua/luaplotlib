@@ -97,6 +97,7 @@ local POLAR_HEATMAP_OPTIONS = {
   colorbar = true,
   colorbar_label = true,
   colorbar_ticks = true,
+  colorbar_tick_values = true,
   degrees = true,
   theta_unit = true,
 }
@@ -963,6 +964,36 @@ function Figure:polar_heatmap(values, opts)
     colorbar_ticks = util.check_integer(opts.colorbar_ticks,
       "polar heatmap colorbar_ticks", 2, 9)
   end
+  local colorbar_tick_values = nil
+  if opts.colorbar_tick_values ~= nil then
+    if opts.colorbar_ticks ~= nil then
+      fail("polar heatmap colorbar_ticks and colorbar_tick_values cannot both be set")
+    end
+    local values = opts.colorbar_tick_values
+    if type(values) ~= "table" then
+      fail("polar heatmap colorbar_tick_values must be a table")
+    end
+    if #values < 2 or #values > 12 then
+      fail("polar heatmap colorbar_tick_values must have 2 to 12 entries")
+    end
+    local tolerance = math.max(math.abs(maximum - minimum), 1) * 1e-9
+    colorbar_tick_values = {}
+    for index = 1, #values do
+      local value = util.check_number(values[index],
+        "polar heatmap colorbar_tick_values[" .. index .. "]")
+      if index > 1 and value <= colorbar_tick_values[index - 1] then
+        fail(string.format(
+          "polar heatmap colorbar_tick_values[%d] must be greater than colorbar_tick_values[%d]",
+          index, index - 1))
+      end
+      if value < minimum - tolerance or value > maximum + tolerance then
+        fail(string.format(
+          "polar heatmap colorbar_tick_values[%d] must be within vmin and vmax",
+          index))
+      end
+      colorbar_tick_values[index] = value
+    end
+  end
 
   local state = ensure_polar_state(self)
   state.heatmaps[#state.heatmaps + 1] = {
@@ -981,6 +1012,7 @@ function Figure:polar_heatmap(values, opts)
     colorbar = colorbar,
     colorbar_label = opts.colorbar_label,
     colorbar_ticks = colorbar_ticks,
+    colorbar_tick_values = colorbar_tick_values,
   }
   return self
 end
