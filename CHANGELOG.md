@@ -1,5 +1,35 @@
 # Changelog
 
+## 4.20.0
+
+- polar streamplot arrow glyphs are now clipped to the polar circle in the
+  exported SVG geometry, not only by the shared series-layer clip path. Arrow
+  triangles are built in screen space, so a large `head` or a late
+  `arrow_fraction` can push a vertex past the frame; that vertex is projected
+  back onto the circle (with a small inward margin for three-decimal
+  coordinate formatting), and every streamline path and arrow vertex now lies
+  inside the frame;
+- the streamplot series group exposes `data-clip="polar-circle"` and
+  `data-clipped-arrow-count`; each `polar-streamline` group reports
+  `data-clipped-arrows`, and each `polar-stream-arrow` polygon reports
+  `data-clipped`;
+- `to_scene()` mirrors the new SVG metadata: streamplot series add `cols`,
+  `rows`, `arrow_count`, `clipped_arrow_count`, and
+  `clip = "polar_circle"`; every exported line adds `arrow_count` and
+  `clipped_arrows`, and every arrow adds `clipped`. Polar legend entries now
+  include `linestyle` when a series defines one, so dashed streamplot swatches
+  survive export. Clipping flags describe the rendered luaplotlib frame; if
+  the canvas is too small to lay out, they fall back to unclipped;
+- `examples/polar_streamplot.lua` writes a third output,
+  `examples/output/polar-streamplot-clip.svg`: a radial field with
+  `arrow_fraction = 0.95` and `head = 24` whose boundary glyphs demonstrate the
+  circle clipping. README and API docs describe the clip contract,
+  `scripts/visual-qa.sh` checks that every streamline and arrow vertex stays
+  inside the frame, validates the series/line/arrow clipping counts, and
+  rasterizes the new example, and Cartesian isolation tests cover the added
+  metadata. 241 dependency-free tests, with no Cartesian rendering changes and
+  no new runtime dependencies.
+
 ## 4.19.0
 
 - polar streamplot arrows are now anchored by arc length instead of by point
