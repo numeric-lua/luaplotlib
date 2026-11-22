@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.16.0
+
+- polar contour labels now rotate to the local tangent (kept upright) and are
+  placed by collision-aware search over every marching-squares segment; labels
+  avoid earlier labels, radial tick text, annotations, and the legend, stay
+  inside the circular clip, and are skipped when no clear anchor exists;
+- each contour label exposes `data-level` and `data-angle`, and scene export
+  adds a preferred `label` anchor (`text`, `theta`, `r`, `u`, `v`, `angle`) per
+  level when labels are enabled;
+- polar heatmap colorbars accept explicit `colorbar_tick_values` (2-12 strictly
+  increasing values within `vmin`/`vmax`, mutually exclusive with
+  `colorbar_ticks`) for readable "nice" ticks; SVG ticks and labels expose
+  `data-value`/`data-fraction` plus `data-tick-source`, and
+  `to_scene()` exports matching `tick_labels`, `tick_fractions`, and
+  `tick_source` arrays;
+- `examples/polar_heatmap.lua` now includes a colorbar with nice ticks and
+  `examples/polar_contour.lua` uses explicit colorbar ticks; `visual-qa.sh`
+  checks rotated labels, colorbar metadata, and that Cartesian examples stay
+  Cartesian; expanded API/README docs and 208 tests.
+
 ## 4.15.0
 
 - `fig:polar_contour` draws projected marching-squares isolines of a matrix,
