@@ -55,6 +55,7 @@ luajit examples/polar_bars.lua
 luajit examples/polar_annotations.lua
 luajit examples/polar_heatmap.lua
 luajit examples/polar_contour.lua
+luajit examples/polar_quiver.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -139,7 +140,12 @@ largest absolute radius, including error-bar extents. `fig:polar_scatter` adds
 polar markers with per-point sizes and colors, `fig:polar_bar` draws radial bar
 wedges with optional per-bar widths and colors, and
 `fig:polar_errorbar(theta, r, rerr, opts)` draws radial and optional angular
-uncertainty. `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
+uncertainty. `fig:polar_quiver(theta, r, u, v, opts)` draws a vector field:
+`u` is the local tangential component toward increasing theta and `v` is the
+radial component, and both are projected into arrow glyphs whose lengths use
+`scale` (or an automatic scale). Large fields are capped with `max_arrows`
+(512 by default) and the SVG exposes `data-drawn`/`data-stride` metadata.
+`fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
 projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
 `theta_min`/`theta_max`; it renders beneath the other series, so lines and
 annotations can be overlaid. Pass `colorbar = true` to a heatmap to add a
@@ -161,14 +167,14 @@ but is shifted back inside the canvas when it would leave the viewport.
 `fig:polar_config` sets the zero location (`"E"`, `"N"`, `"W"`, `"S"`),
 clockwise/counterclockwise direction, explicit `rmax`, and custom
 angular/radial grids; pass `degrees = true` to any polar series method to
-supply theta in degrees. Labelled polar series, heatmaps, and contours
+supply theta in degrees. Labelled polar series, quivers, heatmaps, and contours
 participate in `fig:legend()`, which is placed so it does not cover the angular
 tick labels or the reserved colorbar column (`loc = "best"` searches for the
 least obstructed spot). Heatmap legend swatches are stepped gradients.
 Legend columns and titles are sized from UTF-8-aware Helvetica/Arial advance
 widths, so wide glyphs reserve more room than narrow ones. `fig:to_scene()`
-exports the polar grid, series, heatmaps, contours, colorbar, annotations, and
-legend entries for non-SVG backends.
+exports the polar grid, series (including vector fields), heatmaps, contours,
+colorbar, annotations, and legend entries for non-SVG backends.
 A figure cannot mix Cartesian and polar content.
 
 ```lua
@@ -197,6 +203,9 @@ fig:polar_contour(field, {
   color = "#111111",
   labels = true,
   label = "isolines",
+})
+fig:polar_quiver({ 0, math.pi / 2 }, { 3, 3 }, { 1, 0 }, { 0, 1 }, {
+  label = "flow",
 })
 ```
 
@@ -246,8 +255,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars
-- Polar line, scatter, bar, error-bar, heatmap, and contour plots with circular
-  grid, theta/r ticks, configurable orientation and limits, rotated
+- Polar line, scatter, bar, error-bar, quiver, heatmap, and contour plots with
+  circular grid, theta/r ticks, configurable orientation and limits, rotated
   collision-aware contour labels, explicit colorbar ticks, measured-text
   label-aware legends, polar annotations with canvas clamping, and polar scene
   export
@@ -276,9 +285,9 @@ make test
 ```
 
 For an optional visual check of the polar examples, `scripts/visual-qa.sh`
-runs every example, checks polar/colorbar metadata and that Cartesian examples
-stay Cartesian, and rasterizes the polar SVGs with `rsvg-convert` when that
-tool is installed. Rasterized files stay under the ignored `examples/output/`
+runs every example, checks polar/colorbar/quiver metadata and that Cartesian
+examples stay Cartesian, and rasterizes the polar SVGs with `rsvg-convert` when
+that tool is installed. Rasterized files stay under the ignored `examples/output/`
 directory.
 
 To run the examples through the Makefile:
@@ -296,15 +305,16 @@ make examples
 # examples/output/polar-annotations.svg
 # examples/output/polar-heatmap.svg
 # examples/output/polar-contour.svg
+# examples/output/polar-quiver.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.16.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.17.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar/error-bar/heatmap/contour plots with configurable
+polar line/scatter/bar/error-bar/quiver/heatmap/contour plots with configurable
 orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
 collision-aware polar contour labels, polar annotations with canvas
 clamping, measured-text polar legends, annotations, linear/log/date axes, twin
@@ -319,14 +329,16 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
 - **Polar axes are focused.** Polar figures support line, scatter, bar,
-  error-bar, heatmap, and contour projections plus annotations, with automatic
-  or explicit radial limits, configurable zero location/direction, custom
-  angular and radial grids, one vertical heatmap colorbar per figure with
+  error-bar, quiver, heatmap, and contour projections plus annotations, with
+  automatic or explicit radial limits, configurable zero location/direction,
+  custom angular and radial grids, one vertical heatmap colorbar per figure with
   uniform or explicit tick values, rotated collision-aware contour labels, and
   measured-text label-aware legends; Cartesian and polar content cannot share
-  a figure. Polar twin axes are not implemented, contour labels may be skipped
-  when the frame is too crowded, and contour levels that exactly equal a matrix
-  sample can miss that degenerate contour branch.
+  a figure. Quiver glyphs are screen-space arrows capped at `max_arrows` (512
+  by default), not data-unit extents. Polar twin axes are not implemented,
+  contour labels may be skipped when the frame is too crowded, and contour
+  levels that exactly equal a matrix sample can miss that degenerate contour
+  branch.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.
@@ -365,7 +377,7 @@ local scene = figure:to_scene()
 
 The scene contains series geometry, styles, axes labels, scales, explicit
 limits, category ticks, and annotation geometry/styles. Polar figures export a
-`polar` block with resolved theta/r ticks, series (including error bars),
-heatmap cells and value ranges, annotations, and legend entries under
-`orientation = "polar"`. The export does not depend on LÖVR or any graphics
+`polar` block with resolved theta/r ticks, series (including error bars and
+vector fields), heatmap cells and value ranges, annotations, and legend entries
+under `orientation = "polar"`. The export does not depend on LÖVR or any graphics
 toolkit.
