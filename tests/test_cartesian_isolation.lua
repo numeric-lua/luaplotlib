@@ -30,7 +30,9 @@ local function polar_figure()
   end
   local figure = plt.figure({ width = 480, height = 480 })
   figure:polar_config({ rmax = 3 })
-  figure:polar_streamplot(theta, r, u, v, { density = 0.6 })
+  figure:polar_streamplot(theta, r, u, v, {
+    density = 0.6, linestyle = "dashed", arrow_fraction = 0.7,
+  })
   return figure
 end
 
@@ -66,6 +68,10 @@ test("polar streamplot leaves Cartesian SVG output byte-identical", function()
   assert_equal(after_scene.series[2].kind, "scatter")
   assert_not_contains(before_svg, "streamplot")
   assert_not_contains(before_svg, 'data-polar="true"')
+  assert_not_contains(before_svg, "data-arrow-fraction")
+  assert_not_contains(before_svg, "data-closed-lines")
+  assert_not_contains(before_svg, "data-arc-length")
+  assert_not_contains(before_svg, "polar-streamline")
   assert_well_formed_svg(before_svg)
 end)
 
