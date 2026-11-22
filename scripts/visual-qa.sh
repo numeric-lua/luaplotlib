@@ -29,6 +29,7 @@ POLAR_SVGS=(
   examples/output/polar-contour.svg
   examples/output/polar-quiver.svg
   examples/output/polar-streamplot.svg
+  examples/output/polar-streamplot-styles.svg
 )
 
 for svg in "${POLAR_SVGS[@]}"; do
@@ -106,63 +107,144 @@ angled=$(grep -o 'class="polar-quiver-arrow"[^>]*data-angle="[^"]*"' \
 grep -q 'class="polar-legend"' "$QUIVER" ||
   fail "$QUIVER has no polar legend"
 
-# The streamplot example must keep its integrated line groups, stay inside the
-# configured caps, and expose arrow metadata.  Its field covers a full turn,
-# so the series must be periodic and the example should not hit a cap.
+# Streamplot examples must keep their integrated line groups, stay inside the
+# configured caps, and expose arc-length, seed, closed-orbit, and arrow-anchor
+# metadata.  Both fields cover a full turn, so the series must be periodic and
+# neither example should hit an integration cap.
 STREAM=examples/output/polar-streamplot.svg
-grep -q 'class="series series-polar-streamplot"' "$STREAM" ||
-  fail "$STREAM has no streamplot series"
-grep -q 'data-periodic="true"' "$STREAM" ||
-  fail "$STREAM should use a periodic theta grid"
-grep -q 'data-step-mode="auto"' "$STREAM" ||
-  fail "$STREAM should advertise the automatic integration step"
-stream_lines=$(grep -o 'data-lines="[0-9]*"' "$STREAM" | head -1 | tr -dc '0-9')
-stream_points=$(grep -o 'data-points="[0-9]*"' "$STREAM" | head -1 |
-  tr -dc '0-9')
-stream_max_lines=$(grep -o 'data-max-lines="[0-9]*"' "$STREAM" | head -1 |
-  tr -dc '0-9')
-stream_max_points=$(grep -o 'data-max-points="[0-9]*"' "$STREAM" | head -1 |
-  tr -dc '0-9')
-stream_arrows=$(grep -o 'data-arrow-count="[0-9]*"' "$STREAM" | head -1 |
-  tr -dc '0-9')
-[ -n "$stream_lines" ] && [ -n "$stream_points" ] &&
-  [ -n "$stream_max_lines" ] && [ -n "$stream_max_points" ] &&
-  [ -n "$stream_arrows" ] || fail "$STREAM is missing streamplot metadata"
-[ "$stream_lines" -ge 2 ] || fail "$STREAM has too few streamlines"
-[ "$stream_lines" -le "$stream_max_lines" ] ||
-  fail "$STREAM exceeded the configured max_lines cap"
-[ "$stream_points" -le "$stream_max_points" ] ||
-  fail "$STREAM exceeded the configured max_points cap"
-grep -q 'data-truncated="false"' "$STREAM" ||
-  fail "$STREAM example should not hit an integration cap"
-line_groups=$(grep -o 'class="polar-streamline"' "$STREAM" |
-  wc -l | tr -d ' ')
-[ "$line_groups" -eq "$stream_lines" ] ||
-  fail "$STREAM has $stream_lines streamlines but $line_groups line groups"
-path_count=$(grep -o 'class="polar-streamline-path"' "$STREAM" |
-  wc -l | tr -d ' ')
-[ "$path_count" -eq "$stream_lines" ] ||
-  fail "$STREAM has $stream_lines streamlines but $path_count paths"
-arrow_polygons=$(grep -o 'class="polar-stream-arrow"' "$STREAM" |
-  wc -l | tr -d ' ')
-[ "$arrow_polygons" -eq "$stream_arrows" ] ||
-  fail "$STREAM has $stream_arrows arrows but $arrow_polygons polygons"
-sum_points=$(grep -o \
-  'class="polar-streamline" data-index="[0-9]*" data-points="[0-9]*"' \
-  "$STREAM" | sed -E 's/.*data-points="([0-9]+)"/\1/' |
-  awk '{ total += $1 } END { print total + 0 }')
-[ "$sum_points" -eq "$stream_points" ] ||
-  fail "$STREAM line points sum to $sum_points, expected $stream_points"
-stream_angled=$(grep -o \
-  'class="polar-stream-arrow"[^>]*data-angle="[^"]*"' "$STREAM" |
-  wc -l | tr -d ' ')
-[ "$stream_angled" -eq "$stream_arrows" ] ||
-  fail "$STREAM arrows are missing data-angle metadata"
-if grep -Eqi 'nan|inf' "$STREAM"; then
-  fail "$STREAM contains non-finite geometry"
-fi
-grep -q 'class="polar-legend"' "$STREAM" ||
-  fail "$STREAM has no polar legend"
+STREAM_STYLES=examples/output/polar-streamplot-styles.svg
+
+check_streamplot() {
+  local svg="$1" expected_style="$2" expected_fraction="$3"
+  local stream_lines stream_points stream_max_lines stream_max_points
+  local stream_arrows stream_closed stream_closed_attr
+  local line_groups path_count arrow_polygons seed_meta arc_meta
+
+  grep -q 'class="series series-polar-streamplot"' "$svg" ||
+    fail "$svg has no streamplot series"
+  grep -q 'data-periodic="true"' "$svg" ||
+    fail "$svg should use a periodic theta grid"
+  grep -q 'data-step-mode="auto"' "$svg" ||
+    fail "$svg should advertise the automatic integration step"
+  grep -q "data-linestyle=\"$expected_style\"" "$svg" ||
+    fail "$svg should use the $expected_style line style"
+  grep -q "data-arrow-fraction=\"$expected_fraction\"" "$svg" ||
+    fail "$svg should advertise arrow_fraction = $expected_fraction"
+  grep -q 'data-arc-length-unit="data_radius_units"' "$svg" ||
+    fail "$svg should advertise arc-length units"
+
+  stream_lines=$(grep -o 'data-lines="[0-9]*"' "$svg" | head -1 |
+    tr -dc '0-9')
+  stream_points=$(grep -o 'data-points="[0-9]*"' "$svg" | head -1 |
+    tr -dc '0-9')
+  stream_max_lines=$(grep -o 'data-max-lines="[0-9]*"' "$svg" | head -1 |
+    tr -dc '0-9')
+  stream_max_points=$(grep -o 'data-max-points="[0-9]*"' "$svg" | head -1 |
+    tr -dc '0-9')
+  stream_arrows=$(grep -o 'data-arrow-count="[0-9]*"' "$svg" | head -1 |
+    tr -dc '0-9')
+  stream_closed_attr=$(grep -o 'data-closed-lines="[0-9]*"' "$svg" |
+    head -1 | tr -dc '0-9')
+  [ -n "$stream_lines" ] && [ -n "$stream_points" ] &&
+    [ -n "$stream_max_lines" ] && [ -n "$stream_max_points" ] &&
+    [ -n "$stream_arrows" ] && [ -n "$stream_closed_attr" ] ||
+    fail "$svg is missing streamplot metadata"
+  [ "$stream_lines" -ge 2 ] || fail "$svg has too few streamlines"
+  [ "$stream_lines" -le "$stream_max_lines" ] ||
+    fail "$svg exceeded the configured max_lines cap"
+  [ "$stream_points" -le "$stream_max_points" ] ||
+    fail "$svg exceeded the configured max_points cap"
+  grep -q 'data-truncated="false"' "$svg" ||
+    fail "$svg example should not hit an integration cap"
+
+  line_groups=$(grep -o 'class="polar-streamline"' "$svg" |
+    wc -l | tr -d ' ')
+  [ "$line_groups" -eq "$stream_lines" ] ||
+    fail "$svg has $stream_lines streamlines but $line_groups line groups"
+  path_count=$(grep -o 'class="polar-streamline-path"' "$svg" |
+    wc -l | tr -d ' ')
+  [ "$path_count" -eq "$stream_lines" ] ||
+    fail "$svg has $stream_lines streamlines but $path_count paths"
+  arrow_polygons=$(grep -o 'class="polar-stream-arrow"' "$svg" |
+    wc -l | tr -d ' ')
+  [ "$arrow_polygons" -eq "$stream_arrows" ] ||
+    fail "$svg has $stream_arrows arrows but $arrow_polygons polygons"
+
+  sum_points=$(grep -o \
+    'class="polar-streamline" data-index="[0-9]*" data-points="[0-9]*"' \
+    "$svg" | sed -E 's/.*data-points="([0-9]+)"/\1/' |
+    awk '{ total += $1 } END { print total + 0 }')
+  [ "$sum_points" -eq "$stream_points" ] ||
+    fail "$svg line points sum to $sum_points, expected $stream_points"
+
+  seed_meta=$(grep -o \
+    'class="polar-streamline"[^>]*data-seed-theta="[^"]*"[^>]*data-seed-r="[^"]*"' \
+    "$svg" | wc -l | tr -d ' ')
+  [ "$seed_meta" -eq "$stream_lines" ] ||
+    fail "$svg is missing per-line seed metadata"
+  arc_meta=$(grep -o \
+    'class="polar-streamline"[^>]*data-arc-length="[^"]*"' "$svg" |
+    wc -l | tr -d ' ')
+  [ "$arc_meta" -eq "$stream_lines" ] ||
+    fail "$svg is missing per-line arc-length metadata"
+  grep -o 'data-arc-length="[0-9.]*"' "$svg" |
+    sed -E 's/.*="([0-9.]+)"/\1/' |
+    awk '$1 <= 0 { exit 1 }' ||
+    fail "$svg has a non-positive streamline arc length"
+
+  stream_closed=$(grep -o 'data-closed="true"' "$svg" | wc -l | tr -d ' ')
+  [ "$stream_closed" -eq "$stream_closed_attr" ] ||
+    fail "$svg reports $stream_closed_attr closed lines but draws $stream_closed"
+
+  stream_angled=$(grep -o \
+    'class="polar-stream-arrow"[^>]*data-angle="[^"]*"' "$svg" |
+    wc -l | tr -d ' ')
+  [ "$stream_angled" -eq "$stream_arrows" ] ||
+    fail "$svg arrows are missing data-angle metadata"
+  stream_fractioned=$(grep -o \
+    'class="polar-stream-arrow"[^>]*data-fraction="[^"]*"' "$svg" |
+    wc -l | tr -d ' ')
+  [ "$stream_fractioned" -eq "$stream_arrows" ] ||
+    fail "$svg arrows are missing data-fraction metadata"
+
+  grep -E 'class="polar-streamline"|class="polar-stream-arrow"' "$svg" |
+    awk '
+      /class="polar-streamline"/ {
+        points = 0
+        if (match($0, /data-points="[0-9]+"/)) {
+          value = substr($0, RSTART, RLENGTH)
+          gsub(/[^0-9]/, "", value)
+          points = value + 0
+        }
+      }
+      /class="polar-stream-arrow"/ {
+        anchor = -1
+        fraction = -1
+        if (match($0, /data-index="[0-9]+"/)) {
+          value = substr($0, RSTART, RLENGTH)
+          gsub(/[^0-9]/, "", value)
+          anchor = value + 0
+        }
+        if (match($0, /data-fraction="[0-9.]+"/)) {
+          value = substr($0, RSTART, RLENGTH)
+          gsub(/[^0-9.]/, "", value)
+          fraction = value + 0
+        }
+        if (points < 3 || anchor < 1 || anchor >= points ||
+            fraction < 0 || fraction > 1) bad = 1
+      }
+      END { exit bad }
+    ' || fail "$svg has an arrow anchor outside its streamline"
+
+  if grep -Eqi 'nan|inf' "$svg"; then
+    fail "$svg contains non-finite geometry"
+  fi
+  grep -q 'class="polar-legend"' "$svg" ||
+    fail "$svg has no polar legend"
+}
+
+check_streamplot "$STREAM" solid 0.5
+check_streamplot "$STREAM_STYLES" dashed 0.65
 
 # Cartesian examples must stay Cartesian: no polar marker, no polar layer.
 for svg in \
