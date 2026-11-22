@@ -1,5 +1,39 @@
 # Changelog
 
+## 4.19.0
+
+- polar streamplot arrows are now anchored by arc length instead of by point
+  index: the new `arrow_fraction` option (default `0.5`, constrained to
+  [0.05, 0.95]) places the single directional glyph at that fraction of the
+  integrated polyline, so uneven RK spacing, boundary fallbacks, and trimmed
+  tails cannot pull it away from the requested position;
+- `polar_streamplot` accepts `linestyle = "solid" | "dashed" | "dotted" |
+  "none"`; dashed and dotted paths carry matching `stroke-dasharray` values,
+  `"none"` hides the path while keeping arrows, and the polar legend swatch
+  follows the same dash pattern;
+- closed-orbit seeding no longer redraws the same loop from every angular
+  seed column: a candidate line that falls more than 50% into already-covered
+  occupancy bins is dropped before it consumes the point budget. The bundled
+  streamplot examples shrink from 15 to 12 and 13 to 9 lines while keeping
+  every distinct orbit, and line/point/arrow caps still apply;
+- SVG metadata is now consistent with the scene export. The series adds
+  `data-linestyle`, `data-arrow-fraction`, `data-closed-lines`, and
+  `data-arc-length-unit="data_radius_units"`; every `polar-streamline` group
+  reports `data-closed`, `data-seed-theta`, `data-seed-r`, and
+  `data-arc-length`; every arrow reports `data-fraction` next to its existing
+  anchor `data-index`, `data-angle`, `data-theta`, and `data-r`;
+- `to_scene()` exports the same values: `arrow_fraction`,
+  `closed_line_count`, `arc_length_unit`, per-line `closed`/`seed_theta`/
+  `seed_r`/`arc_length`, and per-arrow `index`/`fraction` in addition to the
+  existing point arrays and angle anchors;
+- `examples/polar_streamplot.lua` now also writes
+  `examples/output/polar-streamplot-styles.svg`, a dashed field with
+  `arrow_fraction = 0.65`; README and API docs describe the new options and
+  metadata, `scripts/visual-qa.sh` checks both streamplot examples for arc
+  length, seed, closed-orbit, line-style, and arrow-anchor integrity, and
+  Cartesian isolation guards cover the new options. 239 tests, with no
+  Cartesian rendering changes and no new runtime dependencies.
+
 ## 4.18.0
 
 - new `fig:polar_streamplot(theta, r, u, v, opts)` integrates grid-sampled

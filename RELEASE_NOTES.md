@@ -1,36 +1,39 @@
-# luaplotlib 4.18.0
+# luaplotlib 4.19.0
 
-- new `fig:polar_streamplot(theta, r, u, v, opts)` integrates a grid-sampled
-  polar vector field into streamlines. `theta` and `r` are strictly increasing
-  coordinate arrays, while `u` and `v` are rows-by-columns matrices holding the
-  local tangential and radial components at every grid node. The field is
-  bilinearly interpolated and integrated in the physical plane with fixed-step
-  fourth-order Runge-Kutta, so a step is isotropic even when the angular and
-  radial grid spacings differ;
-- a theta grid spanning one full turn is periodic: streamlines wrap
-  continuously across theta=0 instead of drawing a chord, and closed orbits are
-  detected when a line returns to its seed. Partial sectors stop at their theta
-  edges, the radial grid bounds, zero-magnitude samples, or `max_steps`.
-  `theta_zero` and `theta_direction` rotate the flow with the axes;
-- seeding is deterministic and scaled by `density`, with coarse occupancy bins
-  that suppress streamlines retracing earlier coverage. The automatic `step` is
-  radial span / 25; `max_steps` (300), `max_lines` (64), and `max_points`
-  (8000) bound SVG size, and `data-truncated` reports whether a cap was hit.
-  Each line carries a mid-line arrow that can be disabled with
-  `arrows = false` or resized with `head`;
-- the series group reports `data-cols`, `data-rows`, `data-lines`,
-  `data-points`, `data-arrow-count`, `data-step`, `data-step-mode`,
-  `data-density`, cap values, `data-periodic`, and `data-truncated`. Every
-  `polar-streamline` group reports `data-points`/`data-arrows`, and arrow
-  polygons carry `data-angle`, `data-theta`, and `data-r`;
-- labelled streamplots join the polar legend with a curved swatch.
-  `to_scene()` exports `kind = "streamplot"` series with copied `u`/`v`
-  matrices, grid coordinates, `components = "tangential_radial"`, periodic and
-  resolved-step metadata, caps, and a `lines` array of `theta`/`r` point
-  arrays plus arrow anchors;
-- new `examples/polar_streamplot.lua`, expanded README and API documentation,
-  `scripts/visual-qa.sh` checks for line/path/arrow/point-count agreement, and
-  Cartesian isolation regressions that pin Cartesian SVG output, Cartesian
-  scene shape, quiver scene metadata, and per-figure palette behavior. The
-  suite now has 236 dependency-free tests; there are no Cartesian rendering or
-  runtime dependency changes.
+- polar streamplot arrows are now anchored by arc length rather than by point
+  index. The new `arrow_fraction` option (default `0.5`, constrained to
+  [0.05, 0.95]) selects the fraction of the integrated polyline that carries
+  the glyph, so uneven RK spacing, boundary fallbacks, and trimmed tails cannot
+  pull it away from the requested position. `arrows = false` and `head = 0`
+  still remove it;
+- `polar_streamplot` accepts `linestyle = "solid" | "dashed" | "dotted" |
+  "none"`. Dashed and dotted paths get matching `stroke-dasharray` values,
+  `"none"` hides the path while keeping the directional arrows, and the polar
+  legend swatch follows the same dash pattern;
+- closed-orbit seeding was redrawing the same loop from every angular seed
+  column because only the seed bin was tested. A candidate line that now falls
+  more than 50% into already-covered occupancy bins is dropped before it
+  consumes the point budget. Every distinct orbit is kept, while the bundled
+  streamplot examples shrink from 15 to 12 and 13 to 9 lines; integration,
+  deterministic ordering, and the line/point/arrow caps are unchanged;
+- SVG metadata now mirrors the scene export. The series adds `data-linestyle`,
+  `data-arrow-fraction`, `data-closed-lines`, and
+  `data-arc-length-unit="data_radius_units"`. Each `polar-streamline` group
+  reports `data-closed`, `data-seed-theta`, `data-seed-r`, and
+  `data-arc-length`, and each `polar-stream-arrow` polygon reports
+  `data-fraction` in addition to its anchor `data-index`, `data-angle`,
+  `data-theta`, and `data-r`;
+- `to_scene()` exports `arrow_fraction`, `closed_line_count`,
+  `arc_length_unit = "data_radius_units"`, per-line `closed`, `seed_theta`,
+  `seed_r`, and `arc_length`, and per-arrow `index` and `fraction` alongside
+  the existing point arrays and angle anchors. Rendering and scene export use
+  the same deterministic build, so their line, point, arrow, and closed counts
+  agree;
+- `examples/polar_streamplot.lua` writes a second output,
+  `examples/output/polar-streamplot-styles.svg`, showing a dashed field with
+  `arrow_fraction = 0.65`. README and API docs describe the new options and
+  metadata, `scripts/visual-qa.sh` validates both examples for line-style,
+  arc-length, seed, closed-orbit, and arrow-anchor integrity, and Cartesian
+  isolation tests cover the new options. The suite has 239 dependency-free
+  tests; there are no Cartesian rendering changes and no new runtime
+  dependencies.

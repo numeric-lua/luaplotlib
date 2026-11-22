@@ -7,7 +7,7 @@ test("module exposes the public API without optional dependencies", function()
   assert_equal(type(plt.figure), "function")
   assert_equal(type(plt.Figure), "table")
   assert_equal(type(plt._VERSION), "string")
-  assert_equal(plt._VERSION, "4.18.0")
+  assert_equal(plt._VERSION, "4.19.0")
   assert_equal(package.loaded["torch"], nil, "require('luaplotlib') must not load torch")
 end)
 
