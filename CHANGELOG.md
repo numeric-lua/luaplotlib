@@ -1,5 +1,39 @@
 # Changelog
 
+## 4.18.0
+
+- new `fig:polar_streamplot(theta, r, u, v, opts)` integrates grid-sampled
+  polar vector fields into streamlines: `theta` and `r` are strictly increasing
+  grid coordinates and `u`/`v` are rows-by-columns matrices of the local
+  tangential/radial components at every node; bilinear interpolation and
+  fixed-step fourth-order Runge-Kutta run in the physical plane so one step is
+  isotropic even when the angular and radial spacings differ;
+- a theta grid spanning one full turn is periodic and lines wrap continuously
+  across theta=0, while partial sectors stop at their theta edges; lines also
+  stop at the radial grid bounds, at zero-magnitude samples, after `max_steps`,
+  or when a closed orbit returns to its seed; `theta_zero` and
+  `theta_direction` rotate the field with the axes;
+- seeding is deterministic and `density`-scaled with coarse occupancy bins that
+  suppress retraced coverage; `step` defaults to radial span / 25,
+  `max_steps` defaults to 300, `max_lines` to 64, and `max_points` to 8000, so
+  SVG output stays bounded; arrows sit near each line midpoint and can be
+  disabled with `arrows = false` or sized with `head`;
+- the series group exposes `data-cols`, `data-rows`, `data-lines`,
+  `data-points`, `data-arrow-count`, `data-step`, `data-step-mode`,
+  `data-density`, `data-max-steps`, `data-max-lines`, `data-max-points`,
+  `data-arrows`, `data-head`, `data-periodic`, and `data-truncated`; each
+  `polar-streamline` group reports its own point/arrow counts and arrow
+  polygons carry `data-angle`/`data-theta`/`data-r`;
+- labelled streamplots join the measured-text polar legend with a curved
+  swatch, and `to_scene()` exports `kind = "streamplot"` series with copied
+  `u`/`v` matrices, grid coordinates, periodic/step/cap metadata, and resolved
+  `lines` containing `theta`/`r` point arrays plus arrow anchors;
+- new `examples/polar_streamplot.lua`, expanded README/API documentation,
+  `scripts/visual-qa.sh` checks for line/path/arrow/point-count agreement and
+  cap compliance, and Cartesian isolation regressions that pin SVG output,
+  scene shape, quiver metadata, and per-figure palette behavior; 236 tests
+  with no Cartesian rendering, scene-shape, or dependency changes.
+
 ## 4.17.0
 
 - new `fig:polar_quiver(theta, r, u, v, opts)` renders a vector field: `u` is

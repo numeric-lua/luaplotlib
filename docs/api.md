@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.17.0`. This document describes the public Lua API implemented
+Version: `4.18.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.17.0"`
+- `plt._VERSION` — currently `"4.18.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 

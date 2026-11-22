@@ -339,7 +339,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.17.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.18.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 polar line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with configurable
 orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
