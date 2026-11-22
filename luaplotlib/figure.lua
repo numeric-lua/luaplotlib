@@ -19,6 +19,7 @@ local PLOT_OPTIONS = {
   linestyle = true,
   marker = true,
   markersize = true,
+  markevery = true,
   alpha = true,
 }
 
@@ -398,6 +399,38 @@ local function checked_marker(value, context)
   return value
 end
 
+-- Normalize markevery into a sorted list of one-based point indices. An integer
+-- is a stride starting at the first point; a table is an explicit index list.
+local function checked_markevery(value, count, context)
+  if value == nil then
+    return nil
+  end
+  local indices = {}
+  if type(value) == "number" then
+    local stride = util.check_integer(value, context .. " markevery", 1)
+    for index = 1, count, stride do
+      indices[#indices + 1] = index
+    end
+  elseif type(value) == "table" then
+    if #value == 0 then
+      fail(context .. " markevery index table must not be empty")
+    end
+    local seen = {}
+    for position = 1, #value do
+      local index = util.check_integer(value[position],
+        string.format("%s markevery[%d]", context, position), 1, count)
+      if not seen[index] then
+        seen[index] = true
+        indices[#indices + 1] = index
+      end
+    end
+    table.sort(indices)
+  else
+    fail(context .. " markevery must be a positive integer or an index table")
+  end
+  return indices
+end
+
 local function checked_xytext(value)
   if value == nil then
     return nil
@@ -468,6 +501,70 @@ local function checked_arrow(value, color)
   }
 end
 
+-- Normalize symmetric or asymmetric error input into one lower and one upper
+-- value per point. Symmetric input is a non-negative number or a flat numeric
+-- sequence. Asymmetric input is either { lower = ..., upper = ... } or a
+-- two-element { lower_sequence, upper_sequence }; each side may be a scalar or
+-- a sequence.
+local function error_components(value, count, name)
+  if value == nil then
+    fail(name .. " is required")
+  end
+
+  local lower_raw, upper_raw
+  local asymmetric = false
+  if type(value) == "number" then
+    lower_raw, upper_raw = value, value
+  elseif type(value) == "table" then
+    local has_named = value.lower ~= nil or value.upper ~= nil
+    local has_pair = type(value[1]) == "table" or type(value[2]) == "table"
+    if has_named and has_pair then
+      fail(name .. " must use either lower/upper fields or two sequences, not both")
+    end
+    if has_named then
+      if value.lower == nil or value.upper == nil then
+        fail(name .. " asymmetric table requires both lower and upper")
+      end
+      lower_raw, upper_raw = value.lower, value.upper
+      asymmetric = true
+    elseif has_pair then
+      if #value ~= 2 then
+        fail(name .. " asymmetric table must contain exactly two sequences")
+      end
+      lower_raw, upper_raw = value[1], value[2]
+      asymmetric = true
+    else
+      lower_raw, upper_raw = value, value
+    end
+  else
+    fail(name .. " must be a number, a numeric sequence, or an asymmetric table")
+  end
+
+  local function side(raw, side_name)
+    local result
+    if type(raw) == "number" then
+      result = {}
+      for index = 1, count do result[index] = raw end
+    else
+      result = data.sequence(raw, side_name)
+    end
+    if #result ~= count then
+      fail(string.format("%s must have the same length as x and y (%d ~= %d)",
+        side_name, #result, count))
+    end
+    for index, error in ipairs(result) do
+      if error < 0 then
+        fail(string.format("%s[%d] must be non-negative", side_name, index))
+      end
+    end
+    return result
+  end
+
+  local lower = side(lower_raw, name .. " lower")
+  local upper = side(upper_raw, name .. " upper")
+  return lower, upper, asymmetric
+end
+
 function Figure.new(opts)
   opts = util.check_options(opts, {
     width = true,
@@ -513,7 +610,10 @@ function Figure.new(opts)
     _xscale = checked_scale(opts.xscale, "figure xscale", true),
     _yscale = checked_scale(opts.yscale, "figure yscale", true),
     _grid = false,
-    _grid_opts = { color = "#d9d9d9", linewidth = 1, linestyle = "solid" },
+    _grid_opts = {
+      color = "#d9d9d9", linewidth = 1, linestyle = "solid", minor = false,
+    },
+    _minorticks = { enabled = false, axis = "both" },
     _facecolor = "#ffffff",
     _aria_label = nil,
     _legend_requested = false,
@@ -521,6 +621,7 @@ function Figure.new(opts)
     _category_ticks = nil,
     _colorbar = false,
     _xtick_rotation = 0,
+    _ytick_rotation = 0,
     _xticks = nil,
     _yticks = nil,
     _xtick_format = nil,
@@ -558,6 +659,7 @@ function Figure:plot(x, y, opts)
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
+  style.markevery = checked_markevery(opts.markevery, #xv, "plot")
 
   self._series[#self._series + 1] = {
     kind = "line",
@@ -2137,6 +2239,14 @@ function Figure:xtick_rotation(angle)
   return self
 end
 
+function Figure:ytick_rotation(angle)
+  if type(angle) ~= "number" or angle % 1 ~= 0 or angle < -90 or angle > 90 then
+    fail("ytick_rotation must be an integer in [-90, 90]")
+  end
+  self._ytick_rotation = angle
+  return self
+end
+
 -- Horizontal bars for a single numeric series.  Category labels are placed on
 -- the y axis; values extend horizontally from zero.
 -- Pie/donut chart.  Values must be non-negative and sum to a positive total.
@@ -2639,14 +2749,20 @@ function Figure:boxplot(values, opts)
 end
 
 function Figure:errorbar(x, y, yerr, xerr, opts)
-  -- Allow the common four-argument form: errorbar(x, y, yerr, opts).
+  -- Allow the common four-argument form: errorbar(x, y, yerr, opts).  An
+  -- asymmetric xerr table is recognized before the options form so that
+  -- { lower = ..., upper = ... } can be passed as the fourth argument.
   if opts == nil and type(xerr) == "table" then
-    local has_string_key = false
-    for key in pairs(xerr) do
-      if type(key) == "string" then has_string_key = true; break end
-    end
-    if has_string_key then
-      opts, xerr = xerr, nil
+    local asymmetric_xerr = xerr.lower ~= nil or xerr.upper ~= nil or
+      type(xerr[1]) == "table" or type(xerr[2]) == "table"
+    if not asymmetric_xerr then
+      local has_string_key = false
+      for key in pairs(xerr) do
+        if type(key) == "string" then has_string_key = true; break end
+      end
+      if has_string_key then
+        opts, xerr = xerr, nil
+      end
     end
   end
   opts = util.check_options(opts, ERRORBAR_OPTIONS, "errorbar")
@@ -2658,30 +2774,12 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   end
   if yerr == nil then fail("errorbar requires yerr") end
 
-  local function errors(value, name)
-    local result
-    if type(value) == "number" then
-      result = {}
-      for index = 1, #xv do result[index] = value end
-    else
-      result = data.sequence(value, name)
-    end
-    if #result ~= #xv then
-      fail(string.format("%s must have the same length as x and y (%d ~= %d)",
-        name, #result, #xv))
-    end
-    for index, error in ipairs(result) do
-      if error < 0 then
-        fail(string.format("%s[%d] must be non-negative", name, index))
-      end
-    end
-    return result
-  end
-
-  local lower = errors(yerr, "errorbar yerr")
-  local horizontal = nil
+  local yerr_lower, yerr_upper, yerr_asymmetric =
+    error_components(yerr, #xv, "errorbar yerr")
+  local xerr_lower, xerr_upper, xerr_asymmetric
   if xerr ~= nil then
-    horizontal = errors(xerr, "errorbar xerr")
+    xerr_lower, xerr_upper, xerr_asymmetric =
+      error_components(xerr, #xv, "errorbar xerr")
   end
 
   local linewidth = 1.5
@@ -2724,8 +2822,14 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
     kind = "errorbar",
     x = xv,
     y = yv,
-    yerr = lower,
-    xerr = horizontal,
+    yerr = yerr_upper,
+    yerr_lower = yerr_lower,
+    yerr_upper = yerr_upper,
+    yerr_asymmetric = yerr_asymmetric,
+    xerr = xerr_upper,
+    xerr_lower = xerr_lower,
+    xerr_upper = xerr_upper,
+    xerr_asymmetric = xerr_asymmetric,
     style = style,
   }
   return self
@@ -2921,6 +3025,27 @@ function Figure:axvline(x, opts)
   return self
 end
 
+-- Draw an infinite line through two finite data points, clipped to the axes
+-- rectangle. The two defining points participate in automatic ranging; the
+-- clipped extensions do not.
+function Figure:axline(x1, y1, x2, y2, opts)
+  if y2 == nil then
+    fail("axline requires x1, y1, x2, and y2")
+  end
+  x1 = util.check_number(x1, "axline x1")
+  y1 = util.check_number(y1, "axline y1")
+  x2 = util.check_number(x2, "axline x2")
+  y2 = util.check_number(y2, "axline y2")
+  if x1 == x2 and y1 == y2 then
+    fail("axline requires two distinct points")
+  end
+  local style = reference_style(self, opts, "axline")
+  self._series[#self._series + 1] = {
+    kind = "axline", x1 = x1, y1 = y1, x2 = x2, y2 = y2, style = style,
+  }
+  return self
+end
+
 function Figure:grid(enabled, opts)
   if type(enabled) == "table" and opts == nil then
     opts, enabled = enabled, true
@@ -2929,12 +3054,16 @@ function Figure:grid(enabled, opts)
   util.check_boolean(enabled, "grid")
   if opts ~= nil then
     opts = util.check_options(opts, { color = true, linewidth = true,
-      linestyle = true, axis = true }, "grid")
+      linestyle = true, axis = true, minor = true }, "grid")
     if opts.axis ~= nil then
       if opts.axis ~= "x" and opts.axis ~= "y" and opts.axis ~= "both" then
         fail("grid axis must be x, y, or both")
       end
       self._grid_opts.axis = opts.axis
+    end
+    if opts.minor ~= nil then
+      util.check_boolean(opts.minor, "grid minor")
+      self._grid_opts.minor = opts.minor
     end
     if opts.color ~= nil then
       self._grid_opts.color = util.check_color(opts.color, "grid color")
@@ -2952,6 +3081,28 @@ function Figure:grid(enabled, opts)
     end
   end
   self._grid = enabled
+  return self
+end
+
+-- Toggle minor tick marks independently from minor grid lines. opts.axis
+-- restricts the marks to "x", "y", or "both".
+function Figure:minorticks(enabled, opts)
+  if type(enabled) == "table" and opts == nil then
+    opts, enabled = enabled, true
+  end
+  if enabled == nil then enabled = true end
+  util.check_boolean(enabled, "minorticks")
+  local axis = self._minorticks.axis
+  if opts ~= nil then
+    opts = util.check_options(opts, { axis = true }, "minorticks")
+    if opts.axis ~= nil then
+      if opts.axis ~= "x" and opts.axis ~= "y" and opts.axis ~= "both" then
+        fail("minorticks axis must be x, y, or both")
+      end
+      axis = opts.axis
+    end
+  end
+  self._minorticks = { enabled = enabled, axis = axis }
   return self
 end
 

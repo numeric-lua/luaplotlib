@@ -207,4 +207,105 @@ function M.generate_log(lo, hi, target)
   return { lo }
 end
 
+local function sorted_major_values(major, lo, hi)
+  local result = {}
+  for index = 1, #(major or {}) do
+    local value = major[index]
+    if type(value) == "number" and value == value and value ~= math.huge and
+        value ~= -math.huge and value >= lo and value <= hi then
+      result[#result + 1] = value
+    end
+  end
+  table.sort(result)
+  return result
+end
+
+-- Return minor tick positions between the supplied major tick values. Linear
+-- axes are subdivided into five equal parts per major interval; logarithmic
+-- axes use the 2..9 mantissas of each decade. Values that duplicate a major
+-- tick are omitted so major labels and major grid lines remain unambiguous.
+function M.generate_minor(lo, hi, major, scale)
+  if type(lo) ~= "number" or type(hi) ~= "number" or lo ~= lo or hi ~= hi or
+      lo == math.huge or hi == -math.huge or hi <= lo then
+    return {}
+  end
+  local majors = sorted_major_values(major, lo, hi)
+  if #majors == 0 then
+    return {}
+  end
+
+  local values = {}
+  local function append(value, tolerance)
+    if value < lo - tolerance or value > hi + tolerance then
+      return
+    end
+    if value < lo then value = lo end
+    if value > hi then value = hi end
+    for index = 1, #majors do
+      local scale_value = math.max(1, math.abs(value), math.abs(majors[index]))
+      if math.abs(value - majors[index]) <= tolerance * scale_value then
+        return
+      end
+    end
+    for index = 1, #values do
+      local scale_value = math.max(1, math.abs(value), math.abs(values[index]))
+      if math.abs(value - values[index]) <= tolerance * scale_value then
+        return
+      end
+    end
+    values[#values + 1] = value
+  end
+
+  if scale == "log" then
+    if lo <= 0 or hi <= 0 then return {} end
+    if util.log10(hi) - util.log10(lo) > 12 then return {} end
+    local first = math.floor(util.log10(lo)) - 1
+    local last = math.ceil(util.log10(hi))
+    for exponent = first, last do
+      local base = 10 ^ exponent
+      for mantissa = 2, 9 do
+        append(mantissa * base, 1e-10)
+      end
+    end
+  else
+    local minimum_step
+    for index = 2, #majors do
+      local delta = majors[index] - majors[index - 1]
+      if delta > 0 and (minimum_step == nil or delta < minimum_step) then
+        minimum_step = delta
+      end
+    end
+    if minimum_step == nil or minimum_step <= 0 then
+      return {}
+    end
+    local tolerance = minimum_step * 1e-9
+    for index = 1, #majors - 1 do
+      local span = majors[index + 1] - majors[index]
+      if span > 0 then
+        for part = 1, 4 do
+          append(majors[index] + span * part / 5, tolerance)
+        end
+      end
+    end
+    local delta = minimum_step / 5
+    local value = majors[1] - delta
+    local guard = 0
+    while value >= lo - tolerance and guard < 1000 do
+      append(value, tolerance)
+      value = value - delta
+      guard = guard + 1
+    end
+    value = majors[#majors] + delta
+    guard = 0
+    while value <= hi + tolerance and guard < 1000 do
+      append(value, tolerance)
+      value = value + delta
+      guard = guard + 1
+    end
+  end
+
+  table.sort(values)
+  return values
+end
+
 return M

@@ -14,6 +14,7 @@ examples:
 	@$(LUA) examples/histogram.lua
 	@$(LUA) examples/errorbar.lua
 	@$(LUA) examples/annotations.lua
+	@$(LUA) examples/axline.lua
 	@$(LUA) examples/bars.lua
 	@$(LUA) examples/polar.lua
 	@$(LUA) examples/polar_bars.lua

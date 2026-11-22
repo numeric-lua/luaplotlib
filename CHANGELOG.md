@@ -1,5 +1,44 @@
 # Changelog
 
+## 4.21.0
+
+- `fig:errorbar` now accepts independent lower and upper errors. `yerr` and
+  `xerr` may be a number, a flat per-point array, or an asymmetric table in
+  either `{ lower = ..., upper = ... }` or `{ lower_sequence,
+  upper_sequence }` form. Error-bar geometry, automatic ranging, and scene
+  export all use the independent extents; asymmetric groups expose
+  `data-yerr-mode` / `data-xerr-mode`, and scene series add `yerr_lower`,
+  `yerr_upper`, `xerr_lower`, `xerr_upper`, and matching asymmetric flags while
+  keeping the legacy upper-side `yerr`/`xerr` arrays;
+- new `fig:axline(x1, y1, x2, y2, opts)` draws an infinite line through two
+  distinct points, clipped to the plot rectangle with Liang-Barsky clipping.
+  The series exposes its defining anchors plus `data-clipped`, participates in
+  automatic ranging only through those anchors, supports the same color,
+  width, style, alpha, and label options as `axhline`/`axvline`, and exports
+  the same fields through `to_scene()`;
+- `fig:plot` adds `markevery`: a positive integer stride or a table of
+  one-based point indices. Markers are decimated while every line vertex is
+  retained; index tables are sorted and de-duplicated. Line groups report
+  `data-marker-count` and `data-markevery`, and scene styles carry the
+  normalized index list;
+- new `fig:ytick_rotation(angle)` mirrors `xtick_rotation` for y tick labels,
+  including the right-hand labels of a twin y axis. Angles are integers in
+  `[-90, 90]`; both rotations are exported in the scene;
+- new `fig:minorticks([enabled[, opts]])` draws minor tick marks on `"x"`,
+  `"y"`, or `"both"`, subdividing linear major intervals into five parts and
+  using the 2–9 mantissas on log axes. `fig:grid(true, { minor = true })` adds
+  a fainter minor grid independently. Major values are never duplicated;
+  categorical x axes are skipped. SVG roots expose `data-minorticks` and
+  `data-minor-grid`, minor elements use `minor-tick-mark`,
+  `grid-minor`/`minor-grid-line`, and the scene reports the same settings;
+- `examples/line.lua` now demonstrates `markevery`, minor ticks, and the minor
+  grid; `examples/errorbar.lua` uses asymmetric y and x errors; the new
+  `examples/axline.lua` covers clipped diagonal, horizontal, and vertical
+  reference lines plus y tick rotation. README, API docs, the Makefile, and
+  `scripts/visual-qa.sh` cover all five features. The dependency-free suite
+  grows to 267 tests; polar rendering is unchanged and there are no new
+  runtime dependencies.
+
 ## 4.20.0
 
 - polar streamplot arrow glyphs are now clipped to the polar circle in the

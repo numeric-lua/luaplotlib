@@ -27,6 +27,7 @@ local function copy_style(style)
     linestyle = style.linestyle,
     marker = style.marker,
     markersize = style.markersize,
+    markevery = style.markevery and copy_array(style.markevery) or nil,
     radius = style.radius,
     width_fraction = style.width_fraction,
     capsize = style.capsize,
@@ -121,6 +122,11 @@ function M.from_figure(figure)
     ylabel = figure._ylabel,
     xscale = figure._xscale or "linear",
     yscale = figure._yscale or "linear",
+    xtick_rotation = figure._xtick_rotation or 0,
+    ytick_rotation = figure._ytick_rotation or 0,
+    minorticks = figure._minorticks and figure._minorticks.enabled or false,
+    minor_tick_axis = figure._minorticks and figure._minorticks.axis or "both",
+    minor_grid = figure._grid_opts and figure._grid_opts.minor == true or false,
     grid = figure._grid and true or false,
     legend = figure._legend_requested and true or false,
     category_ticks = nil,
@@ -164,19 +170,42 @@ function M.from_figure(figure)
     elseif series.kind == "errorbar" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
-      copy.yerr = copy_array(series.yerr)
-      if series.xerr then copy.xerr = copy_array(series.xerr) end
+      copy.yerr = copy_array(series.yerr_upper or series.yerr)
+      copy.yerr_lower = copy_array(series.yerr_lower or series.yerr)
+      copy.yerr_upper = copy_array(series.yerr_upper or series.yerr)
+      if series.yerr_asymmetric then copy.yerr_asymmetric = true end
+      if series.xerr then
+        copy.xerr = copy_array(series.xerr_upper or series.xerr)
+        copy.xerr_lower = copy_array(series.xerr_lower or series.xerr)
+        copy.xerr_upper = copy_array(series.xerr_upper or series.xerr)
+        if series.xerr_asymmetric then copy.xerr_asymmetric = true end
+      end
       for index = 1, #copy.x do
         local x, y = copy.x[index], copy.y[index]
-        local xerr = copy.xerr and copy.xerr[index] or 0
-        local yerr = copy.yerr[index]
-        local left, right = x - xerr, x + xerr
-        local lower, upper = y - yerr, y + yerr
+        local xerr_lower = copy.xerr_lower and copy.xerr_lower[index] or 0
+        local xerr_upper = copy.xerr_upper and copy.xerr_upper[index] or 0
+        local yerr_lower = copy.yerr_lower[index]
+        local yerr_upper = copy.yerr_upper[index]
+        local left, right = x - xerr_lower, x + xerr_upper
+        local lower, upper = y - yerr_lower, y + yerr_upper
         if state.xmin == nil or left < state.xmin then state.xmin = left end
         if state.xmax == nil or right > state.xmax then state.xmax = right end
         if state.ymin == nil or lower < state.ymin then state.ymin = lower end
         if state.ymax == nil or upper > state.ymax then state.ymax = upper end
       end
+    elseif series.kind == "axline" then
+      copy.x1 = series.x1
+      copy.y1 = series.y1
+      copy.x2 = series.x2
+      copy.y2 = series.y2
+      if state.xmin == nil or series.x1 < state.xmin then state.xmin = series.x1 end
+      if state.xmin == nil or series.x2 < state.xmin then state.xmin = series.x2 end
+      if state.xmax == nil or series.x1 > state.xmax then state.xmax = series.x1 end
+      if state.xmax == nil or series.x2 > state.xmax then state.xmax = series.x2 end
+      if state.ymin == nil or series.y1 < state.ymin then state.ymin = series.y1 end
+      if state.ymin == nil or series.y2 < state.ymin then state.ymin = series.y2 end
+      if state.ymax == nil or series.y1 > state.ymax then state.ymax = series.y1 end
+      if state.ymax == nil or series.y2 > state.ymax then state.ymax = series.y2 end
     elseif series.kind == "fill" then
       copy.x = copy_array(series.x)
       copy.y1 = copy_array(series.y1)
@@ -376,8 +405,16 @@ function M.from_figure(figure)
       elseif series.kind == "errorbar" then
         copy.x = copy_array(series.x)
         copy.y = copy_array(series.y)
-        copy.yerr = copy_array(series.yerr)
-        if series.xerr then copy.xerr = copy_array(series.xerr) end
+        copy.yerr = copy_array(series.yerr_upper or series.yerr)
+        copy.yerr_lower = copy_array(series.yerr_lower or series.yerr)
+        copy.yerr_upper = copy_array(series.yerr_upper or series.yerr)
+        if series.yerr_asymmetric then copy.yerr_asymmetric = true end
+        if series.xerr then
+          copy.xerr = copy_array(series.xerr_upper or series.xerr)
+          copy.xerr_lower = copy_array(series.xerr_lower or series.xerr)
+          copy.xerr_upper = copy_array(series.xerr_upper or series.xerr)
+          if series.xerr_asymmetric then copy.xerr_asymmetric = true end
+        end
       elseif series.kind == "bar" then
         copy.x = copy_array(series.x)
         copy.y = copy_array(series.y)
@@ -404,8 +441,16 @@ function M.from_figure(figure)
       elseif series.kind == "errorbar" then
         copy.x = copy_array(series.x)
         copy.y = copy_array(series.y)
-        copy.yerr = copy_array(series.yerr)
-        if series.xerr then copy.xerr = copy_array(series.xerr) end
+        copy.yerr = copy_array(series.yerr_upper or series.yerr)
+        copy.yerr_lower = copy_array(series.yerr_lower or series.yerr)
+        copy.yerr_upper = copy_array(series.yerr_upper or series.yerr)
+        if series.yerr_asymmetric then copy.yerr_asymmetric = true end
+        if series.xerr then
+          copy.xerr = copy_array(series.xerr_upper or series.xerr)
+          copy.xerr_lower = copy_array(series.xerr_lower or series.xerr)
+          copy.xerr_upper = copy_array(series.xerr_upper or series.xerr)
+          if series.xerr_asymmetric then copy.xerr_asymmetric = true end
+        end
       end
       scene.twiny.series[#scene.twiny.series + 1] = copy
     end

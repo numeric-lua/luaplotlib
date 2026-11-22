@@ -47,6 +47,7 @@ luajit examples/line.lua
 luajit examples/histogram.lua
 luajit examples/errorbar.lua
 luajit examples/annotations.lua
+luajit examples/axline.lua
 luajit examples/bars.lua
 luajit examples/heatmap.lua
 luajit examples/subplots.lua
@@ -117,6 +118,35 @@ fig:savefig("log.svg")
 Log axes require strictly positive values; zero or negative data raises a
 `luaplotlib:` error when the figure is rendered. The scales can also be set in
 the figure options: `plt.figure({ xscale = "log", yscale = "log" })`.
+
+Minor ticks, decimated markers, rotated y labels, and clipped infinite
+reference lines are available without changing existing plots:
+
+```lua
+fig:plot(x, y, { marker = true, markevery = 5, label = "sampled" })
+fig:minorticks(true)
+fig:grid(true, { minor = true })
+fig:ytick_rotation(30)
+fig:axline(0, 0, 1, 1, { label = "y = x", linestyle = "dashed" })
+```
+
+`markevery` accepts a positive integer stride or a table of 1-based point
+indices; it decimates markers while keeping every line vertex. Minor ticks
+subdivide linear major intervals into five parts and use the 2–9 mantissas on
+log axes, and `fig:grid(true, { minor = true })` adds their fainter grid. An
+`axline` is clipped to the plot rectangle and participates in automatic ranging
+only through its two defining points.
+
+Error bars can use independent lower and upper errors:
+
+```lua
+fig:errorbar({ 1, 2, 3 }, { 10, 12, 11 }, {
+  lower = { 0.5, 0.8, 0.6 },
+  upper = { 1.2, 1.5, 1.0 },
+}, { label = "asymmetric uncertainty" })
+```
+
+Symmetric numbers and flat arrays continue to work exactly as before.
 
 Polar plots use radians for theta and accept negative radii, which are drawn on
 the opposite side of the origin:
@@ -300,9 +330,16 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   export
 - Text annotations with optional leader arrows at Cartesian or polar data
   coordinates
+- Symmetric or asymmetric vertical/horizontal error bars with independent lower
+  and upper extents
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
+  and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
-- Explicit `xlim` / `ylim`, optional grid, titles, axis labels, and legends
+- Explicit `xlim` / `ylim`, optional major/minor grid, titles, axis labels, and
+  legends
+- Clipped infinite `axline` reference lines, `axhline`/`axvline`, and marker
+  decimation through `markevery`
+- X/y tick-label rotation, including twin y axes
 - XML-escaped text, no scripts, no external references, standalone SVG 1.1
 - Plain Lua tables, plus optional duck-typed 1-D tensor/array inputs
   (luatorch/numlua style); neither library is required
@@ -322,11 +359,13 @@ luajit tests/run.lua
 make test
 ```
 
-For an optional visual check of the polar examples, `scripts/visual-qa.sh`
-runs every example, checks polar/colorbar/quiver metadata and that Cartesian
-examples stay Cartesian, and rasterizes the polar SVGs with `rsvg-convert` when
-that tool is installed. Rasterized files stay under the ignored `examples/output/`
-directory.
+For an optional visual check, `scripts/visual-qa.sh` runs every example, checks
+polar/colorbar/quiver metadata, verifies the new Cartesian minor-tick,
+marker-decimation, asymmetric-error, rotated-label, and `axline` metadata, and
+confirms that Cartesian examples stay Cartesian. When `rsvg-convert` is
+installed it also rasterizes the polar SVGs and the affected Cartesian examples
+for manual inspection. Rasterized files stay under the ignored
+`examples/output/` directory.
 
 To run the examples through the Makefile:
 
@@ -336,6 +375,7 @@ make examples
 # examples/output/histogram.svg
 # examples/output/errorbar.svg
 # examples/output/annotations.svg
+# examples/output/axline.svg
 # examples/output/bars-grouped.svg
 # examples/output/bars-stacked.svg
 # examples/output/polar.svg
@@ -353,17 +393,19 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.20.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.21.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 polar line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with configurable
 orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
 collision-aware polar contour labels, polar annotations with canvas
-clamping, measured-text polar legends, annotations, linear/log/date axes, twin
-x/y axes, 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors,
-value labels, legends, reference lines, axis-specific grid lines, 3-D scene
-export, per-point scatter sizes/colors, histogram density, multi-column legends,
-marker shapes, shaded spans, log helpers, optional PNG/PDF export, and scene
-export. See [docs/stability.md](docs/stability.md) for the API policy.
+clamping, measured-text polar legends, annotations, asymmetric error bars,
+linear/log/date axes, twin x/y axes, minor ticks and minor grids, clipped
+`axline` reference lines, marker decimation, x/y tick-label rotation, 3-D
+line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
+legends, reference lines, axis-specific grid lines, 3-D scene export, per-point
+scatter sizes/colors, histogram density, multi-column legends, marker shapes,
+shaded spans, log helpers, optional PNG/PDF export, and scene export. See
+[docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations
 
@@ -386,10 +428,14 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.
-- **Basic layout.** Margins are adaptive, `xtick_rotation` helps crowded
-  categorical axes, custom ticks/formatters are available, and subplot
-  gap/margin are configurable. There is no full text-measurement layout engine
-  yet.
+- **Basic layout.** Margins are adaptive, `xtick_rotation`/`ytick_rotation`
+  help crowded labels, minor ticks subdivide major intervals, custom
+  ticks/formatters are available, and subplot gap/margin are configurable.
+  There is no full text-measurement layout engine yet.
+- **Reference lines are clipped, not data series.** `axline` never expands the
+  axes beyond its two defining points, and logarithmic axes draw it straight in
+  transformed space. Minor ticks use a fixed five-way linear subdivision and
+  skip logarithmic spans wider than 12 decades.
 - **One color per bar series.** Colors are not split per bar, and categorical
   series with different label sets share one categorical x-axis.
 - **Heuristic tensor interop.** luatorch/numlua-style one-dimensional objects
@@ -420,10 +466,12 @@ local scene = figure:to_scene()
 ```
 
 The scene contains series geometry, styles, axes labels, scales, explicit
-limits, category ticks, and annotation geometry/styles. Polar figures export a
-`polar` block with resolved theta/r ticks, series (including error bars and
-vector fields), heatmap cells and value ranges, annotations, and legend entries
-under `orientation = "polar"`. Streamplot lines add `closed`, `seed_theta`,
-`seed_r`, and `arc_length`, while each arrow exports its anchor `index`,
-arc-length `fraction`, direction `angle`, and data position. The export does
-not depend on LÖVR or any graphics toolkit.
+limits, category ticks, and annotation geometry/styles. Cartesian scenes also
+export asymmetric error extents, clipped `axline` anchors, normalized
+`markevery` lists, tick rotations, and minor tick/grid settings. Polar figures
+export a `polar` block with resolved theta/r ticks, series (including error bars
+and vector fields), heatmap cells and value ranges, annotations, and legend
+entries under `orientation = "polar"`. Streamplot lines add `closed`,
+`seed_theta`, `seed_r`, and `arc_length`, while each arrow exports its anchor
+`index`, arc-length `fraction`, direction `angle`, and data position. The export
+does not depend on LÖVR or any graphics toolkit.

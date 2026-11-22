@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Render the examples and inspect the polar output structurally, then
-# rasterize the polar SVGs for manual visual inspection when rsvg-convert is
-# available.  This is a developer QA helper, not part of the dependency-free
+# Render the examples, inspect polar and Cartesian output structurally, then
+# rasterize the SVGs for manual visual inspection when rsvg-convert is
+# available. This is a developer QA helper, not part of the dependency-free
 # test suite.
 set -euo pipefail
 
@@ -336,6 +336,7 @@ for svg in \
   examples/output/histogram.svg \
   examples/output/errorbar.svg \
   examples/output/annotations.svg \
+  examples/output/axline.svg \
   examples/output/bars-grouped.svg \
   examples/output/bars-stacked.svg
 do
@@ -346,12 +347,57 @@ do
   fi
 done
 
+# Marker decimation, minor ticks, and minor grid share the line example.
+LINE=examples/output/line.svg
+grep -q 'data-markevery="true"' "$LINE" ||
+  fail "$LINE should demonstrate markevery"
+grep -q 'data-marker-count="[0-9]*"' "$LINE" ||
+  fail "$LINE is missing marker-count metadata"
+grep -q 'data-minorticks="both"' "$LINE" ||
+  fail "$LINE should enable minor ticks"
+grep -q 'data-minor-grid="true"' "$LINE" ||
+  fail "$LINE should enable the minor grid"
+grep -q 'class="grid-minor"' "$LINE" ||
+  fail "$LINE has no minor grid group"
+grep -q 'class="minor-tick-mark"' "$LINE" ||
+  fail "$LINE has no minor tick marks"
+
+# Asymmetric error bars must expose both modes.
+ERRORBAR=examples/output/errorbar.svg
+grep -q 'data-yerr-mode="asymmetric"' "$ERRORBAR" ||
+  fail "$ERRORBAR should use asymmetric y errors"
+grep -q 'data-xerr-mode="asymmetric"' "$ERRORBAR" ||
+  fail "$ERRORBAR should use asymmetric x errors"
+
+# axline must be clipped, omit polar output, and rotate y tick labels.
+AXLINE=examples/output/axline.svg
+grep -q 'class="series series-axline"' "$AXLINE" ||
+  fail "$AXLINE has no axline series"
+grep -q 'class="reference axline"' "$AXLINE" ||
+  fail "$AXLINE has no clipped reference line"
+grep -q 'data-clipped="true"' "$AXLINE" ||
+  fail "$AXLINE axline should be clipped to the plot"
+grep -q 'transform="rotate(30 ' "$AXLINE" ||
+  fail "$AXLINE should rotate y tick labels"
+if grep -Eqi 'nan|inf' "$AXLINE"; then
+  fail "$AXLINE contains non-finite geometry"
+fi
+
 if ! command -v rsvg-convert >/dev/null 2>&1; then
   echo "rsvg-convert not found; polar SVGs are in examples/output/"
   exit 0
 fi
 
 for svg in "${POLAR_SVGS[@]}"; do
+  png="${svg%.svg}.png"
+  rsvg-convert -z 2 "$svg" -o "$png"
+  [ -s "$png" ] || fail "rasterization produced no output for $svg"
+  echo "wrote $png"
+done
+
+# Rasterize the examples that exercise the 4.21 Cartesian features too, so a
+# reviewer can inspect marker density, minor grids, asymmetric caps, and clips.
+for svg in "$LINE" "$ERRORBAR" "$AXLINE"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

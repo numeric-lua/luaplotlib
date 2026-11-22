@@ -101,6 +101,11 @@ local function data_extents(fig, xscale, yscale)
       include_y(series.y, series_index, 1, "axhline")
     elseif series.kind == "axvline" then
       include_x(series.x, series_index, 1, "axvline")
+    elseif series.kind == "axline" then
+      include_x(series.x1, series_index, 1, "axline")
+      include_x(series.x2, series_index, 2, "axline")
+      include_y(series.y1, series_index, 1, "axline")
+      include_y(series.y2, series_index, 2, "axline")
     elseif series.kind == "line" or series.kind == "scatter" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "series")
@@ -130,12 +135,16 @@ local function data_extents(fig, xscale, yscale)
     elseif series.kind == "errorbar" then
       for i = 1, #series.x do
         local x, y = series.x[i], series.y[i]
-        local xerr = series.xerr and series.xerr[i] or 0
-        local yerr = series.yerr[i]
-        include_x(x - xerr, series_index, i, "errorbar x")
-        include_x(x + xerr, series_index, i, "errorbar x")
-        include_y(y - yerr, series_index, i, "errorbar y")
-        include_y(y + yerr, series_index, i, "errorbar y")
+        local xerr_lower = (series.xerr_lower or series.xerr) and
+          (series.xerr_lower or series.xerr)[i] or 0
+        local xerr_upper = (series.xerr_upper or series.xerr) and
+          (series.xerr_upper or series.xerr)[i] or 0
+        local yerr_lower = (series.yerr_lower or series.yerr)[i]
+        local yerr_upper = (series.yerr_upper or series.yerr)[i]
+        include_x(x - xerr_lower, series_index, i, "errorbar x")
+        include_x(x + xerr_upper, series_index, i, "errorbar x")
+        include_y(y - yerr_lower, series_index, i, "errorbar y")
+        include_y(y + yerr_upper, series_index, i, "errorbar y")
       end
     elseif series.kind == "fill" then
       for i = 1, #series.x do
@@ -555,6 +564,74 @@ local function render_reference(series, map_x, map_y, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+-- Liang-Barsky clipping for the infinite axline. Coordinates are already in
+-- screen space, so the line is clipped to the plot rectangle after projection.
+local function clip_segment(x0, y0, x1, y1, left, top, right, bottom)
+  local dx, dy = x1 - x0, y1 - y0
+  local t0, t1 = 0, 1
+
+  local function edge(p, q)
+    if math.abs(p) < 1e-12 then
+      return q >= 0
+    end
+    local r = q / p
+    if p < 0 then
+      if r > t1 then return false end
+      if r > t0 then t0 = r end
+    else
+      if r < t0 then return false end
+      if r < t1 then t1 = r end
+    end
+    return true
+  end
+
+  if not edge(-dx, x0 - left) then return nil end
+  if not edge(dx, right - x0) then return nil end
+  if not edge(-dy, y0 - top) then return nil end
+  if not edge(dy, bottom - y0) then return nil end
+
+  return x0 + t0 * dx, y0 + t0 * dy, x0 + t1 * dx, y0 + t1 * dy
+end
+
+local function render_axline(series, map_x, map_y, geom, buf)
+  local style = series.style
+  local dash = ""
+  if style.linestyle == "dashed" then dash = ' stroke-dasharray="6 4"'
+  elseif style.linestyle == "dotted" then dash = ' stroke-dasharray="1.5 3"' end
+  local opacity = style.alpha < 1 and
+    string.format(' stroke-opacity="%s"', util.fmt(style.alpha)) or ""
+  local label = style.label and
+    string.format(' data-label="%s"', attribute(style.label)) or ""
+
+  local ax, ay = map_x(series.x1), map_y(series.y1)
+  local bx, by = map_x(series.x2), map_y(series.y2)
+  local dx, dy = bx - ax, by - ay
+  local length = math.sqrt(dx * dx + dy * dy)
+  if length < 1e-9 then return end
+  -- axline is infinite: extend the defining segment well past the plot
+  -- rectangle before clipping, then keep only the visible intersection.
+  local extension = (geom.plot_width + geom.plot_height) / length
+  local sx, sy = ax - dx * extension, ay - dy * extension
+  local ex, ey = bx + dx * extension, by + dy * extension
+  local x0, y0, x1, y1 = clip_segment(sx, sy, ex, ey, geom.left, geom.top,
+    geom.right, geom.bottom)
+  if x0 == nil then return end
+
+  local clipped = math.abs(x0 - ax) > 1e-6 or math.abs(y0 - ay) > 1e-6 or
+    math.abs(x1 - bx) > 1e-6 or math.abs(y1 - by) > 1e-6
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-axline" data-x1="%s" data-y1="%s" data-x2="%s" data-y2="%s" data-clipped="%s"%s>',
+    util.fmt(series.x1), util.fmt(series.y1), util.fmt(series.x2),
+    util.fmt(series.y2), clipped and "true" or "false", label)
+  if style.linestyle ~= "none" then
+    buf[#buf + 1] = string.format(
+      '   <line class="reference axline" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
+      util.fmt(x0), util.fmt(y0), util.fmt(x1), util.fmt(y1), style.color,
+      util.fmt(style.linewidth), dash, opacity)
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_line(series, map_x, map_y, buf)
   local style = series.style
   local color = style.color
@@ -567,9 +644,27 @@ local function render_line(series, map_x, map_y, buf)
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
   end
-  buf[#buf + 1] = string.format('  <g class="series series-line"%s>', label)
 
   local draw_line = style.linestyle ~= "none"
+  local draw_marker = style.marker ~= nil or (#series.x == 1 and draw_line)
+  local marker_indices = {}
+  if draw_marker then
+    if style.markevery then
+      for _, index in ipairs(style.markevery) do
+        marker_indices[#marker_indices + 1] = index
+      end
+    else
+      for index = 1, #series.x do marker_indices[#marker_indices + 1] = index end
+    end
+  end
+  local metadata = label
+  if draw_marker then
+    metadata = metadata .. string.format(' data-marker-count="%d"',
+      #marker_indices)
+    if style.markevery then metadata = metadata .. ' data-markevery="true"' end
+  end
+  buf[#buf + 1] = string.format('  <g class="series series-line"%s>', metadata)
+
   if draw_line then
     local points = {}
     for i = 1, #series.x do
@@ -586,13 +681,12 @@ local function render_line(series, map_x, map_y, buf)
       table.concat(points, " "), color, util.fmt(style.linewidth), dash, opacity)
   end
 
-  local draw_marker = style.marker ~= nil or (#series.x == 1 and draw_line)
   if draw_marker then
     local marker_opacity = ""
     if style.alpha < 1 then
       marker_opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
     end
-    for i = 1, #series.x do
+    for _, i in ipairs(marker_indices) do
       buf[#buf + 1] = markers.svg(style.marker, "marker",
         map_x(series.x[i]), map_y(series.y[i]), style.markersize, color,
         marker_opacity, "")
@@ -637,12 +731,22 @@ local function render_errorbar(series, map_x, map_y, buf)
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
   end
-  buf[#buf + 1] = string.format('  <g class="series series-errorbar"%s>', label)
+  local metadata = ""
+  if series.yerr_asymmetric then metadata = metadata .. ' data-yerr-mode="asymmetric"' end
+  if series.xerr_asymmetric then metadata = metadata .. ' data-xerr-mode="asymmetric"' end
+  buf[#buf + 1] = string.format('  <g class="series series-errorbar"%s%s>',
+    label, metadata)
   for i = 1, #series.x do
     local x = map_x(series.x[i])
     local y = series.y[i]
-    local top = map_y(y + series.yerr[i])
-    local bottom = map_y(y - series.yerr[i])
+    local yerr_lower = (series.yerr_lower or series.yerr)[i]
+    local yerr_upper = (series.yerr_upper or series.yerr)[i]
+    local xerr_lower = (series.xerr_lower or series.xerr) and
+      (series.xerr_lower or series.xerr)[i] or 0
+    local xerr_upper = (series.xerr_upper or series.xerr) and
+      (series.xerr_upper or series.xerr)[i] or 0
+    local top = map_y(y + yerr_upper)
+    local bottom = map_y(y - yerr_lower)
     buf[#buf + 1] = string.format(
       '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
       util.fmt(x), util.fmt(top), util.fmt(x), util.fmt(bottom), color,
@@ -656,8 +760,8 @@ local function render_errorbar(series, map_x, map_y, buf)
       util.fmt(x - cap), util.fmt(bottom), util.fmt(x + cap), util.fmt(bottom),
       color, util.fmt(width))
     if series.xerr then
-      local left = map_x(series.x[i] - series.xerr[i])
-      local right = map_x(series.x[i] + series.xerr[i])
+      local left = map_x(series.x[i] - xerr_lower)
+      local right = map_x(series.x[i] + xerr_upper)
       local center = map_y(y)
       buf[#buf + 1] = string.format(
         '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
@@ -1276,6 +1380,27 @@ function M.to_svg(fig)
     end
   end
 
+  local minorticks = fig._minorticks or { enabled = false, axis = "both" }
+  local minor_axis = minorticks.axis or "both"
+  local grid_minor = fig._grid and fig._grid_opts and
+    fig._grid_opts.minor == true
+  local x_minor, y_minor = {}, {}
+  if minorticks.enabled or grid_minor then
+    if not categories then
+      local major_x = {}
+      for _, tick in ipairs(x_display) do
+        major_x[#major_x + 1] = tick.value
+      end
+      x_minor = ticks.generate_minor(xmin, xmax, major_x, xscale)
+    end
+    local major_y = {}
+    for _, tick in ipairs(y_display) do
+      major_y[#major_y + 1] = tick.value
+    end
+    y_minor = ticks.generate_minor(yaxis.data_minimum, yaxis.data_maximum,
+      major_y, yscale)
+  end
+
   local twin_y_display = {}
   if twin_yaxis ~= nil then
     for _, value in ipairs(twin_yaxis.ticks) do
@@ -1336,11 +1461,13 @@ function M.to_svg(fig)
   local clip_id = "luaplotlib-plot-clip-" .. tostring(fig):gsub("%W", "")
 
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s">',
+  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s" data-minorticks="%s" data-minor-grid="%s">',
     util.fmt(fig.width), util.fmt(fig.height),
     util.fmt(fig.width), util.fmt(fig.height),
     util.escape_xml(fig._aria_label or fig._title or "luaplotlib figure"),
-    util.fmt(fig.dpi), util.escape_xml(xscale), util.escape_xml(yscale))
+    util.fmt(fig.dpi), util.escape_xml(xscale), util.escape_xml(yscale),
+    minorticks.enabled and minor_axis or "none",
+    grid_minor and "true" or "false")
   add(' <title>' .. util.escape_xml(fig._title or "luaplotlib figure") .. '</title>')
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   printf(' <rect class="background" x="0" y="0" width="%s" height="%s" fill="%s"/>',
@@ -1377,6 +1504,29 @@ function M.to_svg(fig)
       end
     end
     add('  </g>')
+    if grid_opts.minor then
+      add('  <g class="grid-minor" stroke="' ..
+        (grid_opts.color or GRID_COLOR) .. '" stroke-width="' ..
+        util.fmt((grid_opts.linewidth or 1) * 0.65) ..
+        '" stroke-opacity="0.6"' .. dash .. '>')
+      if grid_axis ~= "y" then
+        for _, value in ipairs(x_minor) do
+          local x = map_x(value)
+          printf('   <line class="minor-grid-line" x1="%s" y1="%s" x2="%s" y2="%s"/>',
+            util.fmt(x), util.fmt(geom.top), util.fmt(x),
+            util.fmt(geom.bottom))
+        end
+      end
+      if grid_axis ~= "x" then
+        for _, value in ipairs(y_minor) do
+          local y = map_y(value)
+          printf('   <line class="minor-grid-line" x1="%s" y1="%s" x2="%s" y2="%s"/>',
+            util.fmt(geom.left), util.fmt(y), util.fmt(geom.right),
+            util.fmt(y))
+        end
+      end
+      add('  </g>')
+    end
   end
 
   add('  <g class="series-layer" clip-path="url(#' .. clip_id .. ')">')
@@ -1385,6 +1535,8 @@ function M.to_svg(fig)
       render_image(series, map_x, map_y, buf)
     elseif series.kind == "axhspan" or series.kind == "axvspan" then
       render_span(series, map_x, map_y, geom, buf)
+    elseif series.kind == "axline" then
+      render_axline(series, map_x, map_y, geom, buf)
     elseif series.kind == "axhline" or series.kind == "axvline" then
       render_reference(series, map_x, map_y, geom, buf)
     elseif series.kind == "line" then
@@ -1484,8 +1636,14 @@ function M.to_svg(fig)
       printf('   <line class="tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
         util.fmt(geom.right), util.fmt(y), util.fmt(geom.right + 5),
         util.fmt(y), AXIS_COLOR)
-      printf('   <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="start">%s</text>',
-        util.fmt(geom.right + 9), util.fmt(y + 4), TEXT_COLOR,
+      local rotation = fig._ytick_rotation or 0
+      local transform = ""
+      if rotation ~= 0 then
+        transform = string.format(' transform="rotate(%d %s %s)"', rotation,
+          util.fmt(geom.right + 9), util.fmt(y + 4))
+      end
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="start"%s>%s</text>',
+        util.fmt(geom.right + 9), util.fmt(y + 4), TEXT_COLOR, transform,
         util.escape_xml(tick.label))
     end
     if twin._ylabel ~= nil then
@@ -1543,6 +1701,14 @@ function M.to_svg(fig)
       util.fmt(x), util.fmt(geom.bottom + 19), TEXT_COLOR, anchor, transform,
       util.escape_xml(tick.label))
   end
+  if minorticks.enabled and minor_axis ~= "y" then
+    for _, value in ipairs(x_minor) do
+      local x = map_x(value)
+      printf('    <line class="minor-tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+        util.fmt(x), util.fmt(geom.bottom), util.fmt(x),
+        util.fmt(geom.bottom + 3), AXIS_COLOR)
+    end
+  end
   add('   </g>')
 
   add('   <g class="ticks y-ticks">')
@@ -1550,9 +1716,23 @@ function M.to_svg(fig)
     local y = map_y(tick.value)
     printf('    <line class="tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
       util.fmt(geom.left - 5), util.fmt(y), util.fmt(geom.left), util.fmt(y), AXIS_COLOR)
-    printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="end">%s</text>',
-      util.fmt(geom.left - 9), util.fmt(y + 4), TEXT_COLOR,
+    local rotation = fig._ytick_rotation or 0
+    local transform = ""
+    if rotation ~= 0 then
+      transform = string.format(' transform="rotate(%d %s %s)"', rotation,
+        util.fmt(geom.left - 9), util.fmt(y + 4))
+    end
+    printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="end"%s>%s</text>',
+      util.fmt(geom.left - 9), util.fmt(y + 4), TEXT_COLOR, transform,
       util.escape_xml(tick.label))
+  end
+  if minorticks.enabled and minor_axis ~= "x" then
+    for _, value in ipairs(y_minor) do
+      local y = map_y(value)
+      printf('    <line class="minor-tick-mark" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+        util.fmt(geom.left - 3), util.fmt(y), util.fmt(geom.left),
+        util.fmt(y), AXIS_COLOR)
+    end
   end
   add('   </g>')
 

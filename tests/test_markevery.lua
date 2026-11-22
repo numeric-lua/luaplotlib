@@ -1,0 +1,83 @@
+local plt = require("luaplotlib")
+
+local function marker_count(svg)
+  return select(2, svg:gsub('class="marker"', ""))
+end
+
+local function line_point_count(svg)
+  local points = svg:match('class="line" points="([^"]*)"')
+  assert_true(points ~= nil, "line polyline is missing")
+  return select(2, points:gsub("%S+", ""))
+end
+
+test("markevery integer decimates markers but keeps every line point", function()
+  local fig = plt.figure()
+  fig:plot({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
+    { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 },
+    { marker = true, markevery = 3 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-marker-count="4"')
+  assert_contains(svg, 'data-markevery="true"')
+  assert_equal(marker_count(svg), 4, "markers should be drawn every third point")
+  assert_equal(line_point_count(svg), 10, "the line should keep all ten points")
+end)
+
+test("markevery index tables are sorted and de-duplicated", function()
+  local fig = plt.figure()
+  fig:plot({ 1, 2, 3, 4, 5 }, { 1, 4, 9, 16, 25 },
+    { marker = "square", markevery = { 5, 1, 5 } })
+  local svg = fig:to_svg()
+  assert_equal(marker_count(svg), 2, "duplicate marker indices should collapse")
+  assert_contains(svg, 'data-marker-count="2"')
+  local scene = fig:to_scene()
+  assert_equal(scene.series[1].style.markevery[1], 1, "first scene markevery index")
+  assert_equal(scene.series[1].style.markevery[2], 5, "second scene markevery index")
+end)
+
+test("markevery alone does not create markers", function()
+  local fig = plt.figure()
+  fig:plot({ 1, 2, 3 }, { 1, 2, 3 }, { markevery = 2 })
+  local svg = fig:to_svg()
+  assert_equal(marker_count(svg), 0, "markevery should not enable markers")
+  assert_not_contains(svg, "data-marker-count", "marker metadata without markers")
+  assert_not_contains(svg, 'data-markevery="true"')
+end)
+
+test("markevery works with dashed lines and single-point plots", function()
+  local fig = plt.figure()
+  fig:plot({ 1, 2, 3, 4 }, { 1, 2, 3, 4 },
+    { marker = true, linestyle = "dashed", markevery = 2 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'stroke-dasharray="6 4"')
+  assert_equal(marker_count(svg), 2)
+
+  local single = plt.figure()
+  single:plot({ 1 }, { 1 }, { markevery = 3 })
+  assert_equal(marker_count(single:to_svg()), 1,
+    "a single-point line still draws its fallback marker")
+end)
+
+test("markevery validation rejects malformed specifications", function()
+  local fig = plt.figure()
+  assert_error("markevery", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = 0 })
+  end)
+  assert_error("markevery", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = -2 })
+  end)
+  assert_error("integer", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = 1.5 })
+  end)
+  assert_error("must not be empty", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = {} })
+  end)
+  assert_error("markevery%[1%]", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = { 0 } })
+  end)
+  assert_error("markevery%[1%]", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = { 3 } })
+  end)
+  assert_error("positive integer or an index table", function()
+    fig:plot({ 1, 2 }, { 1, 2 }, { markevery = "2" })
+  end)
+end)

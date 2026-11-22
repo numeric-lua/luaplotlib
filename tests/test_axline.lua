@@ -1,0 +1,111 @@
+local plt = require("luaplotlib")
+
+local LEFT, TOP, RIGHT, BOTTOM = 72, 40, 576, 336
+
+local function axline_geometry(svg)
+  local line = svg:match('<line class="reference axline"[^>]*/>')
+  assert_true(line ~= nil, "axline line element is missing")
+  local x1 = tonumber(line:match('x1="([^"]+)"'))
+  local y1 = tonumber(line:match('y1="([^"]+)"'))
+  local x2 = tonumber(line:match('x2="([^"]+)"'))
+  local y2 = tonumber(line:match('y2="([^"]+)"'))
+  assert_true(x1 and y1 and x2 and y2, "axline coordinates are malformed")
+  return x1, y1, x2, y2, line
+end
+
+local function assert_inside_plot(x1, y1, x2, y2)
+  for _, point in ipairs({ { x1, y1 }, { x2, y2 } }) do
+    assert_true(point[1] >= LEFT - 0.001 and point[1] <= RIGHT + 0.001,
+      "axline x lies outside the plot area")
+    assert_true(point[2] >= TOP - 0.001 and point[2] <= BOTTOM + 0.001,
+      "axline y lies outside the plot area")
+  end
+end
+
+test("axline draws a clipped diagonal with anchor metadata", function()
+  local fig = plt.figure({ width = 600, height = 400 })
+  fig:axline(0, 0, 1, 1, { label = "y = x", color = "#d62728" })
+  fig:xlim(-1, 1)
+  fig:ylim(-1, 1)
+  fig:legend()
+  local svg = fig:to_svg()
+  assert_well_formed_svg(svg)
+  assert_contains(svg, 'class="series series-axline"')
+  assert_contains(svg, 'data-x1="0" data-y1="0" data-x2="1" data-y2="1"')
+  assert_contains(svg, 'data-clipped="true"')
+  assert_contains(svg, 'data-label="y = x"')
+  assert_contains(svg, 'stroke="#d62728"')
+  assert_contains(svg, ">y = x</text>")
+  local x1, y1, x2, y2 = axline_geometry(svg)
+  assert_inside_plot(x1, y1, x2, y2)
+  assert_true(math.abs((x1 + x2) / 2 - (LEFT + RIGHT) / 2) < 0.01 and
+      math.abs((y1 + y2) / 2 - (TOP + BOTTOM) / 2) < 0.01,
+    "the y = x axline should pass through the plot center")
+end)
+
+test("axline supports vertical and horizontal clipped lines", function()
+  local vertical = plt.figure({ width = 600, height = 400 })
+  vertical:axline(0, -1, 0, 1)
+  vertical:xlim(-1, 1)
+  vertical:ylim(-1, 1)
+  local x1, y1, x2, y2 = axline_geometry(vertical:to_svg())
+  assert_true(math.abs(x1 - x2) < 0.001, "vertical axline should keep one x")
+  assert_true(y1 > y2, "vertical axline should span the plot height")
+  assert_inside_plot(x1, y1, x2, y2)
+
+  local horizontal = plt.figure({ width = 600, height = 400 })
+  horizontal:axline(-1, 0, 1, 0)
+  horizontal:xlim(-1, 1)
+  horizontal:ylim(-1, 1)
+  x1, y1, x2, y2 = axline_geometry(horizontal:to_svg())
+  assert_true(math.abs(y1 - y2) < 0.001, "horizontal axline should keep one y")
+  assert_true(x1 < x2, "horizontal axline should span the plot width")
+  assert_inside_plot(x1, y1, x2, y2)
+end)
+
+test("an axline alone establishes finite automatic limits", function()
+  local fig = plt.figure()
+  fig:axline(1, 2, 3, 4)
+  local svg = fig:to_svg()
+  assert_well_formed_svg(svg)
+  assert_contains(svg, 'class="series series-axline"')
+  local scene = fig:to_scene()
+  assert_equal(scene.series[1].kind, "axline", "scene series kind")
+  assert_equal(scene.series[1].x1, 1, "scene x1")
+  assert_equal(scene.series[1].y2, 4, "scene y2")
+  assert_true(scene.xlim[1] < 1 and scene.xlim[2] > 3,
+    "scene xlim should include both anchors")
+  assert_true(scene.ylim[1] < 2 and scene.ylim[2] > 4,
+    "scene ylim should include both anchors")
+end)
+
+test("axline linestyle none hides the visible segment", function()
+  local fig = plt.figure()
+  fig:axline(0, 0, 1, 1, { linestyle = "none", label = "hidden" })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'class="series series-axline"')
+  assert_contains(svg, 'data-label="hidden"')
+  assert_not_contains(svg, 'class="reference axline"')
+end)
+
+test("axline validates its anchors and options", function()
+  local fig = plt.figure()
+  assert_error("requires x1, y1, x2, and y2", function()
+    fig:axline(0, 0, 1)
+  end)
+  assert_error("must be a number", function()
+    fig:axline(0, 0, "1", 1)
+  end)
+  assert_error("must be finite", function()
+    fig:axline(0, 0, 0 / 0, 1)
+  end)
+  assert_error("two distinct points", function()
+    fig:axline(1, 2, 1, 2)
+  end)
+  assert_error("unsupported axline option", function()
+    fig:axline(0, 0, 1, 1, { width = 1 })
+  end)
+  assert_error("must be one of", function()
+    fig:axline(0, 0, 1, 1, { linestyle = "zigzag" })
+  end)
+end)

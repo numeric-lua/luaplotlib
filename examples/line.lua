@@ -45,6 +45,9 @@ fig:plot(x, sin_x, {
   label = "sin(x)",
   color = "#1f77b4",
   linewidth = 2.5,
+  marker = "circle",
+  markersize = 4,
+  markevery = 8,
 })
 fig:plot(x, cos_x, {
   label = "cos(x)",
@@ -57,7 +60,8 @@ fig:xlabel("x (radians)")
 fig:ylabel("value")
 fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
-fig:grid(true)
+fig:minorticks(true)
+fig:grid(true, { minor = true })
 fig:legend()
 
 local path = outdir .. "/line.svg"

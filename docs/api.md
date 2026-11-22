@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.20.0`. This document describes the public Lua API implemented
+Version: `4.21.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.20.0"`
+- `plt._VERSION` — currently `"4.21.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -78,10 +78,16 @@ Draw a connected line series.
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
 | `marker` | `"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"cross"`, `"x"`, aliases, `true`, or `false` | `false` |
 | `markersize` | number > 0 | `4` |
+| `markevery` | positive integer stride or table of 1-based point indices | draw every marker |
 | `alpha` | number in [0, 1] | `1` |
 
-A single-point line still renders its point. Unknown options, invalid colors,
-and malformed data raise errors.
+`markevery` decimates markers without dropping line vertices. An integer draws
+the first point and then every Nth point; a table lists the 1-based point
+indices to mark. Index tables are sorted and duplicate entries are ignored.
+The line group exposes `data-marker-count` and, when decimation is requested,
+`data-markevery="true"`. A single-point line still renders its point.
+
+Unknown options, invalid colors, and malformed data raise errors.
 
 ### `fig:pie(values[, opts])` / `fig:donut(values[, opts])`
 
@@ -424,8 +430,9 @@ y axis; `bar_colors` and `show_values` behave like `bar`.
 
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
-Draw a connected line and markers with symmetric vertical error bars, plus
-optional horizontal error bars.
+Draw a connected line and markers with vertical error bars, plus optional
+horizontal error bars. Errors may be symmetric or independent on the lower and
+upper sides.
 
 | Option | Type | Default |
 | --- | --- | --- |
@@ -440,10 +447,28 @@ optional horizontal error bars.
 | `elinewidth` | number ≥ 0 | `1` |
 | `ecolor` | color string | same as `color` |
 
-`yerr` is required; `xerr` is optional. Either can be a single non-negative
-number applied to every point, or an array with one non-negative value per
-point. The four-argument form is accepted when the fourth argument is an
-options table with string keys.
+`yerr` is required; `xerr` is optional. Each accepts one of three forms:
+
+- a single non-negative number applied to every point;
+- a flat array with one non-negative value per point (symmetric);
+- an asymmetric table, either `{ lower = ..., upper = ... }` or
+  `{ lower_sequence, upper_sequence }`, where each side is a scalar or an array
+  of one non-negative value per point.
+
+```lua
+fig:errorbar({ 1, 2, 3 }, { 10, 12, 11 }, {
+  lower = { 0.5, 0.8, 0.6 },
+  upper = { 1.2, 1.5, 1.0 },
+})
+```
+
+Asymmetric groups add `data-yerr-mode="asymmetric"` and/or
+`data-xerr-mode="asymmetric"`. The scene export exposes `yerr_lower`/
+`yerr_upper` and `xerr_lower`/`xerr_upper`; the legacy `yerr`/`xerr` arrays
+track the upper side for compatibility, and `yerr_asymmetric`/
+`xerr_asymmetric` are set when the input was asymmetric. The four-argument form
+`errorbar(x, y, yerr, opts)` is accepted when the fourth argument is an options
+table; an asymmetric `xerr` table in that position is treated as error data.
 
 ### `fig:scatter(x, y, opts)`
 
@@ -614,14 +639,29 @@ Draw a horizontal or vertical reference line in data coordinates. Options:
 `alpha`, and `label`. A horizontal line extends the y range; a vertical line
 extends the x range.
 
+### `fig:axline(x1, y1, x2, y2[, opts])`
+
+Draw the infinite line through two distinct data points, clipped to the plot
+rectangle. Options are the same as `axhline`: `color`, `linewidth`,
+`linestyle`, `alpha`, and `label`. On logarithmic axes the line is straight in
+the transformed (screen) space. The two defining points participate in
+automatic ranging, but the clipped extensions do not.
+
+The series group exposes `data-x1`, `data-y1`, `data-x2`, `data-y2`, and
+`data-clipped` (whether the visible segment extends beyond the defining
+points). `to_scene()` exports the same anchors with `kind = "axline"`.
+
 ### `fig:to_html([title])` / `fig:save_html(path[, title])`
 
 Embed the SVG in a standalone HTML document.
 
-### `fig:xtick_rotation(angle)`
+### `fig:xtick_rotation(angle)` / `fig:ytick_rotation(angle)`
 
-Rotates x tick labels by an integer in `[-90, 90]`. Useful for long categorical
-labels.
+Rotate x or y tick labels by an integer in `[-90, 90]`. Useful for long
+categorical labels and for wide y labels. Rotated labels keep the existing
+right/left alignment and pivot around their text anchor. Both settings are
+exported as `xtick_rotation` / `ytick_rotation` in the scene. On figures with a
+twin y axis, `ytick_rotation` applies to both right-hand label columns.
 
 ### Labels and titles
 
@@ -729,10 +769,30 @@ fig:grid(true)
 fig:grid(false)
 fig:grid()       -- same as true
 fig:grid(true, { axis = "x" })
+fig:grid(true, { axis = "both", minor = true })
 ```
 
 Grid is off by default. Grid lines align with the rendered x and y ticks and are
-drawn behind series.
+drawn behind series. `axis` selects `"x"`, `"y"`, or `"both"`; `minor = true`
+adds a fainter minor grid at the minor tick intervals. Minor grid lines use the
+`grid-minor` group and `minor-grid-line` class, and the SVG root reports
+`data-minor-grid="true"`.
+
+### `fig:minorticks([enabled[, opts]])`
+
+```lua
+fig:minorticks(true)
+fig:minorticks(false)
+fig:minorticks(true, { axis = "y" })
+```
+
+Minor tick marks are off by default. On linear axes each major interval is
+divided into five parts; on logarithmic axes the 2–9 mantissas of each decade
+are used. Values that coincide with a major tick are omitted. `opts.axis` can
+be `"x"`, `"y"`, or `"both"` and is independent from the minor grid setting.
+Minor marks use the `minor-tick-mark` class, and the SVG root and scene expose
+the active axis (`data-minorticks` / `minor_tick_axis`). Minor marks are
+skipped for categorical x axes.
 
 ### Legend
 
@@ -793,10 +853,12 @@ The subplot figure supports `title`, `savefig`, `to_svg`, `axes_at`, and
   `100`, …). Narrow ranges fall back to 1/2/2.5/5 mantissas, and very large
   spans are thinned so labels do not collide.
 - The number of ticks adapts to the axes size (roughly 3–8 per axis).
+- Minor ticks subdivide each linear major interval into five parts, or use the
+  2–9 mantissas per decade on log axes, and never duplicate a major value.
 - Tick labels use compact decimal/scientific formatting.
 - Categorical bar positions replace numeric x tick labels.
-- Linear and base-10 logarithmic x/y axes are supported. There are no date,
-  twin, or polar axes yet.
+- Linear and base-10 logarithmic x/y axes, date-formatted x labels, twin axes,
+  and polar axes are supported.
 
 ## Color cycle
 
@@ -813,14 +875,14 @@ match these forms raise errors.
 `to_svg()` produces a standalone SVG 1.1 document:
 
 - XML declaration and `xmlns="http://www.w3.org/2000/svg"`
-- Root `width`, `height`, and `viewBox`, plus `data-dpi`, `data-xscale`, and
-  `data-yscale` metadata
+- Root `width`, `height`, and `viewBox`, plus `data-dpi`, `data-xscale`,
+  `data-yscale`, `data-minorticks`, and `data-minor-grid` metadata
 - White background rectangle
 - A clip path limiting series and annotations to the axes rectangle
-- Groups with classes such as `figure`, `grid`, `series-layer`, `series-line`,
-  `series-scatter`, `series-hist`, `series-bar`, `annotation-layer`,
-  `annotation`, `annotation-text`, `annotation-arrow`, `axes`, `ticks`,
-  `xlabel`, `ylabel`, `title`, and `legend`
+- Groups with classes such as `figure`, `grid`, `grid-minor`, `series-layer`,
+  `series-line`, `series-scatter`, `series-hist`, `series-bar`, `series-axline`,
+  `annotation-layer`, `annotation`, `annotation-text`, `annotation-arrow`,
+  `axes`, `ticks`, `minor-tick-mark`, `xlabel`, `ylabel`, `title`, and `legend`
 - No scripts, embedded images, or external references/hrefs
 - User text XML-escaped; invalid control characters replaced with U+FFFD
 - No external fonts; text uses a generic Helvetica/Arial/sans-serif stack
@@ -923,12 +985,18 @@ Returns a renderer-agnostic scene table:
   width = 640, height = 480, dpi = 100,
   title = "...", xlabel = "...", ylabel = "...",
   xscale = "linear", yscale = "linear",
+  xtick_rotation = 0, ytick_rotation = 0,
+  minorticks = false, minor_tick_axis = "both", minor_grid = false,
   xlim = { min, max }, ylim = { min, max },
   grid = false, legend = false,
   category_ticks = nil,
   series = {
     { kind = "line", x = {...}, y = {...}, style = {...} },
     { kind = "scatter", x = {...}, y = {...}, style = {...} },
+    { kind = "errorbar", x = {...}, y = {...},
+      yerr = {...}, yerr_lower = {...}, yerr_upper = {...},
+      xerr = {...}, xerr_lower = {...}, xerr_upper = {...} },
+    { kind = "axline", x1 = 0, y1 = 0, x2 = 1, y2 = 1, style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8 },
     -- Grouped bars keep category centers in x and add a per-series offset:
     { kind = "bar", x = {...}, y = {...}, width = 0.4, mode = "grouped",
@@ -957,7 +1025,13 @@ and style so another backend can apply its own coordinate transform; they do not
 affect the exported limits. Bar series always keep category centers in `x`.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
 series expose the per-bar `bottom`, `top`, and `stack` arrays so a backend does
-not have to infer the layout from the rendered SVG.
+not have to infer the layout from the rendered SVG. Error-bar scenes always
+carry `yerr_lower`/`yerr_upper` and, when horizontal errors are present,
+`xerr_lower`/`xerr_upper`; `yerr`/`xerr` mirror the upper side for older
+backends. `axline` scenes carry the four defining anchors and do not include
+the clipped extensions. Line styles carry the normalized `markevery` index
+list when marker decimation is active. Minor tick and minor grid settings are
+reported at the scene root.
 
 ### Polar scenes
 
