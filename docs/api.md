@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.15.0`. This document describes the public Lua API implemented
+Version: `4.16.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.15.0"`
+- `plt._VERSION` — currently `"4.16.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -166,6 +166,7 @@ the grid. Cells use the same viridis-like palette as Cartesian heatmaps.
 | `colorbar` | boolean | `false` |
 | `colorbar_label` | string | no colorbar title |
 | `colorbar_ticks` | integer in [2, 9] | `3` |
+| `colorbar_tick_values` | strictly increasing number array, 2–12 entries within `vmin`/`vmax` | evenly spaced `colorbar_ticks` values |
 
 The optional `rmax` fixes the heatmap's own outer radius. If it is omitted, a
 configured `polar_config.rmax` is used; without either, each matrix row is one
@@ -177,12 +178,17 @@ and in scene export under `polar.heatmaps`. Explicit `rmax` values that do not
 cover a heatmap or data extent raise an error when rendered.
 
 `colorbar = true` reserves a canvas column to the right of the polar circle and
-draws a vertical `polar-colorbar` group with a stepped palette, a frame, evenly
-spaced tick marks from `vmin` to `vmax`, and an optional rotated
-`colorbar_label`. Tick labels use three significant digits. The polar circle is
-reduced to make room, and the legend planner treats the colorbar column as
+draws a vertical `polar-colorbar` group with a stepped palette, a frame, tick
+marks, and an optional rotated `colorbar_label`. Ticks are evenly spaced from
+`vmin` to `vmax` by default, or placed at explicit `colorbar_tick_values` (for
+example `{ -1, -0.5, 0, 0.5, 1 }`) when supplied; `colorbar_ticks` and
+`colorbar_tick_values` cannot be combined. Tick labels use three significant
+digits, and the SVG exposes `data-value`/`data-fraction` on each tick and label
+plus `data-tick-source = "uniform" | "explicit"` on the group. The polar circle
+is reduced to make room, and the legend planner treats the colorbar column as
 occupied. At most one heatmap per polar figure can request a colorbar;
-`fig:to_scene()` exports it as `polar.colorbar`.
+`fig:to_scene()` exports it as `polar.colorbar` with exact tick values, labels,
+and fractions.
 
 ### `fig:polar_contour(values, opts)`
 
@@ -208,13 +214,19 @@ line/scatter/bar/error-bar series.
 | `theta_min` / `theta_max` | finite numbers, span ≤ `2*pi` | `0` / `2*pi` |
 | `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
 
-`labels = true` draws one white-haloed level label per contour, choosing the
-segment farthest from the origin and pulling the text inside the circular clip.
-Contours extend the automatic radial limit exactly like heatmaps; an explicit
-`polar_config.rmax` must cover them. Labelled contours participate in
-`fig:legend()` and scene export under `polar.contours`. Levels that exactly
-equal a matrix sample are ambiguous in marching squares and can drop that
-degenerate branch; use a level between sample values.
+`labels = true` draws white-haloed level labels along the contour lines. Each
+label is rotated to the local tangent (kept upright), pulled inside the circular
+clip, and placed on the farthest segment that does not collide with earlier
+labels, radial tick labels, or annotations. If every candidate would overlap,
+that level is skipped rather than drawn unreadably. The SVG exposes
+`data-level` and `data-angle` on each label. Contours extend the automatic
+radial limit exactly like heatmaps; an explicit `polar_config.rmax` must cover
+them. Labelled contours participate in `fig:legend()` (the legend planner also
+avoids their labels) and scene export under `polar.contours`; each scene level
+carries a `label` table with the preferred `text`, `theta`, `r`, `u`, `v`, and
+upright `angle` when labels are enabled. Levels that exactly equal a matrix
+sample are ambiguous in marching squares and can drop that degenerate branch;
+use a level between sample values.
 
 ### `fig:polar_errorbar(theta, r, rerr, opts)`
 
@@ -869,13 +881,17 @@ schema, the Cartesian `series` array is empty, and geometry lives under
       orientation = "vertical",
       vmin = 11, vmax = 48,
       ticks = { 11, 23.5, 36, 48 },
+      tick_labels = { "11", "23.5", "36", "48" },
+      tick_fractions = { 0, 0.338, 0.676, 1 },
+      tick_source = "uniform",          -- or "explicit"
       label = "value",
     },
     heatmaps = {
       { kind = "heatmap", rows = 4, cols = 8, values = {...},
         vmin = 11, vmax = 48, rmin = 0, rmax = 4,
         theta_min = 0, theta_max = 6.283, alpha = 1,
-        label = "field", colorbar = true },
+        label = "field", colorbar = true,
+        colorbar_ticks = 3, colorbar_tick_values = nil },
     },
     contours = {
       { kind = "contour", rows = 4, cols = 8,
@@ -884,7 +900,8 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         style = { color = "#111111", linewidth = 1.5,
           linestyle = "solid", alpha = 1 },
         levels = {
-          { level = 18.2, segments = { { theta0, r0, theta1, r1 }, ... } },
+          { level = 18.2, segments = { { theta0, r0, theta1, r1 }, ... },
+            label = nil },
           -- ...
         } },
     },
@@ -914,18 +931,24 @@ top-level `legend` remains a boolean for compatibility with earlier scenes.
 `polar.heatmaps` is present when the figure contains projected heatmaps. Each
 entry carries `kind = "heatmap"`, `rows`, `cols`, `values` (a row-major copy),
 `vmin`, `vmax`, `rmin`, the effective `rmax`, `theta_min`, `theta_max`,
-`alpha`, the optional `label`, and `colorbar = true` when that heatmap owns the
-figure colorbar. Values are copied, so later mutation of the caller's matrix
-does not change an exported scene.
+`alpha`, the optional `label`, `colorbar = true` when that heatmap owns the
+figure colorbar, and the resolved `colorbar_ticks`/`colorbar_tick_values`
+inputs. Values are copied, so later mutation of the caller's matrix does not
+change an exported scene.
 `polar.colorbar` is present when a heatmap requested one; it carries
 `orientation = "vertical"`, `vmin`, `vmax`, the exact `ticks` values (ascending),
-and the optional `label`. `polar.contours` is present when the figure contains
-contours. Each entry carries `kind = "contour"`, `rows`, `cols`, `vmin`,
-`vmax`, `rmin`, the effective `rmax`, `theta_min`, `theta_max`, `labels`,
-`style`, and `levels`. Each level has a `level` value and `segments`; every
-segment is a flat `{ theta0, r0, theta1, r1 }` array in data units, ready for a
-backend to project. Heatmap legend entries also carry `vmin`/`vmax` so a
-gradient swatch can be reconstructed.
+matching `tick_labels` and `tick_fractions` arrays, the `tick_source`
+(`"uniform"` or `"explicit"`), and the optional `label`. `polar.contours` is
+present when the figure contains contours. Each entry carries `kind =
+"contour"`, `rows`, `cols`, `vmin`, `vmax`, `rmin`, the effective `rmax`,
+`theta_min`, `theta_max`, `labels`, `style`, and `levels`. Each level has a
+`level` value and `segments`; every segment is a flat `{ theta0, r0, theta1,
+r1 }` array in data units, ready for a backend to project. When `labels` is
+true, a level also exposes the preferred `label` anchor (`text`, `theta`, `r`,
+`u`, `v`, and upright `angle`); the SVG renderer may skip a colliding label, so
+the scene anchor is a placement hint rather than a one-to-one mirror. Heatmap
+legend entries also carry `vmin`/`vmax` so a gradient swatch can be
+reconstructed.
 Polar `annotations` use theta/r coordinates instead of Cartesian x/y, mirroring
 the Cartesian annotation schema. The `rmax`, tick arrays, and labels reflect the
 same resolution rules as the SVG renderer, so another backend does not need to

@@ -50,6 +50,9 @@ local fig = plt.figure({ width = 640, height = 640, dpi = 100 })
 fig:polar_config({ rmax = 6 })
 fig:polar_heatmap(values, {
   label = "projected temperature field",
+  colorbar = true,
+  colorbar_label = "temperature",
+  colorbar_tick_values = { -0.5, 0, 0.5, 1.0, 1.5 },
 })
 
 -- An analytic ridge drawn over the projected field.  Polar series render

@@ -52,7 +52,8 @@ fig:polar_heatmap(values, {
   label = "temperature anomaly",
   colorbar = true,
   colorbar_label = "anomaly",
-  colorbar_ticks = 5,
+  -- Explicit nice ticks read better than an even split of an arbitrary range.
+  colorbar_tick_values = { -1.0, -0.5, 0, 0.5, 1.0 },
 })
 fig:polar_contour(values, {
   levels = { -0.6, -0.2, 0.2, 0.6 },

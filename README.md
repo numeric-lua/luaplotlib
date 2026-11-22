@@ -143,10 +143,16 @@ uncertainty. `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
 projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
 `theta_min`/`theta_max`; it renders beneath the other series, so lines and
 annotations can be overlaid. Pass `colorbar = true` to a heatmap to add a
-vertical colorbar with `colorbar_label` and `colorbar_ticks`.
+vertical colorbar with `colorbar_label`; `colorbar_ticks` chooses an even tick
+count, while `colorbar_tick_values` accepts explicit (for example "nice")
+values and exposes `data-value`/`data-fraction` metadata plus matching scene
+arrays.
 `fig:polar_contour(values, opts)` draws marching-squares isolines of the same
 matrix, projected as curved paths; explicit or automatic `levels`, `labels`,
 and the shared heatmap extent options keep contours aligned with the field.
+Contour labels follow the local tangent, stay inside the circular clip, avoid
+earlier labels and annotations, and are skipped rather than overlapped when the
+frame is crowded.
 `fig:polar_annotate` (or `fig:annotate` on a polar figure) places text and
 leader arrows at `(theta, r)` coordinates.
 Annotation target radii extend the automatic `rmax`; with an explicit limit, a
@@ -184,6 +190,7 @@ fig:polar_heatmap(field, {
   label = "projected field",
   colorbar = true,
   colorbar_label = "value",
+  colorbar_tick_values = { 0.2, 0.6, 1.0 },
 })
 fig:polar_contour(field, {
   levels = { 0.4, 0.8 },
@@ -239,8 +246,9 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Histograms with configurable bins and ranges
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars
-- Polar line, scatter, bar, error-bar, and heatmap plots with circular grid,
-  theta/r ticks, configurable orientation and limits, measured-text
+- Polar line, scatter, bar, error-bar, heatmap, and contour plots with circular
+  grid, theta/r ticks, configurable orientation and limits, rotated
+  collision-aware contour labels, explicit colorbar ticks, measured-text
   label-aware legends, polar annotations with canvas clamping, and polar scene
   export
 - Text annotations with optional leader arrows at Cartesian or polar data
@@ -268,7 +276,8 @@ make test
 ```
 
 For an optional visual check of the polar examples, `scripts/visual-qa.sh`
-runs every example and rasterizes the polar SVGs with `rsvg-convert` when that
+runs every example, checks polar/colorbar metadata and that Cartesian examples
+stay Cartesian, and rasterizes the polar SVGs with `rsvg-convert` when that
 tool is installed. Rasterized files stay under the ignored `examples/output/`
 directory.
 
@@ -293,10 +302,11 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.15.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.16.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 polar line/scatter/bar/error-bar/heatmap/contour plots with configurable
-orientation and grids, polar heatmap colorbars, polar annotations with canvas
+orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
+collision-aware polar contour labels, polar annotations with canvas
 clamping, measured-text polar legends, annotations, linear/log/date axes, twin
 x/y axes, 3-D line/scatter/surface/mesh, subplots, custom ticks, per-bar colors,
 value labels, legends, reference lines, axis-specific grid lines, 3-D scene
@@ -311,10 +321,12 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 - **Polar axes are focused.** Polar figures support line, scatter, bar,
   error-bar, heatmap, and contour projections plus annotations, with automatic
   or explicit radial limits, configurable zero location/direction, custom
-  angular and radial grids, one vertical heatmap colorbar per figure, and
+  angular and radial grids, one vertical heatmap colorbar per figure with
+  uniform or explicit tick values, rotated collision-aware contour labels, and
   measured-text label-aware legends; Cartesian and polar content cannot share
-  a figure. Polar twin axes are not implemented, and contour levels that
-  exactly equal a matrix sample can miss that degenerate contour branch.
+  a figure. Polar twin axes are not implemented, contour labels may be skipped
+  when the frame is too crowded, and contour levels that exactly equal a matrix
+  sample can miss that degenerate contour branch.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.
