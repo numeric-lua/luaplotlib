@@ -731,6 +731,375 @@ local function render_quiver(series, figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+-- Streamlines for polar vector fields.  `u` and `v` are sampled at every
+-- (theta, r) grid node in the same local tangential/radial basis as
+-- polar_quiver.  Integration happens in the physical plane
+-- (x = r*cos(phi), y = r*sin(phi)) so a fixed step stays isotropic even when
+-- the angular and radial grid spacings differ.  Seeding is deterministic and
+-- both line and point counts are capped so SVG output stays bounded.
+local STREAM_WRAP = 2 * math.pi
+local STREAM_SEED_ANGULAR = 9
+local STREAM_SEED_RADIAL = 5
+local STREAM_BINS_COLS = 24
+local STREAM_BINS_ROWS = 12
+
+local function streamplot_periodic(series)
+  return series.theta[#series.theta] - series.theta[1] >=
+    STREAM_WRAP - 1e-9
+end
+
+local function streamplot_step(series)
+  if series.step ~= nil then return series.step, false end
+  local span = series.r[#series.r] - series.r[1]
+  if span <= 0 then span = series.r[#series.r] end
+  return span / 25, true
+end
+
+-- Bilinear lookup of (u, v) at a data-space (theta, r) position.  Angles are
+-- wrapped into one turn so a full-circle grid is periodic even though its
+-- endpoint column duplicates the first ray.  Returns nil outside the grid.
+local function stream_sample(series, theta, radial)
+  local theta_count = #series.theta
+  local radial_count = #series.r
+  local theta0, theta1 = series.theta[1], series.theta[theta_count]
+  local radial0, radial1 = series.r[1], series.r[radial_count]
+  if radial < radial0 - 1e-9 or radial > radial1 + 1e-9 then
+    return nil
+  end
+  theta = theta0 + ((theta - theta0) % STREAM_WRAP)
+  if theta > theta1 + 1e-9 then
+    return nil
+  end
+
+  local column = (theta - theta0) /
+    ((theta1 - theta0) / (theta_count - 1))
+  local row = (radial - radial0) /
+    ((radial1 - radial0) / (radial_count - 1))
+  column = math.max(0, math.min(theta_count - 1, column))
+  row = math.max(0, math.min(radial_count - 1, row))
+  local c0 = math.min(math.floor(column), theta_count - 2)
+  local r0 = math.min(math.floor(row), radial_count - 2)
+  local cf = column - c0
+  local rf = row - r0
+
+  local function at(radial_index, theta_index)
+    return series.u[radial_index][theta_index]
+  end
+  local function blend(a, b, c, d)
+    local bottom = a + (b - a) * cf
+    local top = c + (d - c) * cf
+    return bottom + (top - bottom) * rf
+  end
+  return blend(at(r0 + 1, c0 + 1), at(r0 + 1, c0 + 2),
+      at(r0 + 2, c0 + 1), at(r0 + 2, c0 + 2)),
+    blend(series.v[r0 + 1][c0 + 1], series.v[r0 + 1][c0 + 2],
+      series.v[r0 + 2][c0 + 1], series.v[r0 + 2][c0 + 2])
+end
+
+-- Unit direction in the physical plane.  The local basis is orthonormal, so
+-- the component pair rotates directly into (dx, dy); theta_zero and
+-- theta_direction change the orientation but not the streamline shape.
+local function stream_direction(series, figure, x, y)
+  local radial = math.sqrt(x * x + y * y)
+  if radial < 1e-12 then return nil end
+  local state = figure._polar
+  local zero = state and state.theta_zero or 0
+  local direction = state and state.theta_direction or 1
+  local theta = (math.atan2(y, x) - zero) / direction
+  local u, v = stream_sample(series, theta, radial)
+  if u == nil then return nil end
+  local magnitude = math.sqrt(u * u + v * v)
+  if magnitude < 1e-12 then return nil end
+  local cosine, sine = x / radial, y / radial
+  return (v * cosine - direction * u * sine) / magnitude,
+    (v * sine + direction * u * cosine) / magnitude
+end
+
+-- One fourth-order Runge-Kutta step.  If an intermediate stage leaves the
+-- sampled field, fall back to a first-order step so a line still reaches the
+-- boundary instead of stopping half a step early.
+local function stream_advance(series, figure, x, y, step)
+  local k1x, k1y = stream_direction(series, figure, x, y)
+  if k1x == nil then return nil end
+  local k2x, k2y = stream_direction(series, figure,
+    x + step * 0.5 * k1x, y + step * 0.5 * k1y)
+  if k2x == nil then return x + step * k1x, y + step * k1y end
+  local k3x, k3y = stream_direction(series, figure,
+    x + step * 0.5 * k2x, y + step * 0.5 * k2y)
+  if k3x == nil then return x + step * k1x, y + step * k1y end
+  local k4x, k4y = stream_direction(series, figure,
+    x + step * k3x, y + step * k3y)
+  if k4x == nil then return x + step * k1x, y + step * k1y end
+  return x + step / 6 * (k1x + 2 * k2x + 2 * k3x + k4x),
+    y + step / 6 * (k1y + 2 * k2y + 2 * k3y + k4y)
+end
+
+-- Integrate one direction from a seed.  The returned points carry continuous
+-- data theta so a full-turn field can wrap across the +/-pi seam without a
+-- visual chord; the renderer's trigonometric projection handles any offset.
+local function stream_trace(series, figure, seed_theta, seed_radial, step,
+    limit, max_steps)
+  local state = figure._polar
+  local zero = state and state.theta_zero or 0
+  local direction = state and state.theta_direction or 1
+  local display = M.theta_to_display(figure, seed_theta)
+  local x = seed_radial * math.cos(display)
+  local y = seed_radial * math.sin(display)
+  local seed_x, seed_y = x, y
+  local closed = false
+  local points = { { theta = seed_theta, r = seed_radial } }
+  for _ = 1, max_steps do
+    local next_x, next_y = stream_advance(series, figure, x, y, step)
+    if next_x == nil then break end
+    local radial = math.sqrt(next_x * next_x + next_y * next_y)
+    if radial > limit + 1e-9 or radial < 1e-12 then break end
+    -- A closed orbit through the seed would otherwise trace the same ring for
+    -- the whole step budget.  Stop once the line comes back to its start.
+    if #points >= 8 then
+      local close_x, close_y = next_x - seed_x, next_y - seed_y
+      local tolerance = step * 1.05
+      if close_x * close_x + close_y * close_y <
+          tolerance * tolerance then
+        closed = true
+        break
+      end
+    end
+    local current = math.atan2(next_y, next_x)
+    while current - display > math.pi do current = current - STREAM_WRAP end
+    while current - display < -math.pi do current = current + STREAM_WRAP end
+    display = current
+    local theta = (current - zero) / direction
+    local u, v = stream_sample(series, theta, radial)
+    if u == nil or u * u + v * v < 1e-24 then break end
+    x, y = next_x, next_y
+    points[#points + 1] = { theta = theta, r = radial }
+  end
+  return points, closed
+end
+
+local function stream_canonical_point(figure, point)
+  local display = M.theta_to_display(figure, point.theta)
+  return point.r * math.cos(display), -point.r * math.sin(display)
+end
+
+-- One arrow per streamline, near the middle.  The angle is computed from
+-- canonical screen coordinates, so it is independent of the canvas size.
+local function stream_arrows(figure, points)
+  local arrows = {}
+  if #points < 3 then return arrows end
+  local index = math.max(2,
+    math.min(#points - 1, math.floor(#points * 0.55) + 1))
+  local x1, y1 = stream_canonical_point(figure, points[index])
+  local x2, y2 = stream_canonical_point(figure, points[index + 1])
+  local dx, dy = x2 - x1, y2 - y1
+  if dx * dx + dy * dy < 1e-18 then return arrows end
+  arrows[1] = {
+    index = index,
+    theta = points[index].theta,
+    r = points[index].r,
+    angle = math.deg(math.atan2(dy, dx)),
+  }
+  return arrows
+end
+
+-- Coarse occupancy bins stop nearby seeds from retracing a line the field
+-- already covered.  The grid is deterministic, so the same field always
+-- produces the same streamlines.  Fractions are quantized before binning so
+-- tiny integration drift cannot push a line into the neighbouring bin.
+local function stream_quantize(value)
+  return math.floor(value * 1000000 + 0.5) / 1000000
+end
+
+local function stream_bin(series, theta, radial)
+  local theta0 = series.theta[1]
+  local theta_span = series.theta[#series.theta] - theta0
+  local radial0 = series.r[1]
+  local radial_span = series.r[#series.r] - radial0
+  local theta_fraction = ((theta - theta0) % STREAM_WRAP) / theta_span
+  if streamplot_periodic(series) then
+    theta_fraction = theta_fraction % 1
+  else
+    theta_fraction = math.max(0, math.min(1, theta_fraction))
+  end
+  local radial_fraction = 0
+  if radial_span > 0 then
+    radial_fraction = (radial - radial0) / radial_span
+  end
+  radial_fraction = math.max(0, math.min(1, radial_fraction))
+  theta_fraction = math.min(1 - 1e-6, stream_quantize(theta_fraction))
+  radial_fraction = math.min(1 - 1e-6, stream_quantize(radial_fraction))
+  local column = math.floor(theta_fraction * STREAM_BINS_COLS) + 1
+  local row = math.floor(radial_fraction * STREAM_BINS_ROWS) + 1
+  return row * STREAM_BINS_COLS + column
+end
+
+local function build_streamplot(series, figure, cfg)
+  local periodic = streamplot_periodic(series)
+  local step, automatic = streamplot_step(series)
+  local theta0 = series.theta[1]
+  local theta_span = series.theta[#series.theta] - theta0
+  local radial0 = series.r[1]
+  local radial1 = series.r[#series.r]
+  local limit = math.min(cfg.rmax, radial1)
+  local seed_columns = math.max(2, math.ceil(
+    STREAM_SEED_ANGULAR * series.density * theta_span / STREAM_WRAP))
+  local seed_rows = math.max(2, math.ceil(
+    STREAM_SEED_RADIAL * series.density))
+  local occupied = {}
+  local lines = {}
+  local point_count = 0
+  local truncated = false
+
+  for row = 1, seed_rows do
+    if #lines >= series.max_lines or point_count >= series.max_points then
+      truncated = true
+      break
+    end
+    local radial = radial0 + (limit - radial0) * row / (seed_rows + 1)
+    for column = 1, seed_columns do
+      if #lines >= series.max_lines or point_count >= series.max_points then
+        truncated = true
+        break
+      end
+      local stagger = (row % 2 == 0) and 0.25 or -0.25
+      local fraction = (column - 0.5 + stagger) / seed_columns
+      if periodic then
+        fraction = fraction % 1
+      else
+        fraction = math.max(0, math.min(1, fraction))
+      end
+      local seed_theta = theta0 + theta_span * fraction
+      local u, v = stream_sample(series, seed_theta, radial)
+      if u ~= nil and u * u + v * v > 1e-24 then
+        local bin = stream_bin(series, seed_theta, radial)
+        if not occupied[bin] then
+          local forward, closed = stream_trace(series, figure, seed_theta,
+            radial, step, limit, series.max_steps)
+          local combined = {}
+          if closed then
+            -- A closed orbit only needs one direction; joining the endpoint
+            -- back to the seed closes the ring without drawing it twice.
+            for index = 1, #forward do
+              combined[index] = forward[index]
+            end
+            combined[#combined + 1] = {
+              theta = seed_theta,
+              r = radial,
+            }
+          else
+            local backward = stream_trace(series, figure, seed_theta,
+              radial, -step, limit, series.max_steps)
+            for index = #backward, 2, -1 do
+              combined[#combined + 1] = backward[index]
+            end
+            for index = 1, #forward do
+              combined[#combined + 1] = forward[index]
+            end
+          end
+          local remaining = series.max_points - point_count
+          if #combined > remaining then
+            local trimmed = {}
+            for index = 1, remaining do
+              trimmed[index] = combined[index]
+            end
+            combined = trimmed
+            truncated = true
+          end
+          if #combined >= 3 then
+            for _, point in ipairs(combined) do
+              occupied[stream_bin(series, point.theta, point.r)] = true
+            end
+            if series.arrows and series.style.head > 0 then
+              combined.arrows = stream_arrows(figure, combined)
+            else
+              combined.arrows = {}
+            end
+            lines[#lines + 1] = combined
+            point_count = point_count + #combined
+          end
+        end
+      end
+    end
+  end
+
+  return {
+    lines = lines,
+    points = point_count,
+    step = step,
+    automatic = automatic,
+    periodic = periodic,
+    truncated = truncated,
+  }
+end
+
+local function render_streamplot(series, figure, cfg, geom, buf)
+  local built = build_streamplot(series, figure, cfg)
+  local style = series.style
+  local stroke_opacity, fill_opacity = "", ""
+  if style.alpha < 1 then
+    local alpha = util.fmt(style.alpha)
+    stroke_opacity = string.format(' stroke-opacity="%s"', alpha)
+    fill_opacity = string.format(' fill-opacity="%s"', alpha)
+  end
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', util.escape_xml(style.label))
+  end
+  local arrow_count = 0
+  for _, points in ipairs(built.lines) do
+    arrow_count = arrow_count + #(points.arrows or {})
+  end
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-polar-streamplot" data-cols="%d" data-rows="%d" data-lines="%d" data-points="%d" data-arrow-count="%d" data-step="%s" data-step-mode="%s" data-density="%s" data-max-steps="%d" data-max-lines="%d" data-max-points="%d" data-arrows="%s" data-head="%s" data-periodic="%s" data-truncated="%s"%s>',
+    #series.theta, #series.r, #built.lines, built.points, arrow_count,
+    util.fmt(built.step), built.automatic and "auto" or "explicit",
+    util.fmt(series.density), series.max_steps, series.max_lines,
+    series.max_points, series.arrows and "true" or "false",
+    util.fmt(style.head), built.periodic and "true" or "false",
+    built.truncated and "true" or "false", label)
+
+  for line_index, points in ipairs(built.lines) do
+    local arrows = points.arrows or {}
+    buf[#buf + 1] = string.format(
+      '   <g class="polar-streamline" data-index="%d" data-points="%d" data-arrows="%d">',
+      line_index, #points, #arrows)
+    if style.linewidth > 0 then
+      local commands = {}
+      for point_index, point in ipairs(points) do
+        local x, y = M.point(figure, cfg, geom, point.theta, point.r)
+        commands[point_index] = string.format("%s %s %s",
+          point_index == 1 and "M" or "L", util.fmt(x), util.fmt(y))
+      end
+      buf[#buf + 1] = string.format(
+        '    <path class="polar-streamline-path" d="%s" fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"%s/>',
+        table.concat(commands, " "), style.color,
+        util.fmt(style.linewidth), stroke_opacity)
+    end
+    for _, arrow in ipairs(arrows) do
+      local x, y = M.point(figure, cfg, geom, arrow.theta, arrow.r)
+      local radians = math.rad(arrow.angle)
+      local ux, uy = math.cos(radians), math.sin(radians)
+      local half = style.head * 0.45
+      local px, py = -uy * half, ux * half
+      local tip_x = x + ux * style.head * 0.5
+      local tip_y = y + uy * style.head * 0.5
+      local neck_x = x - ux * style.head * 0.5
+      local neck_y = y - uy * style.head * 0.5
+      buf[#buf + 1] = string.format(
+        '    <polygon class="polar-stream-arrow" data-index="%d" data-theta="%s" data-r="%s" data-angle="%s" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
+        arrow.index, util.fmt(arrow.theta), util.fmt(arrow.r),
+        util.fmt(arrow.angle),
+        util.fmt(tip_x), util.fmt(tip_y),
+        util.fmt(neck_x + px), util.fmt(neck_y + py),
+        util.fmt(neck_x - px), util.fmt(neck_y - py),
+        style.color, fill_opacity)
+    end
+    buf[#buf + 1] = '   </g>'
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_heatmap(heatmap, figure, cfg, geom, buf)
   local state = figure._polar
   local outer_value = heatmap_rmax(state, heatmap)
@@ -1599,10 +1968,14 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
 
   local data_points = {}
   for _, series in ipairs(figure._polar.series) do
-    for index = 1, #series.theta do
-      local x, y = M.point(figure, cfg, geom, series.theta[index],
-        series.r[index])
-      data_points[#data_points + 1] = { x, y }
+    -- Streamplot grids are axes, not point lists; the streamlines themselves
+    -- already cover the field area, so they do not add leader targets.
+    if series.kind ~= "streamplot" then
+      for index = 1, #series.theta do
+        local x, y = M.point(figure, cfg, geom, series.theta[index],
+          series.r[index])
+        data_points[#data_points + 1] = { x, y }
+      end
     end
   end
 
@@ -1803,6 +2176,15 @@ local function polar_swatch(entry, x, y, buf)
       '   <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
       util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
       util.fmt(x + 13), util.fmt(y + 3.5), color)
+  elseif kind == "streamplot" then
+    buf[#buf + 1] = string.format(
+      '   <path class="legend-swatch-streamplot" d="M %s %s Q %s %s %s %s T %s %s" fill="none" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
+      util.fmt(x), util.fmt(y), util.fmt(x + 5), util.fmt(y - 5),
+      util.fmt(x + 10), util.fmt(y), util.fmt(x + 16), util.fmt(y), color)
+    buf[#buf + 1] = string.format(
+      '   <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
+      util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
+      util.fmt(x + 13), util.fmt(y + 3.5), color)
   elseif kind == "bar" then
     buf[#buf + 1] = string.format(
       '   <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
@@ -1936,6 +2318,8 @@ function M.to_svg(figure)
       render_errorbar(series, figure, cfg, geom, buf)
     elseif series.kind == "quiver" then
       render_quiver(series, figure, cfg, geom, buf)
+    elseif series.kind == "streamplot" then
+      render_streamplot(series, figure, cfg, geom, buf)
     end
   end
   add('  </g>')
@@ -2249,6 +2633,46 @@ function M.to_scene(figure)
       copy.normalize = series.normalize
       copy.stride = stride
       copy.drawn = quiver_drawn(series, indices)
+    elseif series.kind == "streamplot" then
+      local built = build_streamplot(series, figure, cfg)
+      copy.u = copy_matrix(series.u)
+      copy.v = copy_matrix(series.v)
+      copy.components = "tangential_radial"
+      copy.periodic = built.periodic
+      copy.density = series.density
+      copy.step = series.step
+      copy.step_mode = built.automatic and "auto" or "explicit"
+      copy.resolved_step = built.step
+      copy.step_unit = "data_radius_units"
+      copy.max_steps = series.max_steps
+      copy.max_lines = series.max_lines
+      copy.max_points = series.max_points
+      copy.arrows = series.arrows
+      copy.head = series.style.head
+      copy.truncated = built.truncated
+      copy.line_count = #built.lines
+      copy.point_count = built.points
+      copy.lines = {}
+      for line_index, points in ipairs(built.lines) do
+        local exported = {
+          theta = {},
+          r = {},
+          points = #points,
+          arrows = {},
+        }
+        for point_index, point in ipairs(points) do
+          exported.theta[point_index] = point.theta
+          exported.r[point_index] = point.r
+        end
+        for arrow_index, arrow in ipairs(points.arrows or {}) do
+          exported.arrows[arrow_index] = {
+            theta = arrow.theta,
+            r = arrow.r,
+            angle = arrow.angle,
+          }
+        end
+        copy.lines[line_index] = exported
+      end
     end
     scene.polar.series[#scene.polar.series + 1] = copy
   end

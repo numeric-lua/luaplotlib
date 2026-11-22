@@ -99,6 +99,22 @@ local POLAR_QUIVER_OPTIONS = {
   theta_unit = true,
 }
 
+local POLAR_STREAMPLOT_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  alpha = true,
+  density = true,
+  step = true,
+  max_steps = true,
+  max_lines = true,
+  max_points = true,
+  arrows = true,
+  head = true,
+  degrees = true,
+  theta_unit = true,
+}
+
 local POLAR_HEATMAP_OPTIONS = {
   vmin = true,
   vmax = true,
@@ -1000,6 +1016,113 @@ function Figure:polar_quiver(theta, r, u, v, opts)
     pivot = pivot,
     max_arrows = max_arrows,
     normalize = normalize,
+    style = style,
+  }
+  return self
+end
+
+-- Draw streamlines of a polar vector field sampled on a regular grid.
+-- `theta` and `r` are the strictly increasing grid coordinates and `u`/`v`
+-- are rows-by-columns matrices of the local tangential/radial components
+-- sampled at every grid node.  Long fields are integrated with a fixed
+-- physical step, seeded deterministically, and capped by `max_lines` and
+-- `max_points` so SVG output stays bounded.
+function Figure:polar_streamplot(theta, r, u, v, opts)
+  opts = util.check_options(opts, POLAR_STREAMPLOT_OPTIONS,
+    "polar streamplot")
+  local tv = checked_theta_values(theta, opts, "polar streamplot theta")
+  local rv = data.sequence(r, "polar streamplot r")
+  if #tv < 2 then
+    fail("polar streamplot theta must have at least two grid values")
+  end
+  if #rv < 2 then
+    fail("polar streamplot r must have at least two grid values")
+  end
+  if rv[1] < 0 then
+    fail("polar streamplot r values must be non-negative")
+  end
+  for index = 2, #tv do
+    if tv[index] <= tv[index - 1] then
+      fail("polar streamplot theta grid must be strictly increasing")
+    end
+  end
+  for index = 2, #rv do
+    if rv[index] <= rv[index - 1] then
+      fail("polar streamplot r grid must be strictly increasing")
+    end
+  end
+  if tv[#tv] - tv[1] > 2 * math.pi + 1e-9 then
+    fail("polar streamplot theta span must be at most 2*pi radians")
+  end
+
+  local rows, cols = #rv, #tv
+  local urows, ucols, um = data.matrix(u, "polar streamplot u")
+  local vrows, vcols, vm = data.matrix(v, "polar streamplot v")
+  if urows ~= rows or ucols ~= cols or vrows ~= rows or vcols ~= cols then
+    fail(string.format(
+      "polar streamplot u and v must be %d-by-%d matrices matching r and " ..
+      "theta (got %d-by-%d and %d-by-%d)",
+      rows, cols, urows, ucols, vrows, vcols))
+  end
+
+  local linewidth = 1.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth,
+      "polar streamplot linewidth", 0)
+  end
+  local head = 6
+  if opts.head ~= nil then
+    head = util.check_number(opts.head, "polar streamplot head", 0)
+  end
+  local density = 1
+  if opts.density ~= nil then
+    density = util.check_number(opts.density,
+      "polar streamplot density", 0.1, 10)
+  end
+  local step = nil
+  if opts.step ~= nil then
+    step = util.check_number(opts.step, "polar streamplot step")
+    if step <= 0 then
+      fail("polar streamplot step must be positive")
+    end
+  end
+  local max_steps = 300
+  if opts.max_steps ~= nil then
+    max_steps = util.check_integer(opts.max_steps,
+      "polar streamplot max_steps", 10, 5000)
+  end
+  local max_lines = 64
+  if opts.max_lines ~= nil then
+    max_lines = util.check_integer(opts.max_lines,
+      "polar streamplot max_lines", 1, 512)
+  end
+  local max_points = 8000
+  if opts.max_points ~= nil then
+    max_points = util.check_integer(opts.max_points,
+      "polar streamplot max_points", 100, 200000)
+  end
+  local arrows = true
+  if opts.arrows ~= nil then
+    arrows = util.check_boolean(opts.arrows, "polar streamplot arrows")
+  end
+
+  local style = checked_style(self, opts, "polar streamplot")
+  style.linewidth = linewidth
+  style.head = head
+
+  local state = ensure_polar_state(self)
+  state.series[#state.series + 1] = {
+    kind = "streamplot",
+    theta = tv,
+    r = rv,
+    u = um,
+    v = vm,
+    density = density,
+    step = step,
+    max_steps = max_steps,
+    max_lines = max_lines,
+    max_points = max_points,
+    arrows = arrows,
     style = style,
   }
   return self
