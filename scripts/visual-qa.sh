@@ -28,6 +28,7 @@ POLAR_SVGS=(
   examples/output/polar-heatmap.svg
   examples/output/polar-contour.svg
   examples/output/polar-quiver.svg
+  examples/output/polar-streamplot.svg
 )
 
 for svg in "${POLAR_SVGS[@]}"; do
@@ -104,6 +105,64 @@ angled=$(grep -o 'class="polar-quiver-arrow"[^>]*data-angle="[^"]*"' \
   fail "$QUIVER arrow groups are missing data-angle metadata"
 grep -q 'class="polar-legend"' "$QUIVER" ||
   fail "$QUIVER has no polar legend"
+
+# The streamplot example must keep its integrated line groups, stay inside the
+# configured caps, and expose arrow metadata.  Its field covers a full turn,
+# so the series must be periodic and the example should not hit a cap.
+STREAM=examples/output/polar-streamplot.svg
+grep -q 'class="series series-polar-streamplot"' "$STREAM" ||
+  fail "$STREAM has no streamplot series"
+grep -q 'data-periodic="true"' "$STREAM" ||
+  fail "$STREAM should use a periodic theta grid"
+grep -q 'data-step-mode="auto"' "$STREAM" ||
+  fail "$STREAM should advertise the automatic integration step"
+stream_lines=$(grep -o 'data-lines="[0-9]*"' "$STREAM" | head -1 | tr -dc '0-9')
+stream_points=$(grep -o 'data-points="[0-9]*"' "$STREAM" | head -1 |
+  tr -dc '0-9')
+stream_max_lines=$(grep -o 'data-max-lines="[0-9]*"' "$STREAM" | head -1 |
+  tr -dc '0-9')
+stream_max_points=$(grep -o 'data-max-points="[0-9]*"' "$STREAM" | head -1 |
+  tr -dc '0-9')
+stream_arrows=$(grep -o 'data-arrow-count="[0-9]*"' "$STREAM" | head -1 |
+  tr -dc '0-9')
+[ -n "$stream_lines" ] && [ -n "$stream_points" ] &&
+  [ -n "$stream_max_lines" ] && [ -n "$stream_max_points" ] &&
+  [ -n "$stream_arrows" ] || fail "$STREAM is missing streamplot metadata"
+[ "$stream_lines" -ge 2 ] || fail "$STREAM has too few streamlines"
+[ "$stream_lines" -le "$stream_max_lines" ] ||
+  fail "$STREAM exceeded the configured max_lines cap"
+[ "$stream_points" -le "$stream_max_points" ] ||
+  fail "$STREAM exceeded the configured max_points cap"
+grep -q 'data-truncated="false"' "$STREAM" ||
+  fail "$STREAM example should not hit an integration cap"
+line_groups=$(grep -o 'class="polar-streamline"' "$STREAM" |
+  wc -l | tr -d ' ')
+[ "$line_groups" -eq "$stream_lines" ] ||
+  fail "$STREAM has $stream_lines streamlines but $line_groups line groups"
+path_count=$(grep -o 'class="polar-streamline-path"' "$STREAM" |
+  wc -l | tr -d ' ')
+[ "$path_count" -eq "$stream_lines" ] ||
+  fail "$STREAM has $stream_lines streamlines but $path_count paths"
+arrow_polygons=$(grep -o 'class="polar-stream-arrow"' "$STREAM" |
+  wc -l | tr -d ' ')
+[ "$arrow_polygons" -eq "$stream_arrows" ] ||
+  fail "$STREAM has $stream_arrows arrows but $arrow_polygons polygons"
+sum_points=$(grep -o \
+  'class="polar-streamline" data-index="[0-9]*" data-points="[0-9]*"' \
+  "$STREAM" | sed -E 's/.*data-points="([0-9]+)"/\1/' |
+  awk '{ total += $1 } END { print total + 0 }')
+[ "$sum_points" -eq "$stream_points" ] ||
+  fail "$STREAM line points sum to $sum_points, expected $stream_points"
+stream_angled=$(grep -o \
+  'class="polar-stream-arrow"[^>]*data-angle="[^"]*"' "$STREAM" |
+  wc -l | tr -d ' ')
+[ "$stream_angled" -eq "$stream_arrows" ] ||
+  fail "$STREAM arrows are missing data-angle metadata"
+if grep -Eqi 'nan|inf' "$STREAM"; then
+  fail "$STREAM contains non-finite geometry"
+fi
+grep -q 'class="polar-legend"' "$STREAM" ||
+  fail "$STREAM has no polar legend"
 
 # Cartesian examples must stay Cartesian: no polar marker, no polar layer.
 for svg in \
