@@ -1,5 +1,31 @@
 # Changelog
 
+## 4.17.0
+
+- new `fig:polar_quiver(theta, r, u, v, opts)` renders a vector field: `u` is
+  the local tangential component toward increasing data theta and `v` is the
+  radial component, so `theta_zero`/`theta_direction` rotate arrows with the
+  axes while radial arrows keep pointing outward; arrow glyphs are clipped to
+  the polar circle and drawn in series order above heatmaps and contours;
+- glyph lengths use SVG user units: `scale` sets units per unit magnitude and
+  an automatic scale makes the longest arrow 18 units; `normalize = true`
+  draws unit-length direction arrows, and `pivot = "tail" | "middle" | "tip"`
+  places the data point within the glyph;
+- large polar fields are capped deterministically (`max_arrows`, default 512,
+  maximum 4096): indices 1, 1+stride, ... are drawn with
+  `stride = ceil(count / max_arrows)`, zero-magnitude vectors are skipped, and
+  the series group exposes `data-count`, `data-drawn`, `data-stride`,
+  `data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`, and
+  `data-normalize`, with `data-index`/`data-magnitude`/`data-angle` per arrow;
+- labelled quivers participate in the measured-text polar legend with an arrow
+  swatch, and `to_scene()` exports `kind = "quiver"` series with copied
+  `u`/`v` arrays, `components = "tangential_radial"`, resolved scaling,
+  decimation, and style metadata;
+- new `examples/polar_quiver.lua`, expanded README/API docs, and
+  `scripts/visual-qa.sh` checks that quiver arrow groups match `data-drawn`,
+  stay within `max_arrows`, and carry angle metadata; 219 tests, with no
+  Cartesian rendering, scene-shape, or dependency changes.
+
 ## 4.16.0
 
 - polar contour labels now rotate to the local tangent (kept upright) and are

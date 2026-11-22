@@ -1,21 +1,28 @@
-# luaplotlib 4.16.0
+# luaplotlib 4.17.0
 
-- polar contour labels rotate along the local tangent and stay upright. Label
-  placement searches every marching-squares segment and avoids earlier labels,
-  radial tick text, annotations, and the legend; text is clamped inside the
-  circular clip and a level is skipped rather than overlapped when no clear
-  anchor exists. SVG labels expose `data-level`/`data-angle`, and contour scene
-  levels carry a preferred `label` anchor for non-SVG backends;
-- polar heatmap colorbars accept `colorbar_tick_values`, an explicit array of
-  2-12 strictly increasing values within `vmin`/`vmax` (mutually exclusive with
-  `colorbar_ticks`). This makes "nice" ticks such as `{ -1, -0.5, 0, 0.5, 1 }`
-  possible instead of an even split of an arbitrary range. SVG ticks and labels
-  expose `data-value`/`data-fraction` plus `data-tick-source`, and
-  `to_scene()` adds `tick_labels`, `tick_fractions`, and `tick_source` while
-  keeping the existing numeric `ticks` array;
-- `examples/polar_heatmap.lua` now demonstrates a colorbar with explicit nice
-  ticks, and `examples/polar_contour.lua` uses explicit colorbar ticks;
-  `scripts/visual-qa.sh` additionally checks rotated contour labels, colorbar
-  label metadata, and that Cartesian examples remain Cartesian;
-- expanded README/API documentation, 208 tests, and no Cartesian rendering or
-  scene changes.
+- new `fig:polar_quiver(theta, r, u, v, opts)` draws a polar vector field.
+  `u` is the local tangential component toward increasing data theta and `v`
+  is the radial component; both are rotated by the configured
+  `theta_zero`/`theta_direction`, so clockwise axes flip tangential arrows
+  while radial arrows keep pointing outward. Arrows are clipped to the polar
+  circle and draw in series order above heatmaps and contours;
+- glyph lengths use SVG user units rather than data units. `scale` sets user
+  units per unit magnitude, while the default automatic scale makes the longest
+  arrow 18 units; `normalize = true` draws unit-length direction arrows and
+  `pivot = "tail" | "middle" | "tip"` chooses where the data point sits in the
+  glyph;
+- large fields stay bounded: `max_arrows` (default 512, maximum 4096) selects
+  indices 1, 1+stride, ... with `stride = ceil(count / max_arrows)`, zero
+  vectors are skipped, and `data-count`, `data-drawn`, `data-stride`,
+  `data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`, and
+  `data-normalize` make the result inspectable. Every arrow group also exposes
+  `data-index`, `data-magnitude`, `data-theta`, `data-r`, and `data-angle`;
+- labelled quivers get an arrow legend swatch, and `to_scene()` exports
+  `kind = "quiver"` series with copied `u`/`v` arrays,
+  `components = "tangential_radial"`, `auto_scale`/`resolved_scale`,
+  `scale_unit = "svg_user_units_per_magnitude"`, `pivot`, `normalize`,
+  `max_arrows`, `stride`, and `drawn`;
+- new `examples/polar_quiver.lua`, expanded README/API documentation, and
+  `scripts/visual-qa.sh` checks for arrow counts, cap compliance, and direction
+  metadata; 219 dependency-free tests and no Cartesian rendering or dependency
+  changes.
