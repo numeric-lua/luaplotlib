@@ -344,28 +344,38 @@ and trimmed tails cannot pull it away from the requested position. Arrows are
 omitted when `arrows = false` or `head = 0`.
 
 The series group reports `data-cols`, `data-rows`, `data-lines`,
-`data-points`, `data-arrow-count`, `data-step`, `data-step-mode` (`"auto"` or
-`"explicit"`), `data-density`, `data-max-steps`, `data-max-lines`,
-`data-max-points`, `data-arrows`, `data-head`, `data-linestyle`,
-`data-arrow-fraction`, `data-closed-lines`, `data-arc-length-unit`
-(`"data_radius_units"`), `data-periodic`, and `data-truncated`. Each
+`data-points`, `data-arrow-count`, `data-clipped-arrow-count`,
+`data-step`, `data-step-mode` (`"auto"` or `"explicit"`), `data-density`,
+`data-max-steps`, `data-max-lines`, `data-max-points`, `data-arrows`,
+`data-head`, `data-linestyle`, `data-arrow-fraction`, `data-closed-lines`,
+`data-arc-length-unit` (`"data_radius_units"`), `data-clip`
+(`"polar-circle"`), `data-periodic`, and `data-truncated`. Each
 `polar-streamline` group reports `data-index`, `data-points`, `data-arrows`,
-`data-closed`, `data-seed-theta`, `data-seed-r`, and `data-arc-length`; its
-path uses `polar-streamline-path` (with `stroke-dasharray` for dashed/dotted
-styles) and each arrow is a `polar-stream-arrow` polygon with `data-index` (the
-1-based point index used as its anchor), `data-fraction` (the anchor's arc
-length divided by the line length), `data-angle`, `data-theta`, and `data-r`.
-Streamlines are clipped to the polar circle and draw in series order above
-heatmaps, contours, and other series. Labelled streamplots participate in
-`fig:legend()` with a curved swatch that follows the configured line style.
-Scene export under `polar.series` uses `kind = "streamplot"`, copied `u`/`v`
-matrices, the `theta`/`r` grid coordinates,
+`data-clipped-arrows`, `data-closed`, `data-seed-theta`, `data-seed-r`, and
+`data-arc-length`; its path uses `polar-streamline-path` (with
+`stroke-dasharray` for dashed/dotted styles) and each arrow is a
+`polar-stream-arrow` polygon with `data-index` (the 1-based point index used
+as its anchor), `data-fraction` (the anchor's arc length divided by the line
+length), `data-angle`, `data-theta`, `data-r`, and `data-clipped`. Streamlines
+are clipped to the polar circle and draw in series order above heatmaps,
+contours, and other series. Arrow triangles are built in screen space, so a
+large `head` or a late `arrow_fraction` can push a vertex past the frame
+circle; that vertex is projected back onto the circle, which keeps the SVG
+polygon itself inside the frame and sets the corresponding clipping metadata.
+Labelled streamplots participate in `fig:legend()` with a curved swatch that
+follows the configured line style.
+Scene export under `polar.series` uses `kind = "streamplot"`, `cols`/`rows`,
+copied `u`/`v` matrices, the `theta`/`r` grid coordinates,
 `components = "tangential_radial"`, `periodic`, requested and resolved step
-metadata, density/caps, `arrow_fraction`, `closed_line_count`, and
+metadata, density/caps, `arrow_fraction`, `arrow_count`,
+`clipped_arrow_count`, `closed_line_count`, `clip = "polar_circle"`, and
 `arc_length_unit`; its `lines` array carries `theta`, `r`, `points`, `closed`,
-`seed_theta`, `seed_r`, `arc_length`, and `arrows`, where every arrow exports
-`index`, `fraction`, `theta`, `r`, and `angle`. Exported line theta values are
-continuous and may exceed the grid range by whole turns for periodic fields.
+`seed_theta`, `seed_r`, `arc_length`, `arrow_count`, `clipped_arrows`, and
+`arrows`, where every arrow exports `index`, `fraction`, `theta`, `r`,
+`angle`, and `clipped`. Clipping flags follow the rendered luaplotlib frame,
+so a backend that chooses a different frame layout may recompute them. Exported
+line theta values are continuous and may exceed the grid range by whole turns
+for periodic fields.
 
 ### `fig:polar_annotate(text, theta, r, opts)` / `fig:annotate(text, theta, r, opts)`
 
@@ -890,9 +900,10 @@ across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
   `max_arrows`), not magnitude-scaled data extents. Streamlines follow the
   interpolated direction field at a fixed integration step; the step is not a
   physical speed and the sampled component magnitudes do not scale line
-  lengths. Contour levels that exactly equal a matrix sample can drop that
-  degenerate branch. Legend placement uses estimated text metrics, not a full
-  text-measurement engine.
+  lengths. Streamplot arrow glyphs are screen-space triangles clipped to the
+  polar frame circle. Contour levels that exactly equal a matrix sample can
+  drop that degenerate branch. Legend placement uses estimated text metrics,
+  not a full text-measurement engine.
 - 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
@@ -1039,6 +1050,7 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         pivot = "tail", max_arrows = 512, normalize = false,
         stride = 1, drawn = 320, style = {...} },
       { kind = "streamplot", theta = {...}, r = {...},
+        cols = 37, rows = 21,
         u = { {...}, ... }, v = { {...}, ... },
         components = "tangential_radial", periodic = true,
         density = 1, step = nil, step_mode = "auto",
@@ -1047,13 +1059,16 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         arrows = true, arrow_fraction = 0.5, head = 6, truncated = false,
         linestyle = "solid", closed_line_count = 9,
         arc_length_unit = "data_radius_units",
+        clip = "polar_circle", arrow_count = 12,
+        clipped_arrow_count = 0,
         line_count = 12, point_count = 960,
         lines = {
           { theta = {...}, r = {...}, points = 84, closed = false,
             seed_theta = 0.5, seed_r = 1.4, arc_length = 6.28,
+            arrow_count = 1, clipped_arrows = 0,
             arrows = {
               { index = 33, fraction = 0.5, theta = 1.2, r = 2.4,
-                angle = -71.3 },
+                angle = -71.3, clipped = false },
             } },
           -- ...
         }, style = {...} },
@@ -1073,14 +1088,16 @@ present only when angular errors were requested. Quiver series include `u` and
 automatic), `auto_scale`, the resolved `resolved_scale`, `scale_unit =
 "svg_user_units_per_magnitude"`, `pivot`, `max_arrows`, `normalize`, the
 decimation `stride`, and the number of `drawn` arrows. Streamplot series use
-`theta`/`r` as the grid coordinates, copied `u`/`v` matrices,
-`components = "tangential_radial"`, `periodic`, `density`, the requested
-`step`, `step_mode`, `resolved_step`, `step_unit = "data_radius_units"`, caps
-and `truncated`, `arrow_fraction`, `closed_line_count`, and
+`theta`/`r` as the grid coordinates, `cols`/`rows` for their counts, copied
+`u`/`v` matrices, `components = "tangential_radial"`, `periodic`, `density`,
+the requested `step`, `step_mode`, `resolved_step`, `step_unit =
+"data_radius_units"`, caps and `truncated`, `arrow_fraction`, `arrow_count`,
+`clipped_arrow_count`, `closed_line_count`, `clip = "polar_circle"`, and
 `arc_length_unit = "data_radius_units"`, plus a `lines` array whose entries
 carry `theta`, `r`, `points`, `closed`, `seed_theta`, `seed_r`, `arc_length`,
-and `arrows` (each with the 1-based anchor point `index`, its arc-length
-`fraction`, `theta`, `r`, and the screen-space `angle`).
+`arrow_count`, `clipped_arrows`, and `arrows` (each with the 1-based anchor
+point `index`, its arc-length
+`fraction`, `theta`, `r`, the screen-space `angle`, and a `clipped` flag).
 Streamplot line theta values are continuous, so a periodic line may run past
 the grid range by whole turns. `r_ticks` include `fraction`
 (the radius as a fraction of `rmax`) so a backend can draw rings without
@@ -1106,7 +1123,8 @@ true, a level also exposes the preferred `label` anchor (`text`, `theta`, `r`,
 `u`, `v`, and upright `angle`); the SVG renderer may skip a colliding label, so
 the scene anchor is a placement hint rather than a one-to-one mirror. Heatmap
 legend entries also carry `vmin`/`vmax` so a gradient swatch can be
-reconstructed.
+reconstructed, and series legend entries include `linestyle` when the series
+defines one (for example a dashed streamplot swatch).
 Polar `annotations` use theta/r coordinates instead of Cartesian x/y, mirroring
 the Cartesian annotation schema. The `rmax`, tick arrays, and labels reflect the
 same resolution rules as the SVG renderer, so another backend does not need to

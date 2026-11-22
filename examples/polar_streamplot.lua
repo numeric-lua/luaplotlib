@@ -1,6 +1,7 @@
 -- Runnable polar streamplot example. Writes
--- examples/output/polar-streamplot.svg and
--- examples/output/polar-streamplot-styles.svg.
+-- examples/output/polar-streamplot.svg,
+-- examples/output/polar-streamplot-styles.svg, and
+-- examples/output/polar-streamplot-clip.svg.
 --
 --   luajit examples/polar_streamplot.lua
 --
@@ -89,3 +90,40 @@ styled:title("luaplotlib: dashed streamlines")
 styled:legend({ loc = "best" })
 styled:savefig(outdir .. "/polar-streamplot-styles.svg")
 print("wrote " .. outdir .. "/polar-streamplot-styles.svg")
+
+-- A purely radial outward field with arrows anchored near the outer edge.
+-- The triangular glyphs extend past the frame circle, so the renderer clips
+-- their vertices to the polar circle and reports the count.  The shapes stay
+-- inside the frame instead of relying on an SVG clip path that a scene
+-- consumer could miss.
+local radial_theta, radial_r = {}, {}
+for index = 1, 37 do
+  radial_theta[index] = (index - 1) * 2 * math.pi / 36
+end
+for index = 1, 5 do
+  radial_r[index] = 1 + 4 * (index - 1) / 4
+end
+local radial_u, radial_v = {}, {}
+for row = 1, #radial_r do
+  radial_u[row], radial_v[row] = {}, {}
+  for column = 1, #radial_theta do
+    radial_u[row][column] = 0
+    radial_v[row][column] = 1
+  end
+end
+
+local clipped = plt.figure({ width = 640, height = 640, dpi = 100 })
+clipped:polar_config({ rmax = 5 })
+clipped:polar_streamplot(radial_theta, radial_r, radial_u, radial_v, {
+  label = "outward flow",
+  color = "#2ca02c",
+  linewidth = 1.4,
+  density = 1.0,
+  arrow_fraction = 0.95,
+  head = 24,
+  step = 0.05,
+})
+clipped:title("luaplotlib: clipped boundary arrows")
+clipped:legend({ loc = "best" })
+clipped:savefig(outdir .. "/polar-streamplot-clip.svg")
+print("wrote " .. outdir .. "/polar-streamplot-clip.svg")

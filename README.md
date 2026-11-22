@@ -156,11 +156,18 @@ turn is treated as periodic, so lines wrap continuously across theta=0; a
 partial sector stops at its edges. `linestyle` supports solid, dashed, dotted,
 and hidden paths, and the single directional arrow is anchored by arc length:
 `arrow_fraction` (0.5 by default, constrained to [0.05, 0.95]) moves it along
-the integrated line. The series exposes `data-lines`, `data-points`,
-`data-step`, `data-periodic`, `data-truncated`, `data-linestyle`,
-`data-arrow-fraction`, and `data-closed-lines`; each line carries
-`data-points`/`data-arrows`/`data-closed` plus its seed and
-`data-arc-length`, and each arrow carries `data-angle` and `data-fraction`.
+the integrated line. Arrow triangles are built in screen space, so a large
+`head` or a late `arrow_fraction` can push a vertex past the polar circle; the
+renderer projects such vertices back onto the circle and reports the result.
+The series exposes `data-lines`, `data-points`, `data-step`, `data-periodic`,
+`data-truncated`, `data-linestyle`, `data-arrow-fraction`,
+`data-closed-lines`, `data-clip="polar-circle"`, and
+`data-clipped-arrow-count`; each line carries
+`data-points`/`data-arrows`/`data-clipped-arrows`/`data-closed` plus its seed
+and `data-arc-length`, and each arrow carries `data-angle`, `data-fraction`,
+and `data-clipped`. `to_scene()` exports the matching `cols`/`rows`,
+`arrow_count`, `clipped_arrow_count`, `clip`, and per-line/per-arrow clipping
+fields.
 `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
 projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
 `theta_min`/`theta_max`; it renders beneath the other series, so lines and
@@ -338,6 +345,8 @@ make examples
 # examples/output/polar-contour.svg
 # examples/output/polar-quiver.svg
 # examples/output/polar-streamplot.svg
+# examples/output/polar-streamplot-styles.svg
+# examples/output/polar-streamplot-clip.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
@@ -372,7 +381,8 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
   contour labels may be skipped when the frame is too crowded, and contour
   levels that exactly equal a matrix sample can miss that degenerate contour
   branch. Streamlines use a fixed integration step rather than vector
-  magnitude as speed.
+  magnitude as speed, and their screen-space arrow glyphs are clipped to the
+  polar frame circle.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.

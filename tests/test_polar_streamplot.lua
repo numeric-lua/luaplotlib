@@ -91,6 +91,76 @@ local function line_groups(svg)
   return groups
 end
 
+local function attributes(tag)
+  local record = {}
+  for key, value in tag:gmatch('([%w%-]+)="([^"]*)"') do
+    record[key] = value
+  end
+  return record
+end
+
+local function series_record(svg)
+  local tag = svg:match(
+    '<g class="series series%-polar%-streamplot" ([^>]*)>')
+  assert_true(tag ~= nil, "expected a streamplot series group")
+  return attributes(tag)
+end
+
+local function line_records(svg)
+  local records = {}
+  for tag in svg:gmatch('<g class="polar%-streamline" ([^>]*)>') do
+    records[#records + 1] = attributes(tag)
+  end
+  return records
+end
+
+local function arrow_records(svg)
+  local records = {}
+  for tag in svg:gmatch(
+      '<polygon class="polar%-stream%-arrow" ([^>]*)/>') do
+    records[#records + 1] = attributes(tag)
+  end
+  return records
+end
+
+local function polygon_vertices(record)
+  local vertices = {}
+  for x, y in record.points:gmatch('([%d%.%-]+),([%d%.%-]+)') do
+    vertices[#vertices + 1] = { tonumber(x), tonumber(y) }
+  end
+  return vertices
+end
+
+-- Largest distance from the polar centre for every streamline path vertex and
+-- every arrow polygon vertex, plus the frame radius itself.
+local function frame_extents(svg)
+  local cx, cy, radius = geometry(svg)
+  local path_max, arrow_max = 0, 0
+  for d in svg:gmatch(
+      'class="polar%-streamline%-path" d="([^"]+)"') do
+    for x, y in d:gmatch('([%d%.%-]+) ([%d%.%-]+)') do
+      local dx, dy = tonumber(x) - cx, tonumber(y) - cy
+      local distance = math.sqrt(dx * dx + dy * dy)
+      if distance > path_max then path_max = distance end
+    end
+  end
+  for _, record in ipairs(arrow_records(svg)) do
+    for _, vertex in ipairs(polygon_vertices(record)) do
+      local dx, dy = vertex[1] - cx, vertex[2] - cy
+      local distance = math.sqrt(dx * dx + dy * dy)
+      if distance > arrow_max then arrow_max = distance end
+    end
+  end
+  return path_max, arrow_max, radius
+end
+
+local function assert_close(actual, expected, tolerance, label)
+  assert_true(actual ~= nil, (label or "value") .. " is missing")
+  assert_true(math.abs(actual - expected) <= tolerance,
+    string.format("%s: expected %.6f, got %.6f", label or "value",
+      expected, actual))
+end
+
 test("polar streamplot draws closed azimuthal streamlines", function()
   local theta = full_turn(25)
   local r = linear_grid(5, 1, 5)
@@ -368,6 +438,73 @@ test("polar streamplot arrow_fraction moves arrows along the line", function()
   assert_well_formed_svg(legend_svg)
 end)
 
+test("polar streamplot clips glyphs to the polar circle", function()
+  local theta = full_turn(37)
+  local r = linear_grid(5, 1, 5)
+  local u, v = radial(theta, r)
+
+  local function render(head, fraction)
+    local figure = plt.figure({ width = 640, height = 640 })
+    figure:polar_config({ rmax = 5 })
+    figure:polar_streamplot(theta, r, u, v, {
+      density = 1, step = 0.05, max_steps = 200,
+      arrow_fraction = fraction, head = head,
+    })
+    return figure, figure:to_svg()
+  end
+
+  -- Normal arrows fit inside the frame; the clip metadata is explicit but
+  -- nothing needs to be shortened.
+  local plain_figure, plain = render(6, 0.5)
+  local path_max, arrow_max, radius = frame_extents(plain)
+  assert_true(path_max <= radius + 1e-6,
+    "streamline paths must stay inside the polar frame")
+  assert_true(arrow_max <= radius + 1e-6,
+    "default arrow glyphs must stay inside the polar frame")
+  local plain_series = series_record(plain)
+  assert_equal(plain_series["data-clip"], "polar-circle")
+  assert_equal(tonumber(plain_series["data-clipped-arrow-count"]), 0)
+  assert_equal(count(plain, 'data%-clipped="true"'), 0)
+  local plain_scene = scene_series(plain_figure)
+  assert_equal(plain_scene.clip, "polar_circle")
+  assert_equal(plain_scene.clipped_arrow_count, 0)
+
+  -- A large head with a late anchor pushes the triangle past the circle.  The
+  -- rendered vertices are projected onto the frame and reported in both the
+  -- SVG and the scene export.
+  local clipped_figure, clipped = render(26, 0.95)
+  path_max, arrow_max, radius = frame_extents(clipped)
+  assert_true(path_max <= radius + 1e-6,
+    "clipped streamplot paths must stay inside the frame")
+  assert_true(arrow_max <= radius + 1e-6,
+    "clipped glyph vertices must stay inside the frame")
+  local scene = scene_series(clipped_figure)
+  assert_true(scene.clipped_arrow_count > 0,
+    "a large boundary glyph should be clipped")
+  local records = arrow_records(clipped)
+  assert_equal(#records, scene.arrow_count)
+  local clipped_records = 0
+  for _, record in ipairs(records) do
+    if record["data-clipped"] == "true" then
+      clipped_records = clipped_records + 1
+    end
+    local vertices = polygon_vertices(record)
+    assert_equal(#vertices, 3)
+    local cx, cy, frame_radius = geometry(clipped)
+    for _, vertex in ipairs(vertices) do
+      local dx, dy = vertex[1] - cx, vertex[2] - cy
+      assert_true(math.sqrt(dx * dx + dy * dy) <= frame_radius + 1e-6,
+        "every arrow vertex must stay inside the polar frame")
+    end
+  end
+  assert_equal(clipped_records, scene.clipped_arrow_count)
+  assert_equal(tonumber(series_record(clipped)["data-clipped-arrow-count"]),
+    scene.clipped_arrow_count)
+  assert_equal(count(clipped, 'data%-clipped="true"'), clipped_records)
+  assert_well_formed_svg(plain)
+  assert_well_formed_svg(clipped)
+end)
+
 test("polar streamplot supports dashed, dotted, and hidden paths", function()
   local theta = full_turn(17)
   local r = linear_grid(4, 1, 3)
@@ -474,6 +611,8 @@ test("polar streamplot exports grid, lines, and copied matrices", function()
   assert_equal(series.kind, "streamplot")
   assert_equal(#series.theta, 9)
   assert_equal(#series.r, 3)
+  assert_equal(series.cols, 9)
+  assert_equal(series.rows, 3)
   assert_equal(series.u[1][1], 1)
   assert_equal(series.v[3][2], 1)
   assert_equal(series.components, "tangential_radial")
@@ -489,15 +628,20 @@ test("polar streamplot exports grid, lines, and copied matrices", function()
   assert_equal(series.style.linestyle, "solid")
   assert_equal(series.style.label, "flow")
   assert_equal(series.arc_length_unit, "data_radius_units")
+  assert_equal(series.clip, "polar_circle")
   assert_true(series.closed_line_count >= 0)
   assert_true(series.truncated ~= nil)
   assert_equal(scene.polar.legend.entries[1].kind, "streamplot")
+  assert_equal(scene.polar.legend.entries[1].linestyle, "solid")
 
-  local total = 0
+  local total, arrow_total, clipped_total = 0, 0, 0
   for _, line in ipairs(series.lines) do
     total = total + line.points
+    arrow_total = arrow_total + line.arrow_count
+    clipped_total = clipped_total + line.clipped_arrows
     assert_equal(#line.theta, line.points)
     assert_equal(#line.r, line.points)
+    assert_equal(#line.arrows, line.arrow_count)
     assert_true(line.closed == true or line.closed == false)
     assert_true(line.arc_length > 0)
     assert_true(line.seed_theta ~= nil and line.seed_r ~= nil)
@@ -505,9 +649,12 @@ test("polar streamplot exports grid, lines, and copied matrices", function()
       assert_true(arrow.index >= 1 and arrow.index < line.points)
       assert_true(arrow.fraction >= 0 and arrow.fraction <= 1)
       assert_true(arrow.angle ~= nil)
+      assert_true(arrow.clipped == true or arrow.clipped == false)
     end
   end
   assert_equal(total, series.point_count)
+  assert_equal(arrow_total, series.arrow_count)
+  assert_equal(clipped_total, series.clipped_arrow_count)
 
   -- Scene data is a deep copy: mutating it must not reach the figure.
   series.u[1][1] = 99
@@ -516,6 +663,88 @@ test("polar streamplot exports grid, lines, and copied matrices", function()
     "scene export must copy component matrices")
   assert_true(figure._polar.series[1].theta[1] ~= 99,
     "scene export must copy the theta grid")
+end)
+
+test("polar streamplot SVG metadata agrees with the scene export", function()
+  local theta = full_turn(13)
+  local r = linear_grid(4, 1, 4)
+  local u, v = radial(theta, r)
+  local figure = plt.figure({ width = 640, height = 640 })
+  figure:polar_config({ rmax = 4 })
+  figure:polar_streamplot(theta, r, u, v, {
+    density = 0.7, step = 0.05, max_steps = 120, max_lines = 16,
+    arrow_fraction = 0.95, head = 26, linestyle = "dashed",
+    label = "flow",
+  })
+  figure:legend({ loc = "best" })
+  local svg = figure:to_svg()
+  local scene = scene_series(figure)
+  local series = series_record(svg)
+
+  assert_equal(tonumber(series["data-cols"]), scene.cols)
+  assert_equal(tonumber(series["data-rows"]), scene.rows)
+  assert_equal(tonumber(series["data-lines"]), scene.line_count)
+  assert_equal(tonumber(series["data-points"]), scene.point_count)
+  assert_equal(tonumber(series["data-arrow-count"]), scene.arrow_count)
+  assert_equal(tonumber(series["data-clipped-arrow-count"]),
+    scene.clipped_arrow_count)
+  assert_equal(tonumber(series["data-closed-lines"]), scene.closed_line_count)
+  assert_equal(series["data-step-mode"], scene.step_mode)
+  assert_equal(series["data-linestyle"], scene.style.linestyle)
+  assert_equal(series["data-periodic"], scene.periodic and "true" or "false")
+  assert_equal(series["data-truncated"], scene.truncated and "true" or "false")
+  assert_equal(series["data-clip"], "polar-circle")
+  assert_equal(scene.clip, "polar_circle")
+  assert_close(tonumber(series["data-step"]), scene.resolved_step, 1e-9,
+    "resolved step")
+  assert_close(tonumber(series["data-arrow-fraction"]), scene.arrow_fraction,
+    1e-9, "arrow fraction")
+  assert_equal(figure:to_scene().polar.legend.entries[1].linestyle, "dashed")
+
+  local lines = line_records(svg)
+  assert_equal(#lines, #scene.lines)
+  local arrow_total = 0
+  for index, line in ipairs(scene.lines) do
+    local record = lines[index]
+    assert_equal(tonumber(record["data-index"]), index)
+    assert_equal(tonumber(record["data-points"]), line.points)
+    assert_equal(tonumber(record["data-arrows"]), line.arrow_count)
+    assert_equal(tonumber(record["data-clipped-arrows"]), line.clipped_arrows)
+    assert_equal(record["data-closed"], line.closed and "true" or "false")
+    assert_close(tonumber(record["data-seed-theta"]), line.seed_theta, 1e-3,
+      "seed theta")
+    assert_close(tonumber(record["data-seed-r"]), line.seed_r, 1e-3,
+      "seed radius")
+    assert_close(tonumber(record["data-arc-length"]), line.arc_length, 1e-3,
+      "arc length")
+    arrow_total = arrow_total + line.arrow_count
+  end
+  assert_equal(arrow_total, scene.arrow_count)
+
+  local flat_arrows = {}
+  for _, line in ipairs(scene.lines) do
+    for _, arrow in ipairs(line.arrows) do
+      flat_arrows[#flat_arrows + 1] = arrow
+    end
+  end
+  local arrows = arrow_records(svg)
+  assert_equal(#arrows, #flat_arrows)
+  local clipped_total = 0
+  for index, arrow in ipairs(flat_arrows) do
+    local record = arrows[index]
+    assert_equal(tonumber(record["data-index"]), arrow.index)
+    assert_close(tonumber(record["data-fraction"]), arrow.fraction, 1e-3,
+      "arrow fraction")
+    assert_close(tonumber(record["data-theta"]), arrow.theta, 1e-3,
+      "arrow theta")
+    assert_close(tonumber(record["data-r"]), arrow.r, 1e-3, "arrow radius")
+    assert_close(tonumber(record["data-angle"]), arrow.angle, 1e-3,
+      "arrow angle")
+    assert_equal(record["data-clipped"], arrow.clipped and "true" or "false")
+    if arrow.clipped then clipped_total = clipped_total + 1 end
+  end
+  assert_equal(clipped_total, scene.clipped_arrow_count)
+  assert_well_formed_svg(svg)
 end)
 
 test("polar streamplot legend swatch and styles", function()
