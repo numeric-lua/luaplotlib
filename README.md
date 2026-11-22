@@ -56,6 +56,7 @@ luajit examples/polar_annotations.lua
 luajit examples/polar_heatmap.lua
 luajit examples/polar_contour.lua
 luajit examples/polar_quiver.lua
+luajit examples/polar_streamplot.lua
 ```
 
 The trailing `;;` preserves the interpreter's default module path. The same
@@ -145,6 +146,16 @@ uncertainty. `fig:polar_quiver(theta, r, u, v, opts)` draws a vector field:
 radial component, and both are projected into arrow glyphs whose lengths use
 `scale` (or an automatic scale). Large fields are capped with `max_arrows`
 (512 by default) and the SVG exposes `data-drawn`/`data-stride` metadata.
+`fig:polar_streamplot(theta, r, u, v, opts)` integrates the same local-basis
+field into curved streamlines: `theta` and `r` are strictly increasing grid
+coordinates and `u`/`v` are rows-by-columns matrices sampled at every grid
+node. Integration uses a fixed physical step (`step`, or an automatic step
+from the radial span) with deterministic seeding, closed-orbit detection, and
+`density`/`max_lines`/`max_points` caps. A grid whose theta span is one full
+turn is treated as periodic, so lines wrap continuously across theta=0; a
+partial sector stops at its edges. Streamlines expose `data-lines`,
+`data-points`, `data-step`, `data-periodic`, and `data-truncated`, and each
+line carries `data-points`/`data-arrows` plus per-arrow `data-angle` metadata.
 `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
 projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
 `theta_min`/`theta_max`; it renders beneath the other series, so lines and
@@ -167,8 +178,9 @@ but is shifted back inside the canvas when it would leave the viewport.
 `fig:polar_config` sets the zero location (`"E"`, `"N"`, `"W"`, `"S"`),
 clockwise/counterclockwise direction, explicit `rmax`, and custom
 angular/radial grids; pass `degrees = true` to any polar series method to
-supply theta in degrees. Labelled polar series, quivers, heatmaps, and contours
-participate in `fig:legend()`, which is placed so it does not cover the angular
+supply theta in degrees. Labelled polar series, quivers, streamplots, heatmaps,
+and contours participate in `fig:legend()`, which is placed so it does not cover
+the angular
 tick labels or the reserved colorbar column (`loc = "best"` searches for the
 least obstructed spot). Heatmap legend swatches are stepped gradients.
 Legend columns and titles are sized from UTF-8-aware Helvetica/Arial advance
@@ -207,6 +219,20 @@ fig:polar_contour(field, {
 fig:polar_quiver({ 0, math.pi / 2 }, { 3, 3 }, { 1, 0 }, { 0, 1 }, {
   label = "flow",
 })
+
+-- Grid-sampled vector field: theta and r are coordinates, u and v are
+-- rows-by-columns matrices of tangential/radial components at every node.
+local theta_grid = { 0, math.pi, 2 * math.pi }
+local r_grid = { 1, 2, 3 }
+fig:polar_streamplot(theta_grid, r_grid, {
+  { 1, 1, 1 },
+  { 1, 1, 1 },
+  { 1, 1, 1 },
+}, {
+  { 0.3, 0.3, 0.3 },
+  { 0, 0, 0 },
+  { -0.3, -0.3, -0.3 },
+}, { label = "streamlines", density = 0.8 })
 ```
 
 Annotations use data coordinates and can include a leader arrow:
@@ -306,6 +332,7 @@ make examples
 # examples/output/polar-heatmap.svg
 # examples/output/polar-contour.svg
 # examples/output/polar-quiver.svg
+# examples/output/polar-streamplot.svg
 ```
 
 Generated output and scratch files are ignored. There are no committed SVGs.
@@ -314,7 +341,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 `4.17.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar/error-bar/quiver/heatmap/contour plots with configurable
+polar line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with configurable
 orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
 collision-aware polar contour labels, polar annotations with canvas
 clamping, measured-text polar legends, annotations, linear/log/date axes, twin
@@ -329,7 +356,8 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
 - **SVG primary; PNG/PDF optional.** PNG/PDF export requires the system
   `rsvg-convert`; there is no interactive window or display server integration.
 - **Polar axes are focused.** Polar figures support line, scatter, bar,
-  error-bar, quiver, heatmap, and contour projections plus annotations, with
+  error-bar, quiver, streamplot, heatmap, and contour projections plus
+  annotations, with
   automatic or explicit radial limits, configurable zero location/direction,
   custom angular and radial grids, one vertical heatmap colorbar per figure with
   uniform or explicit tick values, rotated collision-aware contour labels, and
@@ -338,7 +366,8 @@ export. See [docs/stability.md](docs/stability.md) for the API policy.
   by default), not data-unit extents. Polar twin axes are not implemented,
   contour labels may be skipped when the frame is too crowded, and contour
   levels that exactly equal a matrix sample can miss that degenerate contour
-  branch.
+  branch. Streamlines use a fixed integration step rather than vector
+  magnitude as speed.
 - **Linear, log, and date-x axes.** Twin axes are supported.
 - **3-D is basic.** Line, scatter, surface, and mesh rendering are available;
   full camera/lighting controls are not.

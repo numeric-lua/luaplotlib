@@ -301,6 +301,58 @@ Arrows are clipped to the polar circle and drawn in series order above
 heatmaps and contours. Labelled quivers participate in `fig:legend()` with an
 arrow swatch and scene export under `polar.series` with `kind = "quiver"`.
 
+### `fig:polar_streamplot(theta, r, u, v, opts)`
+
+Integrate streamlines through a vector field sampled on a regular polar grid.
+`theta` and `r` are strictly increasing coordinate arrays with at least two
+values; `u` and `v` are `#r`-by-`#theta` matrices of the local
+tangential/radial components at every grid node. `u` points toward increasing
+data theta and `v` points outward, and the `theta_zero`/`theta_direction`
+configuration rotates the field with the axes. `theta` may be supplied in
+degrees with `degrees = true` or `theta_unit = "degrees"`.
+
+The field is bilinearly interpolated and integrated in the physical plane with
+fixed-step fourth-order Runge-Kutta, so one `step` is isotropic even when the
+angular and radial grid spacings differ. A theta grid spanning one full turn
+(within `1e-9` of `2*pi`) is periodic and wraps across `theta = 0`; a partial
+sector stops a line at its theta edges. A line also stops at the radial grid
+bounds, at a zero-magnitude sample, after `max_steps` in either direction, or
+when a closed orbit returns to its seed. Seeding is deterministic: a staggered
+grid scaled by `density`, with coarse occupancy bins that suppress lines which
+would retrace earlier coverage.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `density` | number in [0.1, 10] | `1` |
+| `step` | number > 0, data-radius units | automatic: radial span / 25 |
+| `max_steps` | integer in [10, 5000] | `300` |
+| `max_lines` | integer in [1, 512] | `64` |
+| `max_points` | integer in [100, 200000] | `8000` |
+| `arrows` | boolean | `true` |
+| `head` | number ≥ 0, SVG user units | `6` |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `linewidth` | number ≥ 0 | `1.5` |
+| `alpha` | number in [0, 1] | `1` |
+| `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
+
+The series group reports `data-cols`, `data-rows`, `data-lines`,
+`data-points`, `data-arrow-count`, `data-step`, `data-step-mode` (`"auto"` or
+`"explicit"`), `data-density`, `data-max-steps`, `data-max-lines`,
+`data-max-points`, `data-arrows`, `data-head`, `data-periodic`, and
+`data-truncated`. Each `polar-streamline` group reports `data-index`,
+`data-points`, and `data-arrows`; its path uses `polar-streamline-path` and
+each mid-line arrow is a `polar-stream-arrow` polygon with `data-angle`,
+`data-theta`, and `data-r`. Streamlines are clipped to the polar circle and
+draw in series order above heatmaps, contours, and other series. Labelled
+streamplots participate in `fig:legend()` with a curved swatch and scene
+export under `polar.series` with `kind = "streamplot"`, copied `u`/`v`
+matrices, the `theta`/`r` grid coordinates, `components = "tangential_radial"`,
+`periodic`, requested and resolved step metadata, density/caps, and a `lines`
+array whose entries carry `theta`, `r`, `points`, and `arrows`. Exported line
+theta values are continuous and may exceed the grid range by whole turns for
+periodic fields.
+
 ### `fig:polar_annotate(text, theta, r, opts)` / `fig:annotate(text, theta, r, opts)`
 
 Add a text annotation at a polar `(theta, r)` position. In a polar figure the
@@ -775,6 +827,7 @@ Polar figures are created with `plt.polar(theta, r, opts)` or by calling
 `theta_unit = "degrees"` is passed; `r` may be negative. `fig:polar_scatter`,
 `fig:polar_bar`, and `fig:polar_errorbar` add markers, radial wedges, and
 radial/angular uncertainty; `fig:polar_quiver` draws local-basis vector arrows;
+`fig:polar_streamplot` integrates grid-sampled vector fields into streamlines;
 `fig:polar_heatmap` projects a matrix as annular cells; `fig:polar_contour`
 overlays projected isolines of the same matrix.
 `fig:polar_annotate` (or `fig:annotate` on a polar figure) adds text and
@@ -782,8 +835,9 @@ optional arrows at `(theta, r)` coordinates. `fig:polar_config` changes the
 zero location, theta direction, radial limit, and explicit grids.
 
 The radial limit is selected automatically from the largest absolute radius,
-including the extents of radial error bars, annotation targets, heatmaps, and
-contours; the default angular grid has spokes every 45 degrees and the radial
+including the extents of radial error bars, annotation targets, heatmaps,
+contours, and streamplot grids; the default angular grid has spokes every 45
+degrees and the radial
 grid uses "nice" steps. An explicit `rmax` must cover every series value,
 error-bar extent, annotation target, heatmap/contour extent, and `rgrids`
 entry. The polar renderer draws the grid and tick labels itself, so `grid`,
@@ -800,6 +854,7 @@ coordinate-aware tooling. Series are clipped to the polar circle and rendered
 with classes `polar-line`, `polar-scatter`, `polar-bar`,
 `polar-errorbar-r`, `polar-errorbar-theta`, `polar-errorbar-cap`,
 `polar-quiver-arrow`, `polar-quiver-shaft`, `polar-quiver-head`,
+`polar-streamline`, `polar-streamline-path`, `polar-stream-arrow`,
 `polar-contour-line`, `polar-contour-label`, and `polar-frame`, plus
 `polar-spoke`, `polar-circle`, `theta-tick`, `r-tick`, `annotation-text`,
 `polar-legend`, and `polar-colorbar` for the grid, annotations, legend, and
@@ -815,12 +870,15 @@ across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
 ## Limitations
 
 - SVG is the primary backend; PNG/PDF require the optional `rsvg-convert`.
-- Polar axes support line/scatter/bar/error-bar/quiver series, heatmaps with
-  one colorbar, contours, and annotations; polar twin axes are not implemented.
-  Quiver glyphs are screen-space arrows (decimated to `max_arrows`), not
-  magnitude-scaled data extents. Contour levels that exactly equal a matrix
-  sample can drop that degenerate branch. Legend placement uses estimated text
-  metrics, not a full text-measurement engine.
+- Polar axes support line/scatter/bar/error-bar/quiver/streamplot series,
+  heatmaps with one colorbar, contours, and annotations; polar twin axes are
+  not implemented. Quiver glyphs are screen-space arrows (decimated to
+  `max_arrows`), not magnitude-scaled data extents. Streamlines follow the
+  interpolated direction field at a fixed integration step; the step is not a
+  physical speed and the sampled component magnitudes do not scale line
+  lengths. Contour levels that exactly equal a matrix sample can drop that
+  degenerate branch. Legend placement uses estimated text metrics, not a full
+  text-measurement engine.
 - 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
@@ -966,6 +1024,20 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         scale_unit = "svg_user_units_per_magnitude",
         pivot = "tail", max_arrows = 512, normalize = false,
         stride = 1, drawn = 320, style = {...} },
+      { kind = "streamplot", theta = {...}, r = {...},
+        u = { {...}, ... }, v = { {...}, ... },
+        components = "tangential_radial", periodic = true,
+        density = 1, step = nil, step_mode = "auto",
+        resolved_step = 0.2, step_unit = "data_radius_units",
+        max_steps = 300, max_lines = 64, max_points = 8000,
+        arrows = true, head = 6, truncated = false,
+        line_count = 15, point_count = 1268,
+        lines = {
+          { theta = {...}, r = {...}, points = 84, arrows = {
+            { theta = 1.2, r = 2.4, angle = -71.3 },
+          } },
+          -- ...
+        }, style = {...} },
     },
   },
 }
@@ -981,7 +1053,14 @@ present only when angular errors were requested. Quiver series include `u` and
 `v` (copied arrays), `components = "tangential_radial"`, `scale` (nil when
 automatic), `auto_scale`, the resolved `resolved_scale`, `scale_unit =
 "svg_user_units_per_magnitude"`, `pivot`, `max_arrows`, `normalize`, the
-decimation `stride`, and the number of `drawn` arrows. `r_ticks` include `fraction`
+decimation `stride`, and the number of `drawn` arrows. Streamplot series use
+`theta`/`r` as the grid coordinates, copied `u`/`v` matrices,
+`components = "tangential_radial"`, `periodic`, `density`, the requested
+`step`, `step_mode`, `resolved_step`, `step_unit = "data_radius_units"`, caps
+and `truncated`, plus a `lines` array whose entries carry `theta`, `r`,
+`points`, and `arrows` (each with `theta`, `r`, and the screen-space `angle`).
+Streamplot line theta values are continuous, so a periodic line may run past
+the grid range by whole turns. `r_ticks` include `fraction`
 (the radius as a fraction of `rmax`) so a backend can draw rings without
 dividing. `polar.legend` is present only when a non-empty legend was requested;
 top-level `legend` remains a boolean for compatibility with earlier scenes.

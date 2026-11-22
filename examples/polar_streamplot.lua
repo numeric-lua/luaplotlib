@@ -1,0 +1,71 @@
+-- Runnable polar streamplot example. Writes
+-- examples/output/polar-streamplot.svg.
+--
+--   luajit examples/polar_streamplot.lua
+--
+-- The SVG output path is gitignored.
+
+local script = (arg and arg[0]) or "examples/polar_streamplot.lua"
+local normalized = script:gsub("\\", "/")
+local dir = normalized:match("^(.*)/[^/]+$") or "."
+local root
+if dir == "." then
+  -- Invoked from inside examples/.
+  root = ".."
+elseif dir == "examples" or dir == "./examples" then
+  root = "."
+elseif dir:match("/examples$") then
+  root = dir:gsub("/examples$", "")
+  if root == "" then root = "." end
+else
+  root = dir
+end
+
+package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
+local plt = require("luaplotlib")
+
+local outdir = root .. "/examples/output"
+local function shell_quote(value)
+  return "'" .. value:gsub("'", "'\\''") .. "'"
+end
+local mkdir_status = os.execute("mkdir -p " .. shell_quote(outdir))
+if mkdir_status == nil or mkdir_status == false
+    or (type(mkdir_status) == "number" and mkdir_status ~= 0) then
+  error("could not create output directory: " .. outdir)
+end
+
+-- A vector field sampled at every (theta, r) grid node.  u is the local
+-- tangential component (toward increasing theta) and v is the radial
+-- component; streamlines are integrated through the interpolated field so
+-- they curve with the flow.  The domain is a full turn, so it is treated as
+-- periodic and the closed orbit near the middle is detected automatically.
+local theta, r = {}, {}
+for index = 1, 73 do
+  theta[index] = (index - 1) * 2 * math.pi / 72
+end
+for index = 1, 25 do
+  r[index] = 0.4 + (5.0 - 0.4) * (index - 1) / 24
+end
+
+local u, v = {}, {}
+for row = 1, #r do
+  u[row], v[row] = {}, {}
+  for column = 1, #theta do
+    local angle = theta[column]
+    u[row][column] = 1.0 + 0.45 * math.cos(2 * angle) + 0.15 * r[row]
+    v[row][column] = 0.5 * math.sin(3 * angle)
+  end
+end
+
+local fig = plt.figure({ width = 640, height = 640, dpi = 100 })
+fig:polar_config({ rmax = 5 })
+fig:polar_streamplot(theta, r, u, v, {
+  label = "integrated streamlines",
+  color = "#1f77b4",
+  linewidth = 1.4,
+  density = 1.2,
+})
+fig:title("luaplotlib: polar streamlines")
+fig:legend({ loc = "best" })
+fig:savefig(outdir .. "/polar-streamplot.svg")
+print("wrote " .. outdir .. "/polar-streamplot.svg")

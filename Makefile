@@ -21,6 +21,7 @@ examples:
 	@$(LUA) examples/polar_heatmap.lua
 	@$(LUA) examples/polar_contour.lua
 	@$(LUA) examples/polar_quiver.lua
+	@$(LUA) examples/polar_streamplot.lua
 
 visual-qa:
 	@./scripts/visual-qa.sh
