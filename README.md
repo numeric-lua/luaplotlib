@@ -153,9 +153,14 @@ node. Integration uses a fixed physical step (`step`, or an automatic step
 from the radial span) with deterministic seeding, closed-orbit detection, and
 `density`/`max_lines`/`max_points` caps. A grid whose theta span is one full
 turn is treated as periodic, so lines wrap continuously across theta=0; a
-partial sector stops at its edges. Streamlines expose `data-lines`,
-`data-points`, `data-step`, `data-periodic`, and `data-truncated`, and each
-line carries `data-points`/`data-arrows` plus per-arrow `data-angle` metadata.
+partial sector stops at its edges. `linestyle` supports solid, dashed, dotted,
+and hidden paths, and the single directional arrow is anchored by arc length:
+`arrow_fraction` (0.5 by default, constrained to [0.05, 0.95]) moves it along
+the integrated line. The series exposes `data-lines`, `data-points`,
+`data-step`, `data-periodic`, `data-truncated`, `data-linestyle`,
+`data-arrow-fraction`, and `data-closed-lines`; each line carries
+`data-points`/`data-arrows`/`data-closed` plus its seed and
+`data-arc-length`, and each arrow carries `data-angle` and `data-fraction`.
 `fig:polar_heatmap(values, opts)` (alias `polar_pcolormesh`)
 projects a rows-by-columns matrix as annular cells between `rmin`/`rmax` and
 `theta_min`/`theta_max`; it renders beneath the other series, so lines and
@@ -232,7 +237,7 @@ fig:polar_streamplot(theta_grid, r_grid, {
   { 0.3, 0.3, 0.3 },
   { 0, 0, 0 },
   { -0.3, -0.3, -0.3 },
-}, { label = "streamlines", density = 0.8 })
+}, { label = "streamlines", density = 0.8, arrow_fraction = 0.6 })
 ```
 
 Annotations use data coordinates and can include a leader arrow:
@@ -408,5 +413,7 @@ The scene contains series geometry, styles, axes labels, scales, explicit
 limits, category ticks, and annotation geometry/styles. Polar figures export a
 `polar` block with resolved theta/r ticks, series (including error bars and
 vector fields), heatmap cells and value ranges, annotations, and legend entries
-under `orientation = "polar"`. The export does not depend on LÖVR or any graphics
-toolkit.
+under `orientation = "polar"`. Streamplot lines add `closed`, `seed_theta`,
+`seed_r`, and `arc_length`, while each arrow exports its anchor `index`,
+arc-length `fraction`, direction `angle`, and data position. The export does
+not depend on LÖVR or any graphics toolkit.

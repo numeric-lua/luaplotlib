@@ -278,8 +278,139 @@ test("polar streamplot step controls resolution", function()
   assert_equal(scene.step_unit, "data_radius_units")
 end)
 
-test("polar streamplot honours theta_zero and direction", function()
+test("polar streamplot reports closed orbits and arc-length anchors", function()
+  local theta = full_turn(25)
+  local r = linear_grid(5, 1, 5)
+  local u, v = azimuthal(theta, r)
+  local figure = plt.figure({ width = 600, height = 600 })
+  figure:polar_config({ rmax = 5 })
+  figure:polar_streamplot(theta, r, u, v)
+
+  local svg = figure:to_svg()
+  local lines = number_attr(svg, "lines")
+  -- Five radial seed rows; the overlap filter must not redraw the same ring
+  -- from every angular seed column.
+  assert_equal(lines, 5, "closed orbits should be seeded once per radial row")
+  assert_equal(number_attr(svg, "closed%-lines"), lines)
+  assert_equal(count(svg, 'data%-closed="true"'), lines)
+  assert_contains(svg, 'data-arrow-fraction="0.5"')
+  assert_contains(svg, 'data-arc-length-unit="data_radius_units"')
+  local groups = line_groups(svg)
+  assert_equal(#groups, lines)
+  for _, group in ipairs(groups) do
+    assert_true(group.points >= 3)
+    assert_equal(group.arrows, 1)
+  end
+
+  local series = scene_series(figure)
+  assert_equal(series.closed_line_count, lines)
+  assert_equal(series.arrow_fraction, 0.5)
+  assert_equal(series.lines[1].seed_theta, series.lines[1].theta[1])
+  assert_equal(series.lines[1].seed_r, series.lines[1].r[1])
+  local total_points = 0
+  for _, line in ipairs(series.lines) do
+    assert_equal(line.closed, true)
+    assert_true(line.arc_length > 0)
+    -- Each ring starts at its seed radius, so its polyline length is the
+    -- circumference up to chord discretization error.
+    local circumference = 2 * math.pi * line.r[1]
+    assert_true(math.abs(line.arc_length - circumference) <
+      circumference * 0.01,
+      "arc length should track the seeded ring circumference")
+    assert_equal(#line.arrows, 1)
+    local arrow = line.arrows[1]
+    assert_true(arrow.index >= 1 and arrow.index < line.points)
+    assert_true(math.abs(arrow.fraction - 0.5) < 0.02,
+      "an arrow at fraction 0.5 should land near half the arc length")
+    assert_equal(arrow.theta, line.theta[arrow.index])
+    assert_equal(arrow.r, line.r[arrow.index])
+    total_points = total_points + line.points
+  end
+  assert_equal(total_points, series.point_count)
+  assert_well_formed_svg(svg)
+end)
+
+test("polar streamplot arrow_fraction moves arrows along the line", function()
   local theta = full_turn(17)
+  local r = linear_grid(4, 1, 4)
+  local u, v = radial(theta, r)
+
+  local function render(fraction, with_legend)
+    local figure = plt.figure({ width = 500, height = 500 })
+    figure:polar_config({ rmax = 4 })
+    figure:polar_streamplot(theta, r, u, v, {
+      density = 0.5, step = 0.05, max_steps = 100,
+      arrow_fraction = fraction, label = "radial flow",
+    })
+    if with_legend then figure:legend({ loc = "best" }) end
+    return figure, figure:to_svg()
+  end
+
+  local early_figure, early_svg = render(0.2, false)
+  local late_figure, late_svg = render(0.8, false)
+  assert_contains(early_svg, 'data-arrow-fraction="0.2"')
+  assert_contains(late_svg, 'data-arrow-fraction="0.8"')
+
+  local early = scene_series(early_figure).lines[1].arrows[1]
+  local late = scene_series(late_figure).lines[1].arrows[1]
+  assert_true(math.abs(early.fraction - 0.2) < 0.02)
+  assert_true(math.abs(late.fraction - 0.8) < 0.02)
+  assert_true(late.fraction > early.fraction + 0.5,
+    "the late arrow should sit farther along the same line")
+  assert_true(math.abs(late.index - early.index) > 1,
+    "moving the fraction should move the anchor point index")
+
+  local legend_figure, legend_svg = render(0.5, true)
+  assert_contains(legend_svg, 'class="legend-swatch-streamplot"')
+  assert_true(scene_series(legend_figure).arrow_fraction == 0.5)
+  assert_well_formed_svg(early_svg)
+  assert_well_formed_svg(late_svg)
+  assert_well_formed_svg(legend_svg)
+end)
+
+test("polar streamplot supports dashed, dotted, and hidden paths", function()
+  local theta = full_turn(17)
+  local r = linear_grid(4, 1, 3)
+  local u, v = spiral(theta, r)
+
+  local function render(linestyle)
+    local figure = plt.figure({ width = 500, height = 500 })
+    figure:polar_config({ rmax = 3 })
+    figure:polar_streamplot(theta, r, u, v, {
+      density = 0.6, linestyle = linestyle, label = "flow",
+    })
+    figure:legend({ loc = "best" })
+    return figure, figure:to_svg()
+  end
+
+  local dashed_figure, dashed = render("dashed")
+  assert_contains(dashed, 'data-linestyle="dashed"')
+  assert_contains(dashed, 'stroke-dasharray="6 4"')
+  assert_match(dashed,
+    'class="legend%-swatch%-streamplot".-stroke%-dasharray="6 4"')
+  assert_equal(scene_series(dashed_figure).style.linestyle, "dashed")
+
+  local dotted_figure, dotted = render("dotted")
+  assert_contains(dotted, 'data-linestyle="dotted"')
+  assert_contains(dotted, 'stroke-dasharray="1.5 3"')
+  assert_match(dotted,
+    'class="legend%-swatch%-streamplot".-stroke%-dasharray="1%.5 3"')
+  assert_equal(scene_series(dotted_figure).style.linestyle, "dotted")
+
+  local hidden_figure, hidden = render("none")
+  assert_contains(hidden, 'data-linestyle="none"')
+  assert_equal(count(hidden, 'class="polar%-streamline%-path"'), 0)
+  assert_true(number_attr(hidden, "arrow%-count") > 0,
+    "hidden paths should keep their directional arrows")
+  assert_not_contains(hidden, 'class="legend-swatch-streamplot"')
+  assert_equal(scene_series(hidden_figure).style.linestyle, "none")
+
+  assert_well_formed_svg(dashed)
+  assert_well_formed_svg(dotted)
+  assert_well_formed_svg(hidden)
+end)
+
+test("polar streamplot honours theta_zero and direction", function()  local theta = full_turn(17)
   local r = linear_grid(4, 1, 4)
   local u, v = azimuthal(theta, r)
   local figure = plt.figure({ width = 600, height = 600 })
@@ -353,8 +484,12 @@ test("polar streamplot exports grid, lines, and copied matrices", function()
   assert_equal(series.density, 0.6)
   assert_equal(series.max_steps, 30)
   assert_equal(series.arrows, true)
+  assert_equal(series.arrow_fraction, 0.5)
   assert_equal(series.head, 6)
+  assert_equal(series.style.linestyle, "solid")
   assert_equal(series.style.label, "flow")
+  assert_equal(series.arc_length_unit, "data_radius_units")
+  assert_true(series.closed_line_count >= 0)
   assert_true(series.truncated ~= nil)
   assert_equal(scene.polar.legend.entries[1].kind, "streamplot")
 
@@ -363,7 +498,14 @@ test("polar streamplot exports grid, lines, and copied matrices", function()
     total = total + line.points
     assert_equal(#line.theta, line.points)
     assert_equal(#line.r, line.points)
-    assert_true(#line.arrows >= 0)
+    assert_true(line.closed == true or line.closed == false)
+    assert_true(line.arc_length > 0)
+    assert_true(line.seed_theta ~= nil and line.seed_r ~= nil)
+    for _, arrow in ipairs(line.arrows) do
+      assert_true(arrow.index >= 1 and arrow.index < line.points)
+      assert_true(arrow.fraction >= 0 and arrow.fraction <= 1)
+      assert_true(arrow.angle ~= nil)
+    end
   end
   assert_equal(total, series.point_count)
 
@@ -531,6 +673,18 @@ test("polar streamplot rejects malformed grids and options", function()
   end)
   assert_error("head must be >= 0", function()
     streamplot(theta, r, u, v, { head = -1 })
+  end)
+  assert_error("arrow_fraction must be >= 0%.05", function()
+    streamplot(theta, r, u, v, { arrow_fraction = 0.01 })
+  end)
+  assert_error("arrow_fraction must be <= 0%.95", function()
+    streamplot(theta, r, u, v, { arrow_fraction = 0.99 })
+  end)
+  assert_error("arrow_fraction must be a number", function()
+    streamplot(theta, r, u, v, { arrow_fraction = "middle" })
+  end)
+  assert_error("linestyle must be one of", function()
+    streamplot(theta, r, u, v, { linestyle = "dashdot" })
   end)
   assert_error("unsupported polar streamplot option", function()
     streamplot(theta, r, u, v, { bogus = true })

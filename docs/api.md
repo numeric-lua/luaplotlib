@@ -329,29 +329,43 @@ would retrace earlier coverage.
 | `max_lines` | integer in [1, 512] | `64` |
 | `max_points` | integer in [100, 200000] | `8000` |
 | `arrows` | boolean | `true` |
+| `arrow_fraction` | number in [0.05, 0.95], fraction of arc length | `0.5` |
 | `head` | number ≥ 0, SVG user units | `6` |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `1.5` |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
 | `alpha` | number in [0, 1] | `1` |
 | `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
+
+Each line carries one directional arrow, anchored at `arrow_fraction` of the
+line's integrated arc length rather than at a point index, so uneven spacing
+and trimmed tails cannot pull it away from the requested position. Arrows are
+omitted when `arrows = false` or `head = 0`.
 
 The series group reports `data-cols`, `data-rows`, `data-lines`,
 `data-points`, `data-arrow-count`, `data-step`, `data-step-mode` (`"auto"` or
 `"explicit"`), `data-density`, `data-max-steps`, `data-max-lines`,
-`data-max-points`, `data-arrows`, `data-head`, `data-periodic`, and
-`data-truncated`. Each `polar-streamline` group reports `data-index`,
-`data-points`, and `data-arrows`; its path uses `polar-streamline-path` and
-each mid-line arrow is a `polar-stream-arrow` polygon with `data-angle`,
-`data-theta`, and `data-r`. Streamlines are clipped to the polar circle and
-draw in series order above heatmaps, contours, and other series. Labelled
-streamplots participate in `fig:legend()` with a curved swatch and scene
-export under `polar.series` with `kind = "streamplot"`, copied `u`/`v`
-matrices, the `theta`/`r` grid coordinates, `components = "tangential_radial"`,
-`periodic`, requested and resolved step metadata, density/caps, and a `lines`
-array whose entries carry `theta`, `r`, `points`, and `arrows`. Exported line
-theta values are continuous and may exceed the grid range by whole turns for
-periodic fields.
+`data-max-points`, `data-arrows`, `data-head`, `data-linestyle`,
+`data-arrow-fraction`, `data-closed-lines`, `data-arc-length-unit`
+(`"data_radius_units"`), `data-periodic`, and `data-truncated`. Each
+`polar-streamline` group reports `data-index`, `data-points`, `data-arrows`,
+`data-closed`, `data-seed-theta`, `data-seed-r`, and `data-arc-length`; its
+path uses `polar-streamline-path` (with `stroke-dasharray` for dashed/dotted
+styles) and each arrow is a `polar-stream-arrow` polygon with `data-index` (the
+1-based point index used as its anchor), `data-fraction` (the anchor's arc
+length divided by the line length), `data-angle`, `data-theta`, and `data-r`.
+Streamlines are clipped to the polar circle and draw in series order above
+heatmaps, contours, and other series. Labelled streamplots participate in
+`fig:legend()` with a curved swatch that follows the configured line style.
+Scene export under `polar.series` uses `kind = "streamplot"`, copied `u`/`v`
+matrices, the `theta`/`r` grid coordinates,
+`components = "tangential_radial"`, `periodic`, requested and resolved step
+metadata, density/caps, `arrow_fraction`, `closed_line_count`, and
+`arc_length_unit`; its `lines` array carries `theta`, `r`, `points`, `closed`,
+`seed_theta`, `seed_r`, `arc_length`, and `arrows`, where every arrow exports
+`index`, `fraction`, `theta`, `r`, and `angle`. Exported line theta values are
+continuous and may exceed the grid range by whole turns for periodic fields.
 
 ### `fig:polar_annotate(text, theta, r, opts)` / `fig:annotate(text, theta, r, opts)`
 
@@ -1030,12 +1044,17 @@ schema, the Cartesian `series` array is empty, and geometry lives under
         density = 1, step = nil, step_mode = "auto",
         resolved_step = 0.2, step_unit = "data_radius_units",
         max_steps = 300, max_lines = 64, max_points = 8000,
-        arrows = true, head = 6, truncated = false,
-        line_count = 15, point_count = 1268,
+        arrows = true, arrow_fraction = 0.5, head = 6, truncated = false,
+        linestyle = "solid", closed_line_count = 9,
+        arc_length_unit = "data_radius_units",
+        line_count = 12, point_count = 960,
         lines = {
-          { theta = {...}, r = {...}, points = 84, arrows = {
-            { theta = 1.2, r = 2.4, angle = -71.3 },
-          } },
+          { theta = {...}, r = {...}, points = 84, closed = false,
+            seed_theta = 0.5, seed_r = 1.4, arc_length = 6.28,
+            arrows = {
+              { index = 33, fraction = 0.5, theta = 1.2, r = 2.4,
+                angle = -71.3 },
+            } },
           -- ...
         }, style = {...} },
     },
@@ -1057,8 +1076,11 @@ decimation `stride`, and the number of `drawn` arrows. Streamplot series use
 `theta`/`r` as the grid coordinates, copied `u`/`v` matrices,
 `components = "tangential_radial"`, `periodic`, `density`, the requested
 `step`, `step_mode`, `resolved_step`, `step_unit = "data_radius_units"`, caps
-and `truncated`, plus a `lines` array whose entries carry `theta`, `r`,
-`points`, and `arrows` (each with `theta`, `r`, and the screen-space `angle`).
+and `truncated`, `arrow_fraction`, `closed_line_count`, and
+`arc_length_unit = "data_radius_units"`, plus a `lines` array whose entries
+carry `theta`, `r`, `points`, `closed`, `seed_theta`, `seed_r`, `arc_length`,
+and `arrows` (each with the 1-based anchor point `index`, its arc-length
+`fraction`, `theta`, `r`, and the screen-space `angle`).
 Streamplot line theta values are continuous, so a periodic line may run past
 the grid range by whole turns. `r_ticks` include `fraction`
 (the radius as a fraction of `rmax`) so a backend can draw rings without

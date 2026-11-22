@@ -1,9 +1,10 @@
 -- Runnable polar streamplot example. Writes
--- examples/output/polar-streamplot.svg.
+-- examples/output/polar-streamplot.svg and
+-- examples/output/polar-streamplot-styles.svg.
 --
 --   luajit examples/polar_streamplot.lua
 --
--- The SVG output path is gitignored.
+-- The SVG output paths are gitignored.
 
 local script = (arg and arg[0]) or "examples/polar_streamplot.lua"
 local normalized = script:gsub("\\", "/")
@@ -64,8 +65,27 @@ fig:polar_streamplot(theta, r, u, v, {
   color = "#1f77b4",
   linewidth = 1.4,
   density = 1.2,
+  arrow_fraction = 0.5,
 })
 fig:title("luaplotlib: polar streamlines")
 fig:legend({ loc = "best" })
 fig:savefig(outdir .. "/polar-streamplot.svg")
 print("wrote " .. outdir .. "/polar-streamplot.svg")
+
+-- The same field with a non-solid line style.  Arrows are anchored by arc
+-- length, so arrow_fraction = 0.65 places the glyphs later along each line
+-- without changing the integration or the line counts.
+local styled = plt.figure({ width = 640, height = 640, dpi = 100 })
+styled:polar_config({ rmax = 5 })
+styled:polar_streamplot(theta, r, u, v, {
+  label = "dashed streamlines",
+  color = "#d62728",
+  linewidth = 1.5,
+  density = 1.0,
+  linestyle = "dashed",
+  arrow_fraction = 0.65,
+})
+styled:title("luaplotlib: dashed streamlines")
+styled:legend({ loc = "best" })
+styled:savefig(outdir .. "/polar-streamplot-styles.svg")
+print("wrote " .. outdir .. "/polar-streamplot-styles.svg")
