@@ -49,6 +49,7 @@ end
 -- log axes use log10(value) and reject non-positive values with a clear error.
 local function data_extents(fig, xscale, yscale)
   local min_x, max_x, min_y, max_y
+  local baseline_x = false
   local baseline_y = false
   local any = false
   local has_x, has_y = false, false
@@ -113,24 +114,48 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y[i], series_index, i, "series")
       end
     elseif series.kind == "hist" then
-      include_x(series.edges[1], series_index, 1, "histogram edge")
-      include_x(series.edges[#series.edges], series_index, #series.edges,
-        "histogram edge")
-      if y_log then
-        -- Zero-count bins are not drawn, so they do not define a log range.
-        for i = 1, #series.counts do
-          local count = series.counts[i]
-          if count > 0 then
-            include_y(count, series_index, i, "histogram count")
-          elseif count < 0 then
-            check_positive(count, "y", series_index, i, "histogram count")
+      local horizontal = series.orientation == "horizontal"
+      if horizontal then
+        if x_log then
+          -- Zero-count bins are not drawn, so they do not define a log range.
+          for i = 1, #series.counts do
+            local count = series.counts[i]
+            if count > 0 then
+              include_x(count, series_index, i, "histogram count")
+            elseif count < 0 then
+              check_positive(count, "x", series_index, i, "histogram count")
+            end
+          end
+        else
+          baseline_x = true
+          include_x(0, series_index, 1, "histogram baseline")
+          for i = 1, #series.counts do
+            include_x(series.counts[i], series_index, i, "histogram count")
           end
         end
+        include_y(series.edges[1], series_index, 1, "histogram edge")
+        include_y(series.edges[#series.edges], series_index, #series.edges,
+          "histogram edge")
       else
-        baseline_y = true
-        include_y(0, series_index, 1, "histogram baseline")
-        for i = 1, #series.counts do
-          include_y(series.counts[i], series_index, i, "histogram count")
+        include_x(series.edges[1], series_index, 1, "histogram edge")
+        include_x(series.edges[#series.edges], series_index, #series.edges,
+          "histogram edge")
+        if y_log then
+          -- Zero-count bins are not drawn, so they do not define a log range.
+          for i = 1, #series.counts do
+            local count = series.counts[i]
+            if count > 0 then
+              include_y(count, series_index, i, "histogram count")
+            elseif count < 0 then
+              check_positive(count, "y", series_index, i, "histogram count")
+            end
+          end
+        else
+          baseline_y = true
+          include_y(0, series_index, 1, "histogram baseline")
+          for i = 1, #series.counts do
+            include_y(series.counts[i], series_index, i, "histogram count")
+          end
         end
       end
     elseif series.kind == "errorbar" then
@@ -254,6 +279,7 @@ local function data_extents(fig, xscale, yscale)
     max_x = max_x,
     min_y = min_y,
     max_y = max_y,
+    baseline_x = baseline_x,
     baseline_y = baseline_y,
     has_x = has_x,
     has_y = has_y,
@@ -797,7 +823,7 @@ local function render_errorbar(series, map_x, map_y, buf)
   render_line(series, map_x, map_y, buf)
 end
 
-local function render_hist(series, map_x, map_y, baseline, buf)
+local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
   local style = series.style
   local opacity = ""
   if style.alpha < 1 then
@@ -809,18 +835,34 @@ local function render_hist(series, map_x, map_y, baseline, buf)
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
   end
+  local horizontal = series.orientation == "horizontal"
+  local orientation = horizontal and ' data-orientation="horizontal"' or ""
 
-  buf[#buf + 1] = string.format('  <g class="series series-hist"%s>', label)
+  buf[#buf + 1] = string.format('  <g class="series series-hist"%s%s>',
+    label, orientation)
   for i = 1, #series.counts do
     local count = series.counts[i]
     if count > 0 then
-      local x1 = map_x(series.edges[i])
-      local x2 = map_x(series.edges[i + 1])
-      local top = map_y(count)
-      buf[#buf + 1] = string.format(
-        '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
-        util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(baseline - top),
-        style.color, edge, opacity)
+      if horizontal then
+        local y1 = map_y(series.edges[i])
+        local y2 = map_y(series.edges[i + 1])
+        local value_x = map_x(count)
+        local left = math.min(x_baseline, value_x)
+        local top = math.min(y1, y2)
+        buf[#buf + 1] = string.format(
+          '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+          util.fmt(left), util.fmt(top),
+          util.fmt(math.abs(value_x - x_baseline)),
+          util.fmt(math.abs(y2 - y1)), style.color, edge, opacity)
+      else
+        local x1 = map_x(series.edges[i])
+        local x2 = map_x(series.edges[i + 1])
+        local top = map_y(count)
+        buf[#buf + 1] = string.format(
+          '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+          util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
+          util.fmt(y_baseline - top), style.color, edge, opacity)
+      end
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -1357,7 +1399,7 @@ function M.to_svg(fig)
   local xaxis = make_axis("xlim", xscale, fig._xlim,
     extents and extents.has_x and extents.min_x or nil,
     extents and extents.has_x and extents.max_x or nil,
-    x_target, false, 0, 1)
+    x_target, extents and extents.baseline_x or false, 0, 1)
   local yaxis = make_axis("ylim", yscale, fig._ylim,
     extents and extents.has_y and extents.min_y or nil,
     extents and extents.has_y and extents.max_y or nil,
@@ -1510,6 +1552,10 @@ function M.to_svg(fig)
   if yscale ~= "log" then
     y_baseline = map_y(0)
   end
+  local x_baseline = geom.left
+  if xscale ~= "log" then
+    x_baseline = map_x(0)
+  end
 
   local buf = {}
   local function add(line)
@@ -1614,7 +1660,7 @@ function M.to_svg(fig)
     elseif series.kind == "scatter" then
       render_scatter(series, map_x, map_y, buf)
     elseif series.kind == "hist" then
-      render_hist(series, map_x, map_y, y_baseline, buf)
+      render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
     elseif series.kind == "bar" then
       render_bar(series, map_x, map_y, y_baseline, yscale, buf)
     elseif series.kind == "fill" then

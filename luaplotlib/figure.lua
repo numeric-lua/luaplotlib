@@ -174,6 +174,7 @@ local HIST_OPTIONS = {
   range = true,
   density = true,
   cumulative = true,
+  orientation = true,
 }
 
 local BAR_OPTIONS = {
@@ -1728,6 +1729,13 @@ function Figure:hist(values, opts)
   if opts.cumulative ~= nil and type(opts.cumulative) ~= "boolean" then
     fail("hist cumulative must be a boolean")
   end
+  local orientation = "vertical"
+  if opts.orientation ~= nil then
+    if opts.orientation ~= "vertical" and opts.orientation ~= "horizontal" then
+      fail("hist orientation must be 'vertical' or 'horizontal'")
+    end
+    orientation = opts.orientation
+  end
   local bin_width = (hi - lo) / bins
   local counts = {}
   for i = 1, bins do
@@ -1768,6 +1776,7 @@ function Figure:hist(values, opts)
     counts = counts,
     density = density,
     cumulative = cumulative,
+    orientation = orientation,
     style = style,
   }
   return self

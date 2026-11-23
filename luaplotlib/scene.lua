@@ -423,15 +423,36 @@ function M.from_figure(figure)
     elseif series.kind == "hist" then
       copy.edges = copy_array(series.edges)
       copy.counts = copy_array(series.counts)
-      for index = 1, #copy.edges do
-        local x = copy.edges[index]
-        if state.xmin == nil or x < state.xmin then state.xmin = x end
-        if state.xmax == nil or x > state.xmax then state.xmax = x end
-      end
-      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
-      for index = 1, #copy.counts do
-        local y = copy.counts[index]
-        if state.ymax == nil or y > state.ymax then state.ymax = y end
+      copy.orientation = series.orientation or "vertical"
+      if copy.orientation == "horizontal" then
+        if scene.xscale ~= "log" then
+          if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
+        end
+        for index = 1, #copy.counts do
+          local x = copy.counts[index]
+          if x > 0 then
+            if state.xmin == nil or x < state.xmin then state.xmin = x end
+            if state.xmax == nil or x > state.xmax then state.xmax = x end
+          end
+        end
+        for index = 1, #copy.edges do
+          local y = copy.edges[index]
+          if state.ymin == nil or y < state.ymin then state.ymin = y end
+          if state.ymax == nil or y > state.ymax then state.ymax = y end
+        end
+      else
+        for index = 1, #copy.edges do
+          local x = copy.edges[index]
+          if state.xmin == nil or x < state.xmin then state.xmin = x end
+          if state.xmax == nil or x > state.xmax then state.xmax = x end
+        end
+        if scene.yscale ~= "log" then
+          if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
+        end
+        for index = 1, #copy.counts do
+          local y = copy.counts[index]
+          if state.ymax == nil or y > state.ymax then state.ymax = y end
+        end
       end
     end
     scene.series[#scene.series + 1] = copy
