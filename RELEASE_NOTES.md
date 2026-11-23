@@ -1,40 +1,44 @@
-# luaplotlib 4.22.0
+# luaplotlib 4.23.0
 
 This release adds five Cartesian renderer/API features. Existing Cartesian
 defaults are preserved, polar rendering is unchanged, and there are no new
 runtime dependencies.
 
-- **Fractional reference spans.** `fig:axhline(y, { xmin = ..., xmax = ... })`
-  and `fig:axvline(x, { ymin = ..., ymax = ... })` clip a reference line to
-  axes fractions in `[0, 1]`. The endpoints default to the full axes and must
-  be ordered. SVG groups expose `data-xmin`/`data-xmax` or
-  `data-ymin`/`data-ymax`, and `to_scene()` carries the data coordinate plus
-  the resolved fractions.
-- **Independent grid styling.** `fig:grid` adds `alpha` and `minor_color`,
-  `minor_linewidth`, `minor_linestyle`, and `minor_alpha`. Minor lines inherit
-  the major color, width, and dash by default, so existing grids keep their
-  appearance. Scene export includes resolved `grid_style` and
-  `minor_grid_style` objects.
-- **Masked fill bands.** `fig:fill_between` and `fig:fill_betweenx` accept a
-  boolean `where` mask and `interpolate`. Each contiguous true run becomes a
-  polygon; interpolation adds midpoint edges at mask transitions. Hidden
-  samples are excluded from automatic ranging. Masked groups expose segment
-  metadata, and scene export includes the mask and resolved segments.
-- **Horizontal histograms.** `fig:hist(values, { orientation = "horizontal" })`
-  draws counts along x and bin edges along y while sharing the existing bin,
-  density, and cumulative calculations. The SVG group reports its orientation
-  and the scene swaps the automatic axis ranges accordingly.
-- **Styled stems.** `fig:stem` adds `base`, `marker`, and `linestyle`. Stems can
-  grow from any finite baseline, use any supported marker (or none), and hide
-  their lines independently. The base participates in automatic ranging and
-  scene export.
+- **Cartesian quiver.** `fig:quiver(x, y, u, v, opts)` projects data-coordinate
+  vector components through the current axes and draws capped arrow glyphs.
+  `scale` is automatic unless supplied, `normalize`, `pivot`, `head`, and
+  `linewidth` control the glyphs, and `max_arrows` decimates large fields
+  deterministically. Groups expose count/drawn/stride/scale/pivot metadata and
+  each arrow carries its magnitude, position, and angle; scene export includes
+  the component arrays and resolved scaling.
+- **Hexagonal binning.** `fig:hexbin(x, y, opts)` groups samples into regular
+  pointy-top hexagons, filters with `mincnt`, maps counts through the shared heat
+  palette, and optionally adds a labeled count colorbar with uniform or explicit
+  ticks. Cells and scene export carry counts, row/column indices, values, and
+  geometry.
+- **Image extents and origins.** `fig:imshow` (also `pcolormesh`/`pcolor`) accepts
+  `extent = { left, right, bottom, top }` and `origin = "upper" | "lower"`.
+  Extents participate in automatic ranging, explicit output carries
+  `data-extent`/`data-origin` plus per-cell row/column metadata, and scene export
+  preserves both. Default index geometry is unchanged.
+- **Contour coordinate grids.** `fig:contour` accepts `x` and `y` coordinate
+  vectors matching the matrix columns and rows. Marching-squares intersections,
+  labels, automatic ranging, and scene export use the supplied coordinates; the
+  default index grid remains compatible.
+- **Aspect ratios.** `fig:aspect("equal")`, `fig:aspect(number)`, and
+  `fig:aspect("auto")` constrain, set, or clear the plot-box ratio. The box
+  shrinks and centers inside the normal label margins and reports
+  `data-aspect`/`data-plot-width`/`data-plot-height`; scene export adds `aspect`,
+  `aspect_mode`, and `aspect_adjustable`. Unconstrained figures render as before.
 
-Examples: `examples/cartesian_controls.lua` combines fractional reference
-spans, a three-run masked fill band, and independent major/minor grid styling.
-`examples/histogram_horizontal.lua` demonstrates horizontal bins, and
-`examples/stem.lua` shows a non-zero base with diamond markers and dashed
-stems. `make examples` and `scripts/visual-qa.sh` exercise all five features,
-including structural checks for the new metadata and rasterization with
-`rsvg-convert` when available.
+Examples: `examples/quiver.lua` draws a rotation field with a middle pivot and
+legend swatch, `examples/hexbin.lua` renders clustered samples with a labeled
+count colorbar, `examples/field_coordinates.lua` writes both the extent/origin
+heatmap and a coordinate-aware Gaussian contour, and `examples/aspect.lua` shows
+a genuinely round unit circle. `make examples` and `scripts/visual-qa.sh`
+exercise all five features, including structural checks for arrow counts,
+hexbin cells/colorbar labels, image extents, contour coordinates, and a square
+equal-aspect box, then rasterize the new examples when `rsvg-convert` is
+available.
 
-Tests: `./scripts/test.sh` runs 293 dependency-free tests, all passing.
+Tests: `./scripts/test.sh` runs 312 dependency-free tests, all passing.

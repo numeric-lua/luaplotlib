@@ -1,5 +1,48 @@
 # Changelog
 
+## 4.23.0
+
+- new `fig:quiver(x, y, u, v, opts)` draws Cartesian vector fields. `u`/`v`
+  are data-coordinate components projected through the current axis transforms;
+  the largest glyph auto-scales to 18 SVG units unless `scale` is explicit.
+  `pivot`, `normalize`, `head`, `linewidth`, `alpha`, `label`, and a
+  deterministic `max_arrows` cap (512 by default) match the polar quiver
+  vocabulary. The series exposes `data-count`, `data-drawn`, `data-stride`,
+  `data-scale`, `data-scale-mode`, `data-pivot`, and `data-normalize`; each
+  arrow carries index, magnitude, data position, and angle metadata, and
+  `to_scene()` exports the components and resolved scaling;
+- new `fig:hexbin(x, y, opts)` aggregates paired samples into regular
+  pointy-top hexagons. `gridsize` (2–200) controls the x-cell count, `mincnt`
+  filters sparse cells, `vmin`/`vmax` override the count range, and the shared
+  heat palette colors each `hexbin-cell`. A vertical count colorbar supports a
+  title, uniform `colorbar_ticks`, or explicit `colorbar_tick_values`, with
+  `data-value`/`data-fraction` metadata. Scene export includes the filtered
+  cells, counts, cell geometry, limits, and colorbar settings;
+- `fig:imshow` (and `pcolormesh`/`pcolor`) accepts
+  `extent = { left, right, bottom, top }` and `origin = "upper" | "lower"`.
+  Cells map onto the explicit rectangle, the extent participates in automatic
+  ranging, and `origin = "lower"` places row 1 at the bottom. Explicit
+  extent/origin output adds `data-origin`, `data-extent`, and per-cell
+  row/column metadata; `to_scene()` exports both fields while the default
+  index geometry and markup are unchanged;
+- `fig:contour` accepts explicit `x` and `y` coordinate vectors for matrix
+  columns and rows. Marching-squares intersections, automatic ranging, labels,
+  and scene export use the supplied coordinates; the default index geometry is
+  byte-compatible with previous releases;
+- new `fig:aspect(value)` constrains the plot box to `"equal"`, a positive
+  numeric y-unit/x-unit ratio, or `"auto"` to reset. The box shrinks and centers
+  inside the normal label margins, works on linear and log axes, and reports
+  `data-aspect`, `data-plot-width`, and `data-plot-height` on the SVG root.
+  Scene export adds `aspect`, `aspect_mode`, and `aspect_adjustable = "box"`;
+  an unconstrained figure renders exactly as before;
+- new examples `quiver.lua`, `hexbin.lua`, `field_coordinates.lua` (raster
+  extent/origin and contour coordinates), and `aspect.lua`. README, API docs,
+  the Makefile, and `scripts/visual-qa.sh` validate all five features,
+  including arrow/count/colorbar consistency, extent metadata, contour
+  coordinates, and a square equal-aspect box. The dependency-free suite grows
+  from 293 to 312 tests. Polar rendering and existing Cartesian defaults are
+  unchanged, and there are no new runtime dependencies.
+
 ## 4.22.0
 
 - `fig:axhline` and `fig:axvline` now accept axes-fraction endpoints:

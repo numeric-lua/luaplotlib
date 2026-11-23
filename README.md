@@ -51,6 +51,10 @@ luajit examples/axline.lua
 luajit examples/cartesian_controls.lua
 luajit examples/histogram_horizontal.lua
 luajit examples/stem.lua
+luajit examples/quiver.lua
+luajit examples/hexbin.lua
+luajit examples/field_coordinates.lua
+luajit examples/aspect.lua
 luajit examples/bars.lua
 luajit examples/heatmap.lua
 luajit examples/subplots.lua
@@ -168,6 +172,37 @@ A `where` mask must be a table with one boolean per band sample. With
 `interpolate = true`, each visible run gains a midpoint where it meets a hidden
 sample. Reference spans, fill runs, horizontal bins, and stem bases participate
 in automatic ranging as expected.
+
+Cartesian vector fields, hexagonal binning, explicit field coordinates, and
+aspect constraints are also additive:
+
+```lua
+-- u/v are data-coordinate components; the largest glyph is auto-scaled.
+fig:quiver(x, y, u, v, { pivot = "middle", max_arrows = 256, label = "flow" })
+
+-- Count points per hexagon and add a labeled count colorbar.
+fig:hexbin(x, y, {
+  gridsize = 20,
+  mincnt = 2,
+  colorbar = true,
+  colorbar_label = "points per cell",
+})
+
+-- Map a raster onto data coordinates and place row 1 at the bottom.
+fig:imshow(values, { extent = { 100, 280, 20, 70 }, origin = "lower" })
+
+-- Contours accept explicit column/row coordinates instead of matrix indices.
+fig:contour(values, { levels = { 0.2, 0.4, 0.8 }, x = xs, y = ys })
+
+-- Equal data units make one unit circle round on a rectangular canvas.
+fig:aspect("equal")   -- or a positive number, or "auto" to reset
+```
+
+`gridsize` is the number of hexagons across x; rows are derived to keep regular
+hexagons. Contour `x`/`y` vectors must match the matrix columns/rows. Aspect
+constraints shrink and center the plot box inside the normal label margins;
+extreme ratios that leave too little drawing area raise an error at render
+time.
 
 Error bars can use independent lower and upper errors:
 
@@ -373,6 +408,12 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands
 - Horizontal histograms and styled stems with custom bases and markers
+- Cartesian quiver vector fields with automatic/explicit scaling, pivots,
+  normalization, deterministic arrow caps, and legend/scene metadata
+- Hexagonal binning with minimum counts, value limits, explicit or uniform
+  colorbar ticks, and renderer-agnostic cell/count export
+- Image `extent`/`origin` mapping and explicit contour column/row coordinates
+- Optional equal or numeric data-unit aspect ratios that center the plot box
 - Independent major/minor grid color, width, dash, and opacity
 - X/y tick-label rotation, including twin y axes
 - XML-escaped text, no scripts, no external references, standalone SVG 1.1
@@ -397,11 +438,12 @@ make test
 For an optional visual check, `scripts/visual-qa.sh` runs every example, checks
 polar/colorbar/quiver metadata, verifies the Cartesian minor-tick,
 marker-decimation, asymmetric-error, rotated-label, `axline`, fractional-span,
-masked-fill, horizontal-histogram, styled-stem, and grid-style metadata, and
-confirms that Cartesian examples stay Cartesian. When `rsvg-convert` is
-installed it also rasterizes the polar SVGs and the affected Cartesian examples
-for manual inspection. Rasterized files stay under the ignored
-`examples/output/` directory.
+masked-fill, horizontal-histogram, styled-stem, grid-style, Cartesian-quiver,
+hexbin-count, image-extent/origin, contour-coordinate, and equal-aspect
+metadata, and confirms that Cartesian examples stay Cartesian. When
+`rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
+Cartesian examples for manual inspection. Rasterized files stay under the
+ignored `examples/output/` directory.
 
 To run the examples through the Makefile:
 
@@ -415,6 +457,11 @@ make examples
 # examples/output/cartesian-controls.svg
 # examples/output/histogram-horizontal.svg
 # examples/output/stem.svg
+# examples/output/quiver.svg
+# examples/output/hexbin.svg
+# examples/output/heatmap-extent.svg
+# examples/output/contour-coords.svg
+# examples/output/aspect.svg
 # examples/output/bars-grouped.svg
 # examples/output/bars-stacked.svg
 # examples/output/polar.svg
@@ -432,13 +479,15 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.22.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
-fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
-polar line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with configurable
-orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
-collision-aware polar contour labels, polar annotations with canvas
-clamping, measured-text polar legends, annotations, asymmetric error bars,
-linear/log/date axes, twin x/y axes, minor ticks and minor grids, clipped
+`4.23.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+fill/step/stem/stack/fillx/pcolormesh/hexbin/pie/donut/error-bar/box/heatmap/
+contour/contourf plots, Cartesian quiver fields, image extents/origins, explicit
+contour coordinate grids, equal or numeric aspect ratios, polar
+line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with
+configurable orientation and grids, polar heatmap colorbars with explicit nice
+ticks, rotated collision-aware polar contour labels, polar annotations with
+canvas clamping, measured-text polar legends, annotations, asymmetric error
+bars, linear/log/date axes, twin x/y axes, minor ticks and minor grids, clipped
 `axline` reference lines, marker decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference
@@ -472,7 +521,16 @@ helpers, optional PNG/PDF export, and scene export. See
 - **Basic layout.** Margins are adaptive, `xtick_rotation`/`ytick_rotation`
   help crowded labels, minor ticks subdivide major intervals, custom
   ticks/formatters are available, and subplot gap/margin are configurable.
-  There is no full text-measurement layout engine yet.
+  There is no full text-measurement layout engine yet. `aspect` centers a
+  constrained plot box but does not change data limits or support
+  `adjustable = "datalim"`.
+- **Cartesian quiver glyphs are screen-space.** `scale` is a multiplier on the
+  projected component displacement, `normalize` replaces magnitudes with unit
+  directions, and arrow tips can be clipped at the axes rectangle. The input
+  `x`/`y` anchors define automatic ranging.
+- **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
+  rows are derived to keep regular cells; tuple grids, log-count normalization,
+  and callback reductions are not supported.
 - **Reference lines are clipped, not data series.** `axline` never expands the
   axes beyond its two defining points, and logarithmic axes draw it straight in
   transformed space. `axhline`/`axvline` fractional spans only change their
@@ -517,10 +575,14 @@ limits, category ticks, and annotation geometry/styles. Cartesian scenes also
 export asymmetric error extents, clipped `axline` anchors, fractional
 `axhline`/`axvline` spans, normalized `markevery` lists, masked fill runs,
 horizontal histogram orientation, stem bases, tick rotations, and resolved
-major/minor grid styles. Polar figures
-export a `polar` block with resolved theta/r ticks, series (including error bars
-and vector fields), heatmap cells and value ranges, annotations, and legend
-entries under `orientation = "polar"`. Streamplot lines add `closed`,
-`seed_theta`, `seed_r`, and `arc_length`, while each arrow exports its anchor
-`index`, arc-length `fraction`, direction `angle`, and data position. The export
-does not depend on LÖVR or any graphics toolkit.
+major/minor grid styles. Cartesian quiver scenes add component arrays, scale
+mode, pivot, decimation, and drawn counts; hexbin scenes add filtered cells,
+counts, value limits, and colorbar settings; image scenes add `extent`/`origin`;
+contour scenes add explicit coordinate arrays; and aspect-constrained roots add
+`aspect`, `aspect_mode`, and `aspect_adjustable`. Polar figures export a
+`polar` block with resolved theta/r ticks, series (including error bars and
+vector fields), heatmap cells and value ranges, annotations, and legend entries
+under `orientation = "polar"`. Streamplot lines add `closed`, `seed_theta`,
+`seed_r`, and `arc_length`, while each arrow exports its anchor `index`,
+arc-length `fraction`, direction `angle`, and data position. The export does not
+depend on LÖVR or any graphics toolkit.

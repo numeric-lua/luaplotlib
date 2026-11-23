@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.22.0`. This document describes the public Lua API implemented
+Version: `4.23.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.22.0"`
+- `plt._VERSION` — currently `"4.23.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -491,6 +491,39 @@ matplotlib's area-in-points-squared convention. Arrays must match the number
 of points. `color` may also be an array of fill colors. The last listed size
 aliases are only used when the earlier ones are absent.
 
+### `fig:quiver(x, y, u, v, opts)`
+
+Draw one vector glyph per point. `u` and `v` are the components in data
+coordinates; the renderer projects them through the current x/y transforms so
+the arrows stay legible on linear and log axes.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `linewidth` | number ≥ 0 | `1.2` |
+| `head` | number ≥ 0 (SVG user units) | `6` |
+| `scale` | positive number | automatic |
+| `pivot` | `"tail"`, `"middle"`, or `"tip"` | `"tail"` |
+| `max_arrows` | integer in [1, 4096] | `512` |
+| `normalize` | boolean | `false` |
+| `alpha` | number in [0, 1] | `1` |
+
+With `scale` omitted, the largest glyph is automatically drawn 18 SVG units
+long. An explicit `scale` multiplies the screen-space displacement produced by
+the unit components. `normalize = true` gives every nonzero vector a unit
+direction before scaling. Zero-magnitude vectors are skipped. When the input
+is larger than `max_arrows`, indices are decimated deterministically with
+`stride = ceil(count / max_arrows)`.
+
+The series group exposes `data-count`, `data-drawn`, `data-stride`,
+`data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`, and
+`data-normalize`. Each `quiver-arrow` group carries `data-index`,
+`data-magnitude`, `data-x`, `data-y`, and `data-angle`, with `quiver-shaft`
+and `quiver-head` children. Labelled quivers join the regular legend with an
+arrow swatch. `to_scene()` exports the component arrays, scale mode, pivot,
+decimation stride, and drawn count.
+
 ### `fig:hist(values, opts)`
 
 Draw a histogram as adjacent filled rectangles.
@@ -517,6 +550,37 @@ axis ranges swapped accordingly.
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
 count axis includes zero. Empty bins are not emitted as rectangles.
+
+### `fig:hexbin(x, y, opts)`
+
+Aggregate paired samples into regular pointy-top hexagons and color each cell
+by its point count.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `gridsize` | integer in [2, 200] | `20` |
+| `mincnt` | integer ≥ 1 | `1` |
+| `vmin` / `vmax` | finite numbers with `vmax > vmin` | count range |
+| `colorbar` | boolean | `true` |
+| `colorbar_label` | string | no title |
+| `colorbar_ticks` | integer in [2, 10] | `3` |
+| `colorbar_tick_values` | non-empty numeric table | uniform ticks |
+| `edgecolor` | color string | `#ffffff` |
+| `linewidth` | number ≥ 0 | `0.5` |
+| `color`, `label`, `alpha` | normal series style | palette/`1` |
+
+`gridsize` is the number of hexagons across the x span; the row count is
+derived from the y span so cells stay regular in data coordinates. Cells with
+fewer than `mincnt` points are omitted. Counts use the shared heat palette.
+`colorbar_ticks` and `colorbar_tick_values` are mutually exclusive.
+
+The series group exposes `data-bins`, `data-points`, `data-gridsize`,
+`data-mincnt`, `data-vmin`, and `data-vmax`. Each `hexbin-cell` polygon carries
+`data-row`, `data-col`, `data-count`, `data-x`, and `data-y`. A labeled
+colorbar group (`colorbar hexbin-colorbar`) reports its value range, tick
+count/source, geometry, and per-tick `data-value`/`data-fraction`. Scene export
+includes the point arrays, filtered cells, counts, limits, and colorbar
+settings.
 
 ### `fig:eventplot(positions[, opts])`
 
@@ -585,8 +649,17 @@ Filled contour-style field with optional overlay contour lines (`opts.contours =
 ### `fig:imshow(values, opts)`
 
 Renders a rectangular matrix as a heatmap. Accepts a plain 2-D table or a
-2-D tensor-like object exposing `dim()` and `totable()`. `opts.vmin`/`vmax` set the color
-range; `colorbar` defaults to true. Values must be finite.
+2-D tensor-like object exposing `dim()` and `totable()`. `opts.vmin`/`vmax` set
+the color range; `colorbar` defaults to true. Values must be finite.
+`pcolormesh` and `pcolor` are aliases.
+
+`opts.extent = { left, right, bottom, top }` maps the matrix onto explicit data
+coordinates instead of the default index rectangle `{0, cols, 0, rows}`. The
+rectangle must be ordered. `opts.origin` is `"upper"` (default, row 1 at the
+top) or `"lower"` (row 1 at the bottom). The extent participates in automatic
+ranging. Explicit extent/origin output adds `data-origin` and `data-extent` to
+the heatmap group plus `data-row`/`data-col` on each cell; default output keeps
+the legacy markup. `to_scene()` exports `extent` and `origin`.
 
 ### `fig:boxplot(samples, opts)`
 
@@ -596,7 +669,12 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 ### `fig:contour(values, opts)`
 
 Draws marching-squares contour lines. `opts.levels` is a level count or an
-explicit level table.
+explicit level table. `opts.x` and `opts.y` optionally give explicit coordinate
+vectors for the matrix columns and rows; they must have `cols` and `rows`
+entries respectively. When either is supplied, contour geometry and automatic
+ranging use the coordinate values instead of the default index grid, and
+`to_scene()` exports the coordinate arrays. `opts.labels = true` places one
+level label per contour level; `opts.linestyle` accepts the shared line styles.
 
 ### `fig:bar(labels_or_x, values, opts)`
 
@@ -807,6 +885,24 @@ zero. On a log y axis, zero-count histogram bins are omitted rather than treated
 as data, and bars grow from the bottom of the visible plot area because zero is
 not representable.
 
+### Aspect ratio
+
+```lua
+fig:aspect("auto")    -- restore the adaptive plot box
+fig:aspect("equal")   -- one x unit equals one y unit on screen
+fig:aspect(0.5)       -- one y unit is half as tall as one x unit is wide
+```
+
+The optional aspect constraint shrinks the plot box inside the normal layout
+margins and centers it; labels, ticks, legends, and colorbars keep their usual
+outside positions. `"equal"` is shorthand for `1`, and `"auto"` clears the
+constraint. Numeric values must be positive. An extreme ratio that leaves less
+than a drawable plot box raises an error when the figure is rendered. On log
+axes the constraint uses the transformed (decade) spans. Only the primary x/y
+axes define the ratio when twin axes are present. SVG roots add `data-aspect`,
+`data-plot-width`, and `data-plot-height` when aspect is active; scene export
+adds `aspect`, `aspect_mode`, and `aspect_adjustable = "box"`.
+
 ### Grid
 
 ```lua
@@ -929,14 +1025,19 @@ match these forms raise errors.
 
 - XML declaration and `xmlns="http://www.w3.org/2000/svg"`
 - Root `width`, `height`, and `viewBox`, plus `data-dpi`, `data-xscale`,
-  `data-yscale`, `data-minorticks`, and `data-minor-grid` metadata
+  `data-yscale`, `data-minorticks`, and `data-minor-grid` metadata. Aspect-
+  constrained figures also add `data-aspect`, `data-plot-width`, and
+  `data-plot-height`
 - White background rectangle
 - A clip path limiting series and annotations to the axes rectangle
 - Groups with classes such as `figure`, `grid`, `grid-minor`, `series-layer`,
   `series-line`, `series-scatter`, `series-hist`, `series-bar`, `series-axline`,
-  `series-fill`, `series-fillx`, `series-stem`, `annotation-layer`,
-  `annotation`, `annotation-text`, `annotation-arrow`, `axes`, `ticks`,
-  `minor-tick-mark`, `xlabel`, `ylabel`, `title`, and `legend`
+  `series-fill`, `series-fillx`, `series-stem`, `series-quiver`,
+  `series-hexbin`, `annotation-layer`, `annotation`, `annotation-text`,
+  `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`, `xlabel`, `ylabel`,
+  `title`, and `legend`
+- Quiver groups add `quiver-arrow`, `quiver-shaft`, and `quiver-head`; hexbin
+  groups add `hexbin-cell` and, when enabled, a `hexbin-colorbar` group
 - No scripts, embedded images, or external references/hrefs
 - User text XML-escaped; invalid control characters replaced with U+FFFD
 - No external fonts; text uses a generic Helvetica/Arial/sans-serif stack
@@ -958,6 +1059,11 @@ includes, but is not limited to:
 - mismatched x/y or labels/values lengths
 - `NaN`/infinite values
 - reversed or empty axis limits
+- unordered image extents or unknown image origins
+- contour coordinate vectors whose lengths do not match the matrix
+- non-positive aspect ratios that leave no drawable plot box
+- invalid quiver pivots, scales, arrow caps, or vector lengths
+- invalid hexbin grids, minimum counts, value ranges, or colorbar ticks
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1053,6 +1159,22 @@ Returns a renderer-agnostic scene table:
   series = {
     { kind = "line", x = {...}, y = {...}, style = {...} },
     { kind = "scatter", x = {...}, y = {...}, style = {...} },
+    { kind = "quiver", x = {...}, y = {...}, u = {...}, v = {...},
+      scale = nil, scale_mode = "auto", scale_unit = "screen_multiplier",
+      auto_length = 18, pivot = "tail", max_arrows = 512,
+      normalize = false, stride = 1, drawn = 63, style = {...} },
+    { kind = "hexbin", x = {...}, y = {...}, cells = {
+        { row = 1, column = 1, x = 0.5, y = 0.25, count = 4 }, ...
+      }, counts = { 4, ... }, gridsize = 20, mincnt = 1,
+      width = 0.2, radius = 0.115, point_count = 240, vmin = 1, vmax = 9,
+      colorbar = true, colorbar_label = "points", colorbar_ticks = 3,
+      style = {...} },
+    { kind = "image", rows = 2, cols = 3, values = {...}, vmin = 1,
+      vmax = 6, extent = { 10, 40, 100, 300 }, origin = "lower",
+      colorbar = true, style = {...} },
+    { kind = "contour", rows = 3, cols = 3, level = 0.5,
+      segments = { { x1, y1, x2, y2 }, ... },
+      x = { 10, 20, 30 }, y = { 100, 200, 300 }, style = {...} },
     { kind = "errorbar", x = {...}, y = {...},
       yerr = {...}, yerr_lower = {...}, yerr_upper = {...},
       xerr = {...}, xerr_lower = {...}, xerr_upper = {...} },
@@ -1106,6 +1228,16 @@ backends. `axline` scenes carry the four defining anchors and do not include
 the clipped extensions. Line styles carry the normalized `markevery` index
 list when marker decimation is active. Minor tick and minor grid settings are
 reported at the scene root.
+
+Quiver scenes export the component arrays plus the resolved scale mode,
+`scale_unit = "screen_multiplier"`, `auto_length = 18`, pivot, arrow cap,
+normalization flag, decimation stride, and drawn count. Hexbin scenes export the
+input points, filtered cell records, counts, regular-cell width/radius, value
+limits, and colorbar settings. Image scenes add `extent` and `origin` when the
+image uses explicit field coordinates. Contour scenes export `x`/`y` coordinate
+arrays when the figure supplied them and keep the per-level `segments`. Aspect
+constraints appear at the root as `aspect`, `aspect_mode`, and
+`aspect_adjustable = "box"`.
 
 ### Polar scenes
 
