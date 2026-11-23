@@ -163,6 +163,13 @@ local SCATTER_OPTIONS = {
   edgecolor = true,
   linewidth = true,
   marker = true,
+  c = true,
+  vmin = true,
+  vmax = true,
+  colorbar = true,
+  colorbar_label = true,
+  colorbar_ticks = true,
+  colorbar_tick_values = true,
 }
 
 local HIST_OPTIONS = {
@@ -175,6 +182,22 @@ local HIST_OPTIONS = {
   density = true,
   cumulative = true,
   orientation = true,
+}
+
+local HIST2D_OPTIONS = {
+  bins = true,
+  range = true,
+  density = true,
+  vmin = true,
+  vmax = true,
+  colorbar = true,
+  colorbar_label = true,
+  colorbar_ticks = true,
+  colorbar_tick_values = true,
+  alpha = true,
+  edgecolor = true,
+  linewidth = true,
+  label = true,
 }
 
 local BAR_OPTIONS = {
@@ -191,6 +214,10 @@ local BAR_OPTIONS = {
   bar_colors = true,
   show_values = true,
   hatch = true,
+  yerr = true,
+  ecolor = true,
+  elinewidth = true,
+  capsize = true,
 }
 
 local FILL_OPTIONS = {
@@ -227,6 +254,24 @@ local STACK_OPTIONS = {
   colors = true,
   alpha = true,
   edgecolor = true,
+  baseline = true,
+}
+
+local VIOLIN_OPTIONS = {
+  positions = true,
+  width = true,
+  points = true,
+  bandwidth = true,
+  showextrema = true,
+  showmedians = true,
+  showquartiles = true,
+  colors = true,
+  color = true,
+  labels = true,
+  label = true,
+  alpha = true,
+  edgecolor = true,
+  linewidth = true,
 }
 
 local PIE_OPTIONS = {
@@ -598,6 +643,67 @@ local function error_components(value, count, name)
   local lower = side(lower_raw, name .. " lower")
   local upper = side(upper_raw, name .. " upper")
   return lower, upper, asymmetric
+end
+
+-- Shared validation for heat-style colorbars (imshow-like series).  A colorbar
+-- is enabled by default when the caller maps a scalar value to the heat
+-- palette.  Explicit tick values and a tick count are mutually exclusive.
+local function checked_colorbar_options(opts, context, default_enabled)
+  local colorbar = opts.colorbar
+  if colorbar == nil then colorbar = default_enabled end
+  util.check_boolean(colorbar, context .. " colorbar")
+
+  local label = opts.colorbar_label
+  if label ~= nil then
+    util.check_string(label, context .. " colorbar_label", true)
+  end
+
+  local ticks = nil
+  if opts.colorbar_ticks ~= nil then
+    ticks = util.check_integer(opts.colorbar_ticks,
+      context .. " colorbar_ticks", 2, 10)
+  end
+
+  local tick_values = nil
+  if opts.colorbar_tick_values ~= nil then
+    if ticks ~= nil then
+      fail(context .. " colorbar_ticks and colorbar_tick_values cannot both be set")
+    end
+    if type(opts.colorbar_tick_values) ~= "table" or
+        #opts.colorbar_tick_values == 0 then
+      fail(context .. " colorbar_tick_values must be a non-empty table")
+    end
+    tick_values = {}
+    for index = 1, #opts.colorbar_tick_values do
+      tick_values[index] = util.check_number(
+        opts.colorbar_tick_values[index],
+        context .. " colorbar_tick_values[" .. index .. "]")
+    end
+  end
+  return colorbar, label, ticks, tick_values
+end
+
+-- Resolve automatic or explicit vmin/vmax for a scalar value range.  A
+-- degenerate range is padded so the palette still spans a visible interval.
+local function checked_value_range(opts, minimum, maximum, context)
+  if opts.vmin ~= nil then
+    minimum = util.check_number(opts.vmin, context .. " vmin")
+  end
+  if opts.vmax ~= nil then
+    maximum = util.check_number(opts.vmax, context .. " vmax")
+  end
+  if minimum == nil then minimum = 0 end
+  if maximum == nil then maximum = minimum + 1 end
+  if maximum <= minimum then
+    if opts.vmin ~= nil or opts.vmax ~= nil then
+      fail(context .. " vmax must be greater than vmin")
+    elseif minimum == maximum then
+      minimum, maximum = minimum - 0.5, maximum + 0.5
+    else
+      fail(context .. " vmax must be greater than vmin")
+    end
+  end
+  return minimum, maximum
 end
 
 function Figure.new(opts)
@@ -1710,7 +1816,46 @@ function Figure:scatter(x, y, opts)
 
   local point_colors
   local style_opts = opts
-  if type(opts.color) == "table" then
+  local color_values, color_vmin, color_vmax
+  local colorbar, colorbar_label, colorbar_ticks, colorbar_tick_values
+  local c_option = opts.vmin ~= nil or opts.vmax ~= nil or
+    opts.colorbar ~= nil or opts.colorbar_label ~= nil or
+    opts.colorbar_ticks ~= nil or opts.colorbar_tick_values ~= nil
+
+  if opts.c ~= nil then
+    if opts.color ~= nil then
+      fail("scatter color and c cannot both be set")
+    end
+    if type(opts.c) ~= "table" then
+      fail("scatter c must be a table of numeric values")
+    end
+    if #opts.c ~= #xv then
+      fail("scatter c must match the number of points")
+    end
+    color_values = {}
+    local minimum, maximum
+    for i = 1, #opts.c do
+      local value = util.check_number(opts.c[i],
+        "scatter c[" .. i .. "]")
+      color_values[i] = value
+      if minimum == nil or value < minimum then minimum = value end
+      if maximum == nil or value > maximum then maximum = value end
+    end
+    color_vmin, color_vmax = checked_value_range(opts, minimum, maximum,
+      "scatter")
+    colorbar, colorbar_label, colorbar_ticks, colorbar_tick_values =
+      checked_colorbar_options(opts, "scatter", true)
+    point_colors = {}
+    for i = 1, #color_values do
+      point_colors[i] = colors.heat(color_values[i], color_vmin, color_vmax)
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.color = point_colors[1]
+    style_opts.c = nil
+  elseif c_option then
+    fail("scatter vmin, vmax, and colorbar options require c")
+  elseif type(opts.color) == "table" then
     if #opts.color ~= #xv then
       fail("scatter color array must match the number of points")
     end
@@ -1729,11 +1874,19 @@ function Figure:scatter(x, y, opts)
   style.colors = point_colors
   style.linewidth = linewidth
 
+  if colorbar then self._colorbar = true end
   self._series[#self._series + 1] = {
     kind = "scatter",
     x = xv,
     y = yv,
     style = style,
+    color_values = color_values,
+    vmin = color_vmin,
+    vmax = color_vmax,
+    colorbar = colorbar,
+    colorbar_label = colorbar_label,
+    colorbar_ticks = colorbar_ticks,
+    colorbar_tick_values = colorbar_tick_values,
   }
   return self
 end
@@ -1876,6 +2029,177 @@ function Figure:hist(values, opts)
     cumulative = cumulative,
     orientation = orientation,
     style = style,
+  }
+  return self
+end
+
+-- Rectangular two-dimensional histogram.  Paired samples are counted into a
+-- regular x/y grid and non-empty cells are colored with the shared heat
+-- palette.  `bins` is a count or `{ nx, ny }`; `range` may pin the rectangle to
+-- `{ xmin, xmax, ymin, ymax }`.  Density normalizes each cell by the in-range
+-- sample count and cell area.  Empty bins are omitted.
+function Figure:hist2d(x, y, opts)
+  opts = util.check_options(opts, HIST2D_OPTIONS, "hist2d")
+  local xv = data.sequence(x, "hist2d x")
+  local yv = data.sequence(y, "hist2d y")
+  if #xv ~= #yv then
+    fail(string.format("hist2d x and y must have the same length (%d ~= %d)",
+      #xv, #yv))
+  end
+  if #xv == 0 then
+    fail("hist2d requires at least one point")
+  end
+
+  local bins_x, bins_y = 10, 10
+  if opts.bins ~= nil then
+    if type(opts.bins) == "table" then
+      if #opts.bins ~= 2 then
+        fail("hist2d bins must be a count or a {nx, ny} table")
+      end
+      bins_x = util.check_integer(opts.bins[1], "hist2d bins x", 1, 200)
+      bins_y = util.check_integer(opts.bins[2], "hist2d bins y", 1, 200)
+    else
+      bins_x = util.check_integer(opts.bins, "hist2d bins", 1, 200)
+      bins_y = bins_x
+    end
+  end
+
+  local minimum_x, maximum_x = xv[1], xv[1]
+  local minimum_y, maximum_y = yv[1], yv[1]
+  for index = 2, #xv do
+    if xv[index] < minimum_x then minimum_x = xv[index] end
+    if xv[index] > maximum_x then maximum_x = xv[index] end
+    if yv[index] < minimum_y then minimum_y = yv[index] end
+    if yv[index] > maximum_y then maximum_y = yv[index] end
+  end
+
+  if opts.range ~= nil then
+    if type(opts.range) ~= "table" or #opts.range ~= 4 then
+      fail("hist2d range must be a {xmin, xmax, ymin, ymax} table")
+    end
+    minimum_x = util.check_number(opts.range[1], "hist2d range xmin")
+    maximum_x = util.check_number(opts.range[2], "hist2d range xmax")
+    minimum_y = util.check_number(opts.range[3], "hist2d range ymin")
+    maximum_y = util.check_number(opts.range[4], "hist2d range ymax")
+    if maximum_x <= minimum_x then
+      fail("hist2d range xmax must be greater than xmin")
+    end
+    if maximum_y <= minimum_y then
+      fail("hist2d range ymax must be greater than ymin")
+    end
+  else
+    if minimum_x == maximum_x then
+      local pad = math.abs(minimum_x) * 0.5
+      if pad == 0 then pad = 0.5 end
+      minimum_x, maximum_x = minimum_x - pad, maximum_x + pad
+    end
+    if minimum_y == maximum_y then
+      local pad = math.abs(minimum_y) * 0.5
+      if pad == 0 then pad = 0.5 end
+      minimum_y, maximum_y = minimum_y - pad, maximum_y + pad
+    end
+  end
+
+  local density = opts.density == true
+  if opts.density ~= nil then
+    util.check_boolean(opts.density, "hist2d density")
+  end
+
+  local span_x = maximum_x - minimum_x
+  local span_y = maximum_y - minimum_y
+  local width_x = span_x / bins_x
+  local width_y = span_y / bins_y
+  local edges_x, edges_y = {}, {}
+  for index = 0, bins_x do edges_x[index + 1] = minimum_x + index * width_x end
+  for index = 0, bins_y do edges_y[index + 1] = minimum_y + index * width_y end
+
+  local counts = {}
+  for row = 1, bins_y do
+    counts[row] = {}
+    for column = 1, bins_x do counts[row][column] = 0 end
+  end
+  local inside = 0
+  for index = 1, #xv do
+    local px, py = xv[index], yv[index]
+    if px >= minimum_x and px <= maximum_x and
+        py >= minimum_y and py <= maximum_y then
+      local column = math.floor((px - minimum_x) / width_x) + 1
+      local row = math.floor((py - minimum_y) / width_y) + 1
+      if column < 1 then column = 1 elseif column > bins_x then column = bins_x end
+      if row < 1 then row = 1 elseif row > bins_y then row = bins_y end
+      counts[row][column] = counts[row][column] + 1
+      inside = inside + 1
+    end
+  end
+
+  local cell_area = width_x * width_y
+  local function cell_value(count)
+    if not density then return count end
+    if inside == 0 then return 0 end
+    return count / (inside * cell_area)
+  end
+
+  local cells = {}
+  local maximum_value = 0
+  for row = 1, bins_y do
+    for column = 1, bins_x do
+      local count = counts[row][column]
+      if count > 0 then
+        local value = cell_value(count)
+        if value > maximum_value then maximum_value = value end
+        cells[#cells + 1] = {
+          row = row,
+          column = column,
+          count = count,
+          value = value,
+          x0 = edges_x[column],
+          x1 = edges_x[column + 1],
+          y0 = edges_y[row],
+          y1 = edges_y[row + 1],
+        }
+      end
+    end
+  end
+
+  if maximum_value == 0 then maximum_value = 1 end
+  local vmin, vmax = checked_value_range(opts, 0, maximum_value, "hist2d")
+  local colorbar, colorbar_label, colorbar_ticks, colorbar_tick_values =
+    checked_colorbar_options(opts, "hist2d", true)
+
+  local style = checked_style(self, opts, "hist2d")
+  local edgecolor = opts.edgecolor
+  if edgecolor ~= nil then
+    edgecolor = util.check_color(edgecolor, "hist2d edgecolor")
+  else
+    edgecolor = "#ffffff"
+  end
+  local linewidth = 0.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "hist2d linewidth", 0)
+  end
+  if colorbar then self._colorbar = true end
+
+  self._series[#self._series + 1] = {
+    kind = "hist2d",
+    x = xv,
+    y = yv,
+    cells = cells,
+    edges_x = edges_x,
+    edges_y = edges_y,
+    bins_x = bins_x,
+    bins_y = bins_y,
+    point_count = #xv,
+    inside_count = inside,
+    density = density,
+    vmin = vmin,
+    vmax = vmax,
+    colorbar = colorbar,
+    colorbar_label = colorbar_label,
+    colorbar_ticks = colorbar_ticks,
+    colorbar_tick_values = colorbar_tick_values,
+    style = style,
+    edgecolor = edgecolor,
+    linewidth = linewidth,
   }
   return self
 end
@@ -2363,6 +2687,43 @@ function Figure:bar(labels_or_x, values, opts, ...)
     bar_width = group_width / series_count
   end
 
+  local yerr_components
+  local bar_ecolor, bar_elinewidth, bar_capsize
+  if opts.yerr ~= nil then
+    local raw_yerr
+    if series_count == 1 then
+      raw_yerr = { opts.yerr }
+    else
+      if type(opts.yerr) ~= "table" or #opts.yerr ~= series_count then
+        fail("bar yerr must have one entry per value series")
+      end
+      raw_yerr = opts.yerr
+    end
+    yerr_components = {}
+    for i = 1, series_count do
+      local lower, upper, asymmetric = error_components(raw_yerr[i], #positions,
+        "bar yerr[" .. i .. "]")
+      yerr_components[i] = {
+        lower = lower, upper = upper, asymmetric = asymmetric,
+      }
+    end
+    if opts.ecolor ~= nil then
+      bar_ecolor = util.check_color(opts.ecolor, "bar ecolor")
+    end
+    bar_elinewidth = 1
+    if opts.elinewidth ~= nil then
+      bar_elinewidth = util.check_number(opts.elinewidth,
+        "bar elinewidth", 0)
+    end
+    bar_capsize = 4
+    if opts.capsize ~= nil then
+      bar_capsize = util.check_number(opts.capsize, "bar capsize", 0)
+    end
+  elseif opts.ecolor ~= nil or opts.elinewidth ~= nil or
+      opts.capsize ~= nil then
+    fail("bar ecolor, elinewidth, and capsize require yerr")
+  end
+
   local styles = {}
   for i = 1, series_count do
     local meta = series_meta[i]
@@ -2441,6 +2802,15 @@ function Figure:bar(labels_or_x, values, opts, ...)
       end
     elseif mode == "stacked" then
       entry.bottom = stacked_bottoms[i]
+    end
+    if yerr_components ~= nil then
+      local errors = yerr_components[i]
+      entry.yerr_lower = errors.lower
+      entry.yerr_upper = errors.upper
+      entry.yerr_asymmetric = errors.asymmetric
+      entry.ecolor = bar_ecolor or styles[i].color
+      entry.elinewidth = bar_elinewidth
+      entry.capsize = bar_capsize
     end
     self._series[#self._series + 1] = entry
   end
@@ -2771,11 +3141,46 @@ function Figure:stackplot(x, series, opts)
       #colors_list ~= #series) then
     fail("stackplot colors must match the number of series")
   end
-  local bottom = {}
-  for i = 1, #xv do bottom[i] = 0 end
+  local baseline = opts.baseline or "zero"
+  if baseline ~= "zero" and baseline ~= "sym" and baseline ~= "wiggle" then
+    fail("stackplot baseline must be 'zero', 'sym', or 'wiggle'")
+  end
+
+  local values_list = {}
   for index, values in ipairs(series) do
     local yv = data.sequence(values, "stackplot series " .. index)
     if #yv ~= #xv then fail("stackplot series must match x length") end
+    values_list[index] = yv
+  end
+
+  -- The baseline modes shift the complete stack at each x while preserving
+  -- every layer's thickness.  "sym" centers the total; "wiggle" centers the
+  -- average of the cumulative layer boundaries.
+  local shifts = {}
+  for point = 1, #xv do shifts[point] = 0 end
+  if baseline ~= "zero" then
+    for point = 1, #xv do
+      local total = 0
+      local cumulative = 0
+      local cumulative_sum = 0
+      for index = 1, #values_list do
+        total = total + values_list[index][point]
+        if index < #values_list then
+          cumulative = cumulative + values_list[index][point]
+          cumulative_sum = cumulative_sum + cumulative
+        end
+      end
+      if baseline == "sym" then
+        shifts[point] = -total / 2
+      else
+        shifts[point] = -(total + cumulative_sum) / (#values_list + 1)
+      end
+    end
+  end
+
+  local bottom = {}
+  for i = 1, #xv do bottom[i] = shifts[i] end
+  for index, yv in ipairs(values_list) do
     local top = {}
     for i = 1, #xv do top[i] = bottom[i] + yv[i] end
     local color = colors_list and util.check_color(colors_list[index],
@@ -2786,6 +3191,9 @@ function Figure:stackplot(x, series, opts)
       x = xv,
       y1 = { unpack(bottom) },
       y2 = top,
+      stack_baseline = baseline,
+      stack_index = index,
+      stack_shift = shifts,
       style = { color = color, label = labels and labels[index],
         alpha = opts.alpha or 0.8,
         edgecolor = opts.edgecolor and util.check_color(opts.edgecolor,
@@ -3149,6 +3557,226 @@ function Figure:boxplot(values, opts)
     }
     ticks[#ticks + 1] = {
       position = index,
+      label = labels and tostring(labels[index]) or ("sample " .. index),
+    }
+  end
+  self._category_ticks = ticks
+  return self
+end
+
+-- Kernel-density violins for one or more numeric samples.  Each body is a
+-- normalized Gaussian KDE evaluated between the sample extrema; quartile,
+-- median, center, and extrema marks are exposed as separate SVG elements.
+function Figure:violinplot(values, opts)
+  opts = util.check_options(opts, VIOLIN_OPTIONS, "violinplot")
+  if type(values) ~= "table" or #values == 0 then
+    fail("violinplot expects a non-empty table of samples")
+  end
+  local samples
+  if data.is_tensor_like(values) or type(values[1]) == "number" then
+    samples = { values }
+  else
+    samples = values
+  end
+  local sample_count = #samples
+
+  local width_fraction = 0.5
+  if opts.width ~= nil then
+    width_fraction = util.check_number(opts.width,
+      "violinplot width", 0.01, 1)
+  end
+  local points = 50
+  if opts.points ~= nil then
+    points = util.check_integer(opts.points, "violinplot points", 10, 500)
+  end
+  local explicit_bandwidth
+  if opts.bandwidth ~= nil then
+    explicit_bandwidth = util.check_number(opts.bandwidth,
+      "violinplot bandwidth", 0.000001)
+  end
+  local showextrema = opts.showextrema
+  if showextrema == nil then showextrema = true end
+  util.check_boolean(showextrema, "violinplot showextrema")
+  local showmedians = opts.showmedians
+  if showmedians == nil then showmedians = true end
+  util.check_boolean(showmedians, "violinplot showmedians")
+  local showquartiles = opts.showquartiles
+  if showquartiles == nil then showquartiles = true end
+  util.check_boolean(showquartiles, "violinplot showquartiles")
+
+  local positions = {}
+  if opts.positions ~= nil then
+    if type(opts.positions) ~= "table" or #opts.positions ~= sample_count then
+      fail("violinplot positions must match the number of samples")
+    end
+    for index = 1, sample_count do
+      positions[index] = util.check_number(opts.positions[index],
+        "violinplot positions[" .. index .. "]")
+    end
+  else
+    for index = 1, sample_count do positions[index] = index end
+  end
+  local sorted_positions = {}
+  for index = 1, sample_count do sorted_positions[index] = positions[index] end
+  table.sort(sorted_positions)
+  local spacing
+  for index = 2, #sorted_positions do
+    local delta = sorted_positions[index] - sorted_positions[index - 1]
+    if delta > 0 and (spacing == nil or delta < spacing) then spacing = delta end
+  end
+  spacing = spacing or 1
+  local width = spacing * width_fraction
+
+  local labels = opts.labels
+  if labels ~= nil then
+    if type(labels) ~= "table" or #labels ~= sample_count then
+      fail("violinplot labels must have one entry per sample")
+    end
+  end
+  local color_list
+  if opts.colors ~= nil then
+    if opts.color ~= nil then
+      fail("violinplot colors and color cannot both be set")
+    end
+    if type(opts.colors) ~= "table" or #opts.colors ~= sample_count then
+      fail("violinplot colors must have one entry per sample")
+    end
+    color_list = {}
+    for index = 1, sample_count do
+      color_list[index] = util.check_color(opts.colors[index],
+        "violinplot colors[" .. index .. "]")
+    end
+  elseif opts.color ~= nil then
+    color_list = {}
+    for index = 1, sample_count do
+      color_list[index] = util.check_color(opts.color, "violinplot color")
+    end
+  end
+
+  local alpha = opts.alpha
+  if alpha == nil then alpha = 0.65 end
+  alpha = util.check_alpha(alpha, "violinplot alpha")
+  local linewidth = 1
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth,
+      "violinplot linewidth", 0)
+  end
+
+  local ticks = {}
+  for index = 1, sample_count do
+    local values_v = data.sequence(samples[index],
+      "violinplot sample " .. index)
+    if #values_v == 0 then fail("violinplot samples must be non-empty") end
+    local sorted = {}
+    for i = 1, #values_v do sorted[i] = values_v[i] end
+    table.sort(sorted)
+    local function quantile(p)
+      if #sorted == 1 then return sorted[1] end
+      local position = ( #sorted - 1) * p
+      local lower = math.floor(position) + 1
+      local upper = math.min(#sorted, lower + 1)
+      local fraction = position - math.floor(position)
+      return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction
+    end
+    local minimum, maximum = sorted[1], sorted[#sorted]
+    if minimum == maximum then
+      local pad = math.abs(minimum) * 0.5
+      if pad == 0 then pad = 0.5 end
+      minimum, maximum = minimum - pad, maximum + pad
+    end
+    local span = maximum - minimum
+    local bandwidth = explicit_bandwidth
+    if bandwidth == nil then
+      local mean = 0
+      for _, value in ipairs(sorted) do mean = mean + value end
+      mean = mean / #sorted
+      local variance = 0
+      if #sorted > 1 then
+        for _, value in ipairs(sorted) do
+          local delta = value - mean
+          variance = variance + delta * delta
+        end
+        variance = variance / (#sorted - 1)
+      end
+      bandwidth = 1.06 * math.sqrt(variance) * ((#sorted) ^ (-0.2))
+      if bandwidth <= 0 then bandwidth = span / 4 end
+      if bandwidth <= 0 then bandwidth = 0.5 end
+    end
+
+    local densities = {}
+    local maximum_density = 0
+    local normalizer = 1 / (bandwidth * math.sqrt(2 * math.pi) * #sorted)
+    for point = 1, points do
+      local y = minimum + span * (point - 1) / (points - 1)
+      local total = 0
+      for _, value in ipairs(sorted) do
+        local z = (y - value) / bandwidth
+        total = total + math.exp(-0.5 * z * z)
+      end
+      local density = total * normalizer
+      densities[point] = density
+      if density > maximum_density then maximum_density = density end
+    end
+    if maximum_density <= 0 then maximum_density = 1 end
+    for point = 1, points do
+      densities[point] = densities[point] / maximum_density
+    end
+    -- Taper the tips so every violin closes cleanly at the data extrema.
+    densities[1] = 0
+    densities[points] = 0
+
+    local body_x, body_y = {}, {}
+    for point = 1, points do
+      local y = minimum + span * (point - 1) / (points - 1)
+      body_x[#body_x + 1] = positions[index] + width * 0.5 * densities[point]
+      body_y[#body_y + 1] = y
+    end
+    for point = points - 1, 2, -1 do
+      local y = minimum + span * (point - 1) / (points - 1)
+      body_x[#body_x + 1] = positions[index] - width * 0.5 * densities[point]
+      body_y[#body_y + 1] = y
+    end
+
+    local color = color_list and color_list[index] or
+      colors.next(self._color_serial)
+    if color_list == nil then self._color_serial = self._color_serial + 1 end
+    local edgecolor = opts.edgecolor
+    if edgecolor ~= nil then
+      edgecolor = util.check_color(edgecolor, "violinplot edgecolor")
+    else
+      edgecolor = color
+    end
+    local style = checked_style(self, {
+      color = color,
+      label = labels and labels[index] or opts.label,
+      alpha = alpha,
+      edgecolor = edgecolor,
+    }, "violinplot")
+    style.linewidth = linewidth
+    style.edgecolor = edgecolor
+
+    self._series[#self._series + 1] = {
+      kind = "violin",
+      position = positions[index],
+      width = width,
+      points = points,
+      bandwidth = bandwidth,
+      values = sorted,
+      densities = densities,
+      body_x = body_x,
+      body_y = body_y,
+      minimum = minimum,
+      maximum = maximum,
+      q1 = quantile(0.25),
+      median = quantile(0.5),
+      q3 = quantile(0.75),
+      showextrema = showextrema,
+      showmedians = showmedians,
+      showquartiles = showquartiles,
+      style = style,
+    }
+    ticks[#ticks + 1] = {
+      position = positions[index],
       label = labels and tostring(labels[index]) or ("sample " .. index),
     }
   end

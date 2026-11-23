@@ -193,6 +193,18 @@ function M.from_figure(figure)
         copy.colors = {}
         for i, color in ipairs(series.style.colors) do copy.colors[i] = color end
       end
+      if series.color_values ~= nil then
+        copy.color_values = copy_array(series.color_values)
+        copy.c = copy.color_values
+        copy.vmin = series.vmin
+        copy.vmax = series.vmax
+        copy.colorbar = series.colorbar and true or false
+        copy.colorbar_label = series.colorbar_label
+        copy.colorbar_ticks = series.colorbar_ticks
+        if series.colorbar_tick_values ~= nil then
+          copy.colorbar_tick_values = copy_array(series.colorbar_tick_values)
+        end
+      end
       update_xy_range(state, copy)
     elseif series.kind == "quiver" then
       copy.x = copy_array(series.x)
@@ -215,6 +227,49 @@ function M.from_figure(figure)
       copy.stride = stride
       copy.drawn = drawn
       update_xy_range(state, copy)
+    elseif series.kind == "hist2d" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      copy.cells = {}
+      copy.counts = {}
+      copy.values = {}
+      for index, cell in ipairs(series.cells) do
+        copy.cells[index] = {
+          row = cell.row,
+          column = cell.column,
+          count = cell.count,
+          value = cell.value,
+          x0 = cell.x0,
+          x1 = cell.x1,
+          y0 = cell.y0,
+          y1 = cell.y1,
+        }
+        copy.counts[index] = cell.count
+        copy.values[index] = cell.value
+      end
+      copy.edges_x = copy_array(series.edges_x)
+      copy.edges_y = copy_array(series.edges_y)
+      copy.bins_x = series.bins_x
+      copy.bins_y = series.bins_y
+      copy.point_count = series.point_count
+      copy.inside_count = series.inside_count
+      copy.density = series.density and true or false
+      copy.vmin = series.vmin
+      copy.vmax = series.vmax
+      copy.colorbar = series.colorbar and true or false
+      copy.colorbar_label = series.colorbar_label
+      copy.colorbar_ticks = series.colorbar_ticks
+      if series.colorbar_tick_values ~= nil then
+        copy.colorbar_tick_values = copy_array(series.colorbar_tick_values)
+      end
+      local left = series.edges_x[1]
+      local right = series.edges_x[#series.edges_x]
+      local bottom = series.edges_y[1]
+      local top = series.edges_y[#series.edges_y]
+      if state.xmin == nil or left < state.xmin then state.xmin = left end
+      if state.xmax == nil or right > state.xmax then state.xmax = right end
+      if state.ymin == nil or bottom < state.ymin then state.ymin = bottom end
+      if state.ymax == nil or top > state.ymax then state.ymax = top end
     elseif series.kind == "hexbin" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
@@ -306,6 +361,12 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y1 = copy_array(series.y1)
       copy.y2 = copy_array(series.y2)
+      if series.stack_baseline ~= nil then
+        copy.stack_baseline = series.stack_baseline
+        copy.stack_index = series.stack_index
+        copy.stack_shift = copy_array(series.stack_shift)
+        copy.baseline = series.stack_baseline
+      end
       if series.where ~= nil then
         copy.where = copy_array(series.where)
         copy.interpolate = series.interpolate == true
@@ -409,6 +470,33 @@ function M.from_figure(figure)
         if state.ymin == nil or low < state.ymin then state.ymin = low end
         if state.ymax == nil or high > state.ymax then state.ymax = high end
       end
+    elseif series.kind == "violin" then
+      copy.position = series.position
+      copy.width = series.width
+      copy.points = series.points
+      copy.bandwidth = series.bandwidth
+      copy.values = copy_array(series.values)
+      copy.densities = copy_array(series.densities)
+      copy.body_x = copy_array(series.body_x)
+      copy.body_y = copy_array(series.body_y)
+      copy.minimum = series.minimum
+      copy.maximum = series.maximum
+      copy.q1 = series.q1
+      copy.median = series.median
+      copy.q3 = series.q3
+      copy.showextrema = series.showextrema and true or false
+      copy.showmedians = series.showmedians and true or false
+      copy.showquartiles = series.showquartiles and true or false
+      local left, right = series.position - series.width / 2,
+        series.position + series.width / 2
+      if state.xmin == nil or left < state.xmin then state.xmin = left end
+      if state.xmax == nil or right > state.xmax then state.xmax = right end
+      if state.ymin == nil or series.minimum < state.ymin then
+        state.ymin = series.minimum
+      end
+      if state.ymax == nil or series.maximum > state.ymax then
+        state.ymax = series.maximum
+      end
     elseif series.kind == "box" then
       copy.position = series.position
       copy.width = series.width
@@ -466,6 +554,15 @@ function M.from_figure(figure)
       copy.width = series.width
       copy.category = series.category
       copy.mode = mode
+      if series.yerr_lower ~= nil then
+        copy.yerr_lower = copy_array(series.yerr_lower)
+        copy.yerr_upper = copy_array(series.yerr_upper)
+        copy.yerr = copy_array(series.yerr_upper)
+        copy.yerr_asymmetric = series.yerr_asymmetric and true or false
+        copy.ecolor = series.ecolor
+        copy.elinewidth = series.elinewidth
+        copy.capsize = series.capsize
+      end
       copy.grouped = mode == "grouped"
       copy.stacked = mode == "stacked"
       if series.offset ~= nil then
@@ -511,6 +608,16 @@ function M.from_figure(figure)
           end
           if state.ymin == nil or y < state.ymin then state.ymin = y end
           if state.ymax == nil or y > state.ymax then state.ymax = y end
+        end
+        if copy.yerr_lower ~= nil then
+          local reference = copy.y[index]
+          if copy.bottom ~= nil then
+            reference = copy.bottom[index] + copy.y[index]
+          end
+          local lower = reference - copy.yerr_lower[index]
+          local upper = reference + copy.yerr_upper[index]
+          if state.ymin == nil or lower < state.ymin then state.ymin = lower end
+          if state.ymax == nil or upper > state.ymax then state.ymax = upper end
         end
       end
     elseif series.kind == "hist" then

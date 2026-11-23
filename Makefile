@@ -20,6 +20,11 @@ examples:
 	@$(LUA) examples/stem.lua
 	@$(LUA) examples/quiver.lua
 	@$(LUA) examples/hexbin.lua
+	@$(LUA) examples/hist2d.lua
+	@$(LUA) examples/scatter_colors.lua
+	@$(LUA) examples/violinplot.lua
+	@$(LUA) examples/stack_baseline.lua
+	@$(LUA) examples/bar_errors.lua
 	@$(LUA) examples/field_coordinates.lua
 	@$(LUA) examples/aspect.lua
 	@$(LUA) examples/bars.lua

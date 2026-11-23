@@ -342,6 +342,11 @@ for svg in \
   examples/output/stem.svg \
   examples/output/quiver.svg \
   examples/output/hexbin.svg \
+  examples/output/hist2d.svg \
+  examples/output/scatter-colors.svg \
+  examples/output/violinplot.svg \
+  examples/output/stack-baseline.svg \
+  examples/output/bar-errors.svg \
   examples/output/heatmap-extent.svg \
   examples/output/contour-coords.svg \
   examples/output/aspect.svg \
@@ -541,6 +546,126 @@ contour_labels=$(grep -o 'class="contour-label"' "$CONTOUR_COORDS" |
 [ "$contour_labels" -gt 0 ] ||
   fail "$CONTOUR_COORDS has no contour labels"
 
+# Rectangular hist2d cells must agree with the reported grid and input.
+HIST2D=examples/output/hist2d.svg
+grep -q 'class="series series-hist2d"' "$HIST2D" ||
+  fail "$HIST2D has no hist2d series"
+hist2d_points=$(grep -o 'data-points="[0-9]*"' "$HIST2D" | head -1 |
+  tr -dc '0-9')
+hist2d_inside=$(grep -o 'data-inside="[0-9]*"' "$HIST2D" | head -1 |
+  tr -dc '0-9')
+hist2d_bins_x=$(grep -o 'data-bins-x="[0-9]*"' "$HIST2D" | head -1 |
+  tr -dc '0-9')
+hist2d_bins_y=$(grep -o 'data-bins-y="[0-9]*"' "$HIST2D" | head -1 |
+  tr -dc '0-9')
+[ -n "$hist2d_points" ] && [ -n "$hist2d_inside" ] &&
+  [ -n "$hist2d_bins_x" ] && [ -n "$hist2d_bins_y" ] ||
+  fail "$HIST2D is missing hist2d metadata"
+[ "$hist2d_inside" -gt 0 ] && [ "$hist2d_inside" -le "$hist2d_points" ] ||
+  fail "$HIST2D inside count does not fit its input"
+hist2d_cells=$(grep -o 'class="hist2d-cell"' "$HIST2D" | wc -l |
+  tr -d ' ')
+[ "$hist2d_cells" -gt 0 ] ||
+  fail "$HIST2D has no hist2d cells"
+[ "$hist2d_cells" -le $((hist2d_bins_x * hist2d_bins_y)) ] ||
+  fail "$HIST2D draws more cells than its grid"
+hist2d_sum=$(grep -o 'class="hist2d-cell"[^>]*data-count="[0-9]*"' "$HIST2D" |
+  sed -E 's/.*data-count="([0-9]+)"/\1/' |
+  awk '{ total += $1 } END { print total + 0 }')
+[ "$hist2d_sum" -eq "$hist2d_inside" ] ||
+  fail "$HIST2D cell counts sum to $hist2d_sum, expected $hist2d_inside"
+grep -q 'class="colorbar hist2d-colorbar"' "$HIST2D" ||
+  fail "$HIST2D has no hist2d colorbar"
+hist2d_ticks=$(grep -o 'data-ticks="[0-9]*"' "$HIST2D" | head -1 |
+  tr -dc '0-9')
+hist2d_labels=$(grep -o 'class="colorbar-label"' "$HIST2D" | wc -l |
+  tr -d ' ')
+[ "$hist2d_labels" -eq "$hist2d_ticks" ] ||
+  fail "$HIST2D has $hist2d_ticks colorbar ticks but $hist2d_labels labels"
+
+# Numeric scatter colors must produce mapped points and a colorbar.
+SCATTER_COLORS=examples/output/scatter-colors.svg
+grep -q 'class="series series-scatter"[^>]*data-color-values="true"' \
+  "$SCATTER_COLORS" || fail "$SCATTER_COLORS has no numeric color mapping"
+scatter_points=$(grep -o 'class="point"' "$SCATTER_COLORS" | wc -l |
+  tr -d ' ')
+[ "$scatter_points" -gt 100 ] ||
+  fail "$SCATTER_COLORS has too few colored points"
+scatter_fills=$(grep -o 'class="point"[^>]*fill="[^"]*"' "$SCATTER_COLORS" |
+  sed -E 's/.*fill="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$scatter_fills" -gt 1 ] ||
+  fail "$SCATTER_COLORS maps every point to the same color"
+grep -q 'class="colorbar scatter-colorbar"' "$SCATTER_COLORS" ||
+  fail "$SCATTER_COLORS has no scatter colorbar"
+scatter_ticks=$(grep -o 'data-ticks="[0-9]*"' "$SCATTER_COLORS" | head -1 |
+  tr -dc '0-9')
+scatter_labels=$(grep -o 'class="colorbar-label"' "$SCATTER_COLORS" | wc -l |
+  tr -d ' ')
+[ "$scatter_labels" -eq "$scatter_ticks" ] ||
+  fail "$SCATTER_COLORS has $scatter_ticks colorbar ticks but $scatter_labels labels"
+
+# Violin bodies, medians, quartiles, and extrema must stay consistent.
+VIOLIN=examples/output/violinplot.svg
+grep -q 'class="series series-violin"' "$VIOLIN" ||
+  fail "$VIOLIN has no violin series"
+violin_groups=$(grep -o 'class="series series-violin"' "$VIOLIN" | wc -l |
+  tr -d ' ')
+violin_bodies=$(grep -o 'class="violin-body"' "$VIOLIN" | wc -l |
+  tr -d ' ')
+violin_medians=$(grep -o 'class="violin-median"' "$VIOLIN" | wc -l |
+  tr -d ' ')
+violin_quartiles=$(grep -o 'class="violin-quartile"' "$VIOLIN" | wc -l |
+  tr -d ' ')
+violin_extrema=$(grep -o 'class="violin-extrema"' "$VIOLIN" | wc -l |
+  tr -d ' ')
+[ "$violin_groups" -eq 3 ] && [ "$violin_bodies" -eq 3 ] ||
+  fail "$VIOLIN should draw three violin bodies"
+[ "$violin_medians" -eq 3 ] ||
+  fail "$VIOLIN should draw one median per violin"
+[ "$violin_quartiles" -eq 6 ] ||
+  fail "$VIOLIN should draw two quartile marks per violin"
+[ "$violin_extrema" -eq 6 ] ||
+  fail "$VIOLIN should draw two extrema per violin"
+grep -q 'data-points="80"' "$VIOLIN" ||
+  fail "$VIOLIN should use 80 KDE points"
+if grep -Eqi 'nan|inf' "$VIOLIN"; then
+  fail "$VIOLIN contains non-finite geometry"
+fi
+
+# Stackplot baseline metadata and all three layers must survive.
+STACK_BASELINE=examples/output/stack-baseline.svg
+grep -q 'class="fill-between" data-stack="true" data-baseline="wiggle"' \
+  "$STACK_BASELINE" || fail "$STACK_BASELINE has no wiggle baseline metadata"
+stack_polygons=$(grep -o 'class="fill-between"' "$STACK_BASELINE" | wc -l |
+  tr -d ' ')
+[ "$stack_polygons" -eq 3 ] ||
+  fail "$STACK_BASELINE should draw three stacked layers"
+for index in 1 2 3; do
+  grep -q "data-baseline=\"wiggle\" data-index=\"$index\"" "$STACK_BASELINE" ||
+    fail "$STACK_BASELINE is missing stack layer $index"
+done
+
+# Grouped bars must carry both symmetric and asymmetric error geometry.
+BAR_ERRORS=examples/output/bar-errors.svg
+grep -q '<g class="series series-bar"[^>]*data-yerr="true"' "$BAR_ERRORS" ||
+  fail "$BAR_ERRORS has no bar error metadata"
+grep -q 'data-yerr-mode="asymmetric"' "$BAR_ERRORS" ||
+  fail "$BAR_ERRORS has no asymmetric bar errors"
+bar_rects=$(grep -o 'class="bar"' "$BAR_ERRORS" | wc -l | tr -d ' ')
+bar_error_lines=$(grep -o 'class="bar-error"' "$BAR_ERRORS" | wc -l |
+  tr -d ' ')
+bar_error_caps=$(grep -o 'class="bar-error-cap"' "$BAR_ERRORS" | wc -l |
+  tr -d ' ')
+[ "$bar_rects" -eq 8 ] ||
+  fail "$BAR_ERRORS should draw eight bars"
+[ "$bar_error_lines" -eq "$bar_rects" ] ||
+  fail "$BAR_ERRORS should draw one error line per bar"
+[ "$bar_error_caps" -eq $((bar_rects * 2)) ] ||
+  fail "$BAR_ERRORS should draw two caps per bar"
+if grep -Eqi 'nan|inf' "$BAR_ERRORS"; then
+  fail "$BAR_ERRORS contains non-finite geometry"
+fi
+
 # Equal aspect must produce a square plot box.
 ASPECT=examples/output/aspect.svg
 grep -q 'data-aspect="equal"' "$ASPECT" ||
@@ -571,7 +696,9 @@ done
 # marker density, minor grids, asymmetric caps, vector glyphs, hexagons,
 # extent/origin placement, explicit contour coordinates, and equal aspect.
 for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
-  "$QUIVER_CART" "$HEXBIN" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" "$ASPECT"; do
+  "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
+  "$STACK_BASELINE" "$BAR_ERRORS" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" \
+  "$ASPECT"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

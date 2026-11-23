@@ -146,6 +146,13 @@ local function data_extents(fig, xscale, yscale)
         include_x(series.x[i], series_index, i, "series")
         include_y(series.y[i], series_index, i, "series")
       end
+    elseif series.kind == "hist2d" then
+      include_x(series.edges_x[1], series_index, 1, "hist2d x")
+      include_x(series.edges_x[#series.edges_x], series_index,
+        #series.edges_x, "hist2d x")
+      include_y(series.edges_y[1], series_index, 1, "hist2d y")
+      include_y(series.edges_y[#series.edges_y], series_index,
+        #series.edges_y, "hist2d y")
     elseif series.kind == "hexbin" then
       for _, cell in ipairs(series.cells) do
         include_x(cell.x - series.width / 2, series_index, 1, "hexbin")
@@ -276,6 +283,11 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y[i] - series.height / 2, series_index, i, "barh")
         include_y(series.y[i] + series.height / 2, series_index, i, "barh")
       end
+    elseif series.kind == "violin" then
+      include_x(series.position - series.width / 2, series_index, 1, "violin")
+      include_x(series.position + series.width / 2, series_index, 1, "violin")
+      include_y(series.minimum, series_index, 1, "violin minimum")
+      include_y(series.maximum, series_index, 1, "violin maximum")
     elseif series.kind == "box" then
       include_x(series.position - series.width / 2, series_index, 1, "box")
       include_x(series.position + series.width / 2, series_index, 1, "box")
@@ -324,6 +336,16 @@ local function data_extents(fig, xscale, yscale)
             include_y(0, series_index, i, "bar baseline")
           end
           include_y(series.y[i], series_index, i, "bar value")
+        end
+        if series.yerr_lower ~= nil then
+          local reference = series.y[i]
+          if series.bottom ~= nil then
+            reference = series.bottom[i] + series.y[i]
+          end
+          include_y(reference - series.yerr_lower[i], series_index, i,
+            "bar lower error")
+          include_y(reference + series.yerr_upper[i], series_index, i,
+            "bar upper error")
         end
       end
     end
@@ -470,7 +492,8 @@ local function swatch(buf, kind, color, x, y)
     buf[#buf + 1] = string.format(
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
       util.fmt(x), util.fmt(y - 4), color)
-  elseif kind == "hist" or kind == "bar" or kind == "hexbin" then
+  elseif kind == "hist" or kind == "bar" or kind == "hexbin" or
+      kind == "hist2d" or kind == "violin" then
     buf[#buf + 1] = string.format(
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
       util.fmt(x), util.fmt(y - 4), color)
@@ -853,6 +876,11 @@ local function render_scatter(series, map_x, map_y, buf)
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
   end
+  if series.color_values ~= nil then
+    label = label .. string.format(
+      ' data-color-values="true" data-vmin="%s" data-vmax="%s"',
+      util.fmt(series.vmin), util.fmt(series.vmax))
+  end
 
   buf[#buf + 1] = string.format('  <g class="series series-scatter"%s>', label)
   for i = 1, #series.x do
@@ -995,7 +1023,7 @@ local function render_hexbin(series, map_x, map_y, buf)
   buf[#buf + 1] = '  </g>'
 end
 
-local function hexbin_colorbar_values(series)
+local function colorbar_values(series)
   if series.colorbar_tick_values ~= nil then
     return series.colorbar_tick_values, "explicit"
   end
@@ -1008,18 +1036,23 @@ local function hexbin_colorbar_values(series)
   return values, "uniform"
 end
 
-local function render_hexbin_colorbar(series, geom, buf)
+-- Shared vertical heat colorbar used by image, hexbin, hist2d, and numeric
+-- scatter series.  `class_name` preserves the existing feature-specific
+-- classes and `extra_attributes` carries additive norm metadata.
+local function render_value_colorbar(series, geom, buf, class_name,
+    extra_attributes)
   local colors = require("luaplotlib.colors")
-  local values, source = hexbin_colorbar_values(series)
+  local values, source = colorbar_values(series)
   local x = geom.right + 14
   local y = geom.top
   local width = 16
   local height = geom.plot_height
   local span = series.vmax - series.vmin
   buf[#buf + 1] = string.format(
-    '  <g class="colorbar hexbin-colorbar" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-tick-source="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s">',
-    util.fmt(series.vmin), util.fmt(series.vmax), #values, source,
-    util.fmt(x), util.fmt(y), util.fmt(width), util.fmt(height))
+    '  <g class="%s" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-tick-source="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s"%s>',
+    class_name, util.fmt(series.vmin), util.fmt(series.vmax), #values, source,
+    util.fmt(x), util.fmt(y), util.fmt(width), util.fmt(height),
+    extra_attributes or "")
   local steps = 40
   for index = 1, steps do
     local value = series.vmax - (series.vmax - series.vmin) *
@@ -1058,6 +1091,45 @@ local function render_hexbin_colorbar(series, geom, buf)
       util.fmt(label_x), util.fmt(label_y), TEXT_COLOR,
       util.fmt(label_x), util.fmt(label_y),
       util.escape_xml(series.colorbar_label))
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_hexbin_colorbar(series, geom, buf)
+  render_value_colorbar(series, geom, buf, "colorbar hexbin-colorbar")
+end
+
+local function render_hist2d(series, map_x, map_y, buf)
+  local colors = require("luaplotlib.colors")
+  local style = series.style
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', attribute(style.label))
+  end
+  local opacity = ""
+  if style.alpha < 1 then
+    opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
+  end
+  local norm = series.density and "density" or "count"
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-hist2d" data-points="%d" data-inside="%d" data-bins-x="%d" data-bins-y="%d" data-norm="%s" data-vmin="%s" data-vmax="%s"%s>',
+    series.point_count, series.inside_count, series.bins_x, series.bins_y, norm,
+    util.fmt(series.vmin), util.fmt(series.vmax), label)
+  for _, cell in ipairs(series.cells) do
+    local x0 = map_x(cell.x0)
+    local x1 = map_x(cell.x1)
+    local y0 = map_y(cell.y0)
+    local y1 = map_y(cell.y1)
+    local left = math.min(x0, x1)
+    local top = math.min(y0, y1)
+    buf[#buf + 1] = string.format(
+      '   <rect class="hist2d-cell" data-row="%d" data-col="%d" data-count="%d" data-value="%s" data-x0="%s" data-x1="%s" data-y0="%s" data-y1="%s" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
+      cell.row, cell.column, cell.count, util.fmt(cell.value),
+      util.fmt(cell.x0), util.fmt(cell.x1), util.fmt(cell.y0),
+      util.fmt(cell.y1), util.fmt(left), util.fmt(top),
+      util.fmt(math.abs(x1 - x0)), util.fmt(math.abs(y1 - y0)),
+      colors.heat(cell.value, series.vmin, series.vmax), series.edgecolor,
+      util.fmt(series.linewidth), opacity)
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -1236,9 +1308,14 @@ local function render_fill(series, map_x, map_y, buf)
     local points = fill_polygon_points({
       kind = "fill", x = series.x, y1 = series.y1, y2 = series.y2,
     }, map_x, map_y)
+    local stack = ""
+    if series.stack_baseline ~= nil then
+      stack = string.format(' data-stack="true" data-baseline="%s" data-index="%d"',
+        series.stack_baseline, series.stack_index or 1)
+    end
     buf[#buf + 1] = string.format(
-      '  <polygon class="fill-between" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
-      points, style.color, opacity, style.edgecolor or style.color)
+      '  <polygon class="fill-between"%s points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
+      stack, points, style.color, opacity, style.edgecolor or style.color)
     return
   end
 
@@ -1368,6 +1445,62 @@ local function render_contour(series, map_x, map_y, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function render_violin(series, map_x, map_y, buf)
+  local style = series.style
+  local points = {}
+  for index = 1, #series.body_x do
+    points[index] = util.fmt(map_x(series.body_x[index])) .. "," ..
+      util.fmt(map_y(series.body_y[index]))
+  end
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', attribute(style.label))
+  end
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-violin" data-position="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-q1="%s" data-median="%s" data-q3="%s"%s>',
+    util.fmt(series.position), series.points, util.fmt(series.bandwidth),
+    util.fmt(series.minimum), util.fmt(series.maximum), util.fmt(series.q1),
+    util.fmt(series.median), util.fmt(series.q3), label)
+  buf[#buf + 1] = string.format(
+    '   <polygon class="violin-body" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="%s"/>',
+    table.concat(points, " "), style.color, util.fmt(style.alpha),
+    style.edgecolor or style.color, util.fmt(style.linewidth or 1))
+  local center = map_x(series.position)
+  buf[#buf + 1] = string.format(
+    '   <line class="violin-center" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+    util.fmt(center), util.fmt(map_y(series.minimum)), util.fmt(center),
+    util.fmt(map_y(series.maximum)), style.edgecolor or style.color)
+  if series.showquartiles then
+    local half = (map_x(series.position + series.width * 0.25) -
+      map_x(series.position - series.width * 0.25)) / 2
+    for _, value in ipairs({ series.q1, series.q3 }) do
+      local y = map_y(value)
+      buf[#buf + 1] = string.format(
+        '   <line class="violin-quartile" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" stroke-dasharray="3 2"/>',
+        util.fmt(center - half), util.fmt(y), util.fmt(center + half),
+        util.fmt(y), style.edgecolor or style.color)
+    end
+  end
+  if series.showmedians then
+    local half = (map_x(series.position + series.width * 0.5) -
+      map_x(series.position - series.width * 0.5)) / 2
+    local y = map_y(series.median)
+    buf[#buf + 1] = string.format(
+      '   <line class="violin-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(center - half), util.fmt(y), util.fmt(center + half),
+      util.fmt(y), style.edgecolor or style.color)
+  end
+  if series.showextrema then
+    for _, value in ipairs({ series.minimum, series.maximum }) do
+      buf[#buf + 1] = string.format(
+        '   <circle class="violin-extrema" cx="%s" cy="%s" r="2.5" fill="%s"/>',
+        util.fmt(center), util.fmt(map_y(value)),
+        style.edgecolor or style.color)
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
 local function render_box(series, map_x, map_y, buf)
   local color = series.style.color
   local half = series.width / 2
@@ -1464,7 +1597,15 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
   end
 
   local offset = series.offset or 0
-  buf[#buf + 1] = string.format('  <g class="series series-bar"%s>', label)
+  local yerr_meta = ""
+  if series.yerr_lower ~= nil then
+    yerr_meta = ' data-yerr="true"'
+    if series.yerr_asymmetric then
+      yerr_meta = yerr_meta .. ' data-yerr-mode="asymmetric"'
+    end
+  end
+  buf[#buf + 1] = string.format('  <g class="series series-bar"%s%s>', label,
+    yerr_meta)
   for i = 1, #series.x do
     local value = series.y[i]
     local x1 = map_x(series.x[i] + offset - series.width / 2)
@@ -1491,6 +1632,30 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
       '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
       fill, edge, opacity)
+    if series.yerr_lower ~= nil then
+      local reference = value
+      if series.bottom ~= nil then reference = series.bottom[i] + value end
+      local upper_y = map_y(reference + series.yerr_upper[i])
+      local lower_y = map_y(reference - series.yerr_lower[i])
+      local center_x = (x1 + x2) / 2
+      local error_color = series.ecolor or style.color
+      local error_width = series.elinewidth or 1
+      local cap = series.capsize or 4
+      buf[#buf + 1] = string.format(
+        '   <line class="bar-error" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(center_x), util.fmt(upper_y), util.fmt(center_x),
+        util.fmt(lower_y), error_color, util.fmt(error_width))
+      buf[#buf + 1] = string.format(
+        '   <line class="bar-error-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(center_x - cap), util.fmt(upper_y),
+        util.fmt(center_x + cap), util.fmt(upper_y), error_color,
+        util.fmt(error_width))
+      buf[#buf + 1] = string.format(
+        '   <line class="bar-error-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(center_x - cap), util.fmt(lower_y),
+        util.fmt(center_x + cap), util.fmt(lower_y), error_color,
+        util.fmt(error_width))
+    end
     if series.show_values then
       local center_x = (x1 + x2) / 2
       local value_y = value_y or top
@@ -1998,6 +2163,8 @@ function M.to_svg(fig)
       render_scatter(series, map_x, map_y, buf)
     elseif series.kind == "quiver" then
       render_quiver(series, map_x, map_y, buf)
+    elseif series.kind == "hist2d" then
+      render_hist2d(series, map_x, map_y, buf)
     elseif series.kind == "hexbin" then
       render_hexbin(series, map_x, map_y, buf)
     elseif series.kind == "hist" then
@@ -2035,6 +2202,8 @@ function M.to_svg(fig)
       render_barh(series, map_x, map_y, map_x(0), buf)
     elseif series.kind == "contour" then
       render_contour(series, map_x, map_y, buf)
+    elseif series.kind == "violin" then
+      render_violin(series, map_x, map_y, buf)
     elseif series.kind == "box" then
       render_box(series, map_x, map_y, buf)
     elseif series.kind == "errorbar" then
@@ -2219,6 +2388,13 @@ function M.to_svg(fig)
       render_colorbar(series, geom, buf)
     elseif series.kind == "hexbin" and series.colorbar then
       render_hexbin_colorbar(series, geom, buf)
+    elseif series.kind == "hist2d" and series.colorbar then
+      local norm = series.density and "density" or "count"
+      render_value_colorbar(series, geom, buf, "colorbar hist2d-colorbar",
+        ' data-norm="' .. norm .. '"')
+    elseif series.kind == "scatter" and series.colorbar then
+      render_value_colorbar(series, geom, buf, "colorbar scatter-colorbar",
+        ' data-norm="linear"')
     end
   end
   render_legend(fig, geom, buf)
