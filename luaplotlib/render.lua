@@ -1,5 +1,6 @@
 -- Pure-Lua SVG renderer for luaplotlib figures.
 
+local grid = require("luaplotlib.grid")
 local markers = require("luaplotlib.markers")
 local ticks = require("luaplotlib.ticks")
 local util = require("luaplotlib.util")
@@ -9,7 +10,6 @@ local M = {}
 local FONT_FAMILY = "Helvetica, Arial, sans-serif"
 local TEXT_COLOR = "#222222"
 local AXIS_COLOR = "#333333"
-local GRID_COLOR = "#d9d9d9"
 
 local function clamp(value, minimum, maximum)
   if value < minimum then return minimum end
@@ -1495,12 +1495,22 @@ function M.to_svg(fig)
 
   if fig._grid then
     local grid_opts = fig._grid_opts or {}
-    local dash = ""
-    if grid_opts.linestyle == "dashed" then dash = ' stroke-dasharray="6 4"'
-    elseif grid_opts.linestyle == "dotted" then dash = ' stroke-dasharray="2 3"' end
-    add('  <g class="grid" stroke="' .. (grid_opts.color or GRID_COLOR) ..
-      '" stroke-width="' .. util.fmt(grid_opts.linewidth or 1) .. '"' .. dash .. '>')
-    local grid_axis = grid_opts.axis or "both"
+    local major, minor = grid.styles(grid_opts)
+    local function dash_for(style)
+      if style.linestyle == "dashed" then return ' stroke-dasharray="6 4"' end
+      if style.linestyle == "dotted" then return ' stroke-dasharray="2 3"' end
+      return ""
+    end
+    local function opacity_for(style)
+      if style.alpha < 1 then
+        return ' stroke-opacity="' .. util.fmt(style.alpha) .. '"'
+      end
+      return ""
+    end
+    add('  <g class="grid" stroke="' .. major.color ..
+      '" stroke-width="' .. util.fmt(major.linewidth) .. '"' ..
+      dash_for(major) .. opacity_for(major) .. '>')
+    local grid_axis = major.axis
     if grid_axis ~= "y" then
       for _, tick in ipairs(x_display) do
         local x = map_x(tick.value)
@@ -1517,10 +1527,9 @@ function M.to_svg(fig)
     end
     add('  </g>')
     if grid_opts.minor then
-      add('  <g class="grid-minor" stroke="' ..
-        (grid_opts.color or GRID_COLOR) .. '" stroke-width="' ..
-        util.fmt((grid_opts.linewidth or 1) * 0.65) ..
-        '" stroke-opacity="0.6"' .. dash .. '>')
+      add('  <g class="grid-minor" stroke="' .. minor.color ..
+        '" stroke-width="' .. util.fmt(minor.linewidth) .. '"' ..
+        dash_for(minor) .. opacity_for(minor) .. '>')
       if grid_axis ~= "y" then
         for _, value in ipairs(x_minor) do
           local x = map_x(value)

@@ -216,6 +216,7 @@ local test_files = {
   "test_tick_rotation.lua",
   "test_minorticks.lua",
   "test_reference_spans.lua",
+  "test_grid_style.lua",
   "test_twiny.lua",
   "test_style.lua",
   "test_axes3d.lua",

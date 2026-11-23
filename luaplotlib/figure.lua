@@ -611,7 +611,8 @@ function Figure.new(opts)
     _yscale = checked_scale(opts.yscale, "figure yscale", true),
     _grid = false,
     _grid_opts = {
-      color = "#d9d9d9", linewidth = 1, linestyle = "solid", minor = false,
+      color = "#d9d9d9", linewidth = 1, linestyle = "solid", alpha = 1,
+      minor = false,
     },
     _minorticks = { enabled = false, axis = "both" },
     _facecolor = "#ffffff",
@@ -3091,7 +3092,9 @@ function Figure:grid(enabled, opts)
   util.check_boolean(enabled, "grid")
   if opts ~= nil then
     opts = util.check_options(opts, { color = true, linewidth = true,
-      linestyle = true, axis = true, minor = true }, "grid")
+      linestyle = true, alpha = true, axis = true, minor = true,
+      minor_color = true, minor_linewidth = true, minor_linestyle = true,
+      minor_alpha = true }, "grid")
     if opts.axis ~= nil then
       if opts.axis ~= "x" and opts.axis ~= "y" and opts.axis ~= "both" then
         fail("grid axis must be x, y, or both")
@@ -3115,6 +3118,29 @@ function Figure:grid(enabled, opts)
         fail("grid linestyle must be solid, dashed, or dotted")
       end
       self._grid_opts.linestyle = opts.linestyle
+    end
+    if opts.alpha ~= nil then
+      self._grid_opts.alpha = util.check_alpha(opts.alpha, "grid alpha")
+    end
+    if opts.minor_color ~= nil then
+      self._grid_opts.minor_color = util.check_color(opts.minor_color,
+        "grid minor_color")
+    end
+    if opts.minor_linewidth ~= nil then
+      self._grid_opts.minor_linewidth = util.check_number(opts.minor_linewidth,
+        "grid minor_linewidth", 0)
+    end
+    if opts.minor_linestyle ~= nil then
+      if opts.minor_linestyle ~= "solid" and
+          opts.minor_linestyle ~= "dashed" and
+          opts.minor_linestyle ~= "dotted" then
+        fail("grid minor_linestyle must be solid, dashed, or dotted")
+      end
+      self._grid_opts.minor_linestyle = opts.minor_linestyle
+    end
+    if opts.minor_alpha ~= nil then
+      self._grid_opts.minor_alpha = util.check_alpha(opts.minor_alpha,
+        "grid minor_alpha")
     end
   end
   self._grid = enabled

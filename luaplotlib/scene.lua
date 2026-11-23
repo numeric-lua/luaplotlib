@@ -5,6 +5,7 @@
 -- plain Lua table that another backend (LÖVR, a rasterizer, an interactive
 -- canvas, ...) can render without depending on luaplotlib internals.
 --
+local grid = require("luaplotlib.grid")
 local util = require("luaplotlib.util")
 
 local M = {}
@@ -133,6 +134,25 @@ function M.from_figure(figure)
     series = {},
     annotations = {},
   }
+
+  if figure._grid then
+    local major, minor = grid.styles(figure._grid_opts)
+    scene.grid_style = {
+      color = major.color,
+      linewidth = major.linewidth,
+      linestyle = major.linestyle,
+      alpha = major.alpha,
+      axis = major.axis,
+    }
+    if figure._grid_opts and figure._grid_opts.minor then
+      scene.minor_grid_style = {
+        color = minor.color,
+        linewidth = minor.linewidth,
+        linestyle = minor.linestyle,
+        alpha = minor.alpha,
+      }
+    end
+  end
 
   if figure._pie ~= nil then
     scene.pie = {
