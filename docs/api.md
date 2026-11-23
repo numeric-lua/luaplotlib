@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.23.0`. This document describes the public Lua API implemented
+Version: `4.24.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.23.0"`
+- `plt._VERSION` — currently `"4.24.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -485,11 +485,28 @@ triangle, diamond, cross, or x.
 | `alpha` | number in [0, 1] | `1` |
 | `edgecolor` | color string | no outline |
 | `linewidth` | number ≥ 0 | `1` when an outline is present |
+| `c` | numeric array matching the points | unset |
+| `vmin` / `vmax` | finite numbers with `vmax > vmin` | `c` minimum / maximum |
+| `colorbar` | boolean | `true` when `c` is set |
+| `colorbar_label` | string | no title |
+| `colorbar_ticks` | integer in [2, 10] | `3` |
+| `colorbar_tick_values` | non-empty numeric table | uniform ticks |
 
 `size`/`markersize`/`s` are a circle **radius in SVG user units**, not
 matplotlib's area-in-points-squared convention. Arrays must match the number
 of points. `color` may also be an array of fill colors. The last listed size
 aliases are only used when the earlier ones are absent.
+
+When `c` is supplied, every numeric value is mapped through the shared heat
+palette (`colors.heat`) using `vmin`/`vmax`, and a vertical scatter colorbar is
+drawn by default. `c` may contain negative values; a degenerate automatic
+range is padded by 0.5 on each side. `c` and `color` are mutually exclusive,
+and `vmin`, `vmax`, `colorbar`, or colorbar text/tick options require `c`.
+The scatter group exposes `data-color-values="true"`, `data-vmin`, and
+`data-vmax`; the colorbar uses class `colorbar scatter-colorbar` and carries
+the usual `data-value`/`data-fraction` tick metadata. `to_scene()` exports
+`c`/`color_values`, the resolved limits, and the colorbar settings in addition
+to the mapped `colors` array.
 
 ### `fig:quiver(x, y, u, v, opts)`
 
@@ -550,6 +567,41 @@ axis ranges swapped accordingly.
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
 count axis includes zero. Empty bins are not emitted as rectangles.
+
+### `fig:hist2d(x, y, opts)`
+
+Count paired samples into a rectangular x/y grid and color non-empty cells with
+the shared heat palette.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `bins` | integer in [1, 200] or `{ nx, ny }` | `10` |
+| `range` | `{ xmin, xmax, ymin, ymax }` with ordered limits | data min/max |
+| `density` | boolean | `false` |
+| `vmin` / `vmax` | finite numbers with `vmax > vmin` | value range |
+| `colorbar` | boolean | `true` |
+| `colorbar_label` | string | no title |
+| `colorbar_ticks` | integer in [2, 10] | `3` |
+| `colorbar_tick_values` | non-empty numeric table | uniform ticks |
+| `edgecolor` | color string | `#ffffff` |
+| `linewidth` | number ≥ 0 | `0.5` |
+| `color`, `label`, `alpha` | normal series style | palette/`1` |
+
+`bins = { nx, ny }` controls the x and y cell counts independently. An explicit
+`range` clips samples outside the rectangle and fixes the cell edges; the
+default range uses the sample extrema, padded when an axis is degenerate.
+`density = true` divides each cell count by the in-range sample count and the
+cell area. Empty bins are omitted from the SVG and scene cell lists, while the
+grid edges and bin counts are preserved. `colorbar_ticks` and
+`colorbar_tick_values` are mutually exclusive.
+
+The series group exposes `data-points`, `data-inside`, `data-bins-x`,
+`data-bins-y`, `data-norm` (`count` or `density`), `data-vmin`, and `data-vmax`.
+Each `hist2d-cell` rectangle carries `data-row`, `data-col`, `data-count`,
+`data-value`, and its source cell bounds. The colorbar group
+(`colorbar hist2d-colorbar`) reports the same norm and value range. Scene export
+includes the input arrays, edges, cells, counts, values, density flag, limits,
+and colorbar settings.
 
 ### `fig:hexbin(x, y, opts)`
 
@@ -640,7 +692,23 @@ exports the base plus the marker/line style through the normal series style.
 
 ### `fig:stackplot(x, series[, opts])`
 
-Stacked filled areas; `opts.labels` and `opts.colors` match the series list.
+Stacked filled areas. `opts.labels` and `opts.colors` match the series list.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `labels` | one legend label per series | no legend entries |
+| `colors` | one color per series | palette colors |
+| `baseline` | `"zero"`, `"sym"`, or `"wiggle"` | `"zero"` |
+| `alpha` | number in [0, 1] | `0.8` |
+| `edgecolor` | color string | series color |
+
+`zero` starts every stack at y=0. `sym` shifts each complete stack so it is
+centered on zero. `wiggle` shifts each stack by the average of its cumulative
+layer boundaries, which centers the visual mass while preserving every layer's
+thickness. Each fill polygon carries `data-stack="true"`, `data-baseline`, and
+its layer `data-index`; scene export adds `stack_baseline`, `stack_index`, and
+the per-sample `stack_shift` array while the legacy `y1`/`y2` geometry remains
+the canonical band shape.
 
 ### `fig:contourf(values[, opts])`
 
@@ -665,6 +733,39 @@ the legacy markup. `to_scene()` exports `extent` and `origin`.
 
 Draws box-and-whisker plots for one or more numeric samples. `opts.labels`
 names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
+
+### `fig:violinplot(samples, opts)`
+
+Draw kernel-density violins for one or more numeric samples. `samples` is one
+numeric sequence or a list of sequences. A Gaussian KDE is evaluated between
+each sample's extrema and normalized to the widest body.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `positions` | numeric array matching the samples | `1, 2, ...` |
+| `width` | number in [0.01, 1], fraction of the minimum position spacing | `0.5` |
+| `points` | integer in [10, 500], KDE samples per body | `50` |
+| `bandwidth` | positive number | Silverman's rule |
+| `showextrema` | boolean | `true` |
+| `showmedians` | boolean | `true` |
+| `showquartiles` | boolean | `true` |
+| `colors` | one color per sample | palette colors |
+| `color` | single color for every sample | palette colors |
+| `labels` | one tick/legend label per sample | `sample N` |
+| `label` | shared legend label | no legend entry |
+| `alpha` | number in [0, 1] | `0.65` |
+| `edgecolor` | color string | sample color |
+| `linewidth` | number ≥ 0 | `1` |
+
+Each violin is a separate series with class `series-violin`. Bodies are
+`violin-body` polygons; medians are `violin-median` lines, quartiles are
+`violin-quartile` dashed lines, the center is a `violin-center` line, and
+sample extrema are `violin-extrema` circles. The group exposes
+`data-position`, `data-points`, `data-bandwidth`, `data-min`, `data-max`,
+`data-q1`, `data-median`, and `data-q3`. Sample labels become category ticks
+and are also used as legend labels. Scene export includes the sorted sample,
+normalized density array, polygon body coordinates, quartiles, and display
+flags.
 
 ### `fig:contour(values, opts)`
 
@@ -709,6 +810,10 @@ fig:bar({ "Q1", "Q2" }, {
 | `edgecolor` | color string | `#ffffff` |
 | `grouped` | boolean | `true` for multiple series |
 | `stacked` | boolean | `false` |
+| `yerr` | error specification (see below) | no error bars |
+| `ecolor` | color string | series fill color |
+| `elinewidth` | number ≥ 0 | `1` |
+| `capsize` | number ≥ 0, SVG user units | `4` |
 
 `width` is a fraction of the smallest spacing between x positions (or 1 for a
 single bar / categorical position). In grouped mode that width is shared by all
@@ -718,10 +823,21 @@ stacked mode positive and negative values accumulate separately from zero.
 a single series; use `labels` (or descriptor labels) for multiple series. The
 `labels` and `colors` tables must have exactly one entry per value series.
 
+`yerr` mirrors `errorbar` error specifications. For a single series it may be a
+non-negative number, a flat per-bar sequence, or an asymmetric
+`{ lower = ..., upper = ... }` / `{ lower_sequence, upper_sequence }` table. For
+multiple series it must contain exactly one such specification per series.
+Errors are anchored at each bar's top (or each stacked segment's top), and the
+automatic y range includes both error extents. Groups with errors add
+`data-yerr="true"` plus `data-yerr-mode="asymmetric"` when lower and upper
+errors differ. Error lines use `bar-error` and caps use `bar-error-cap`.
+Scene export includes `yerr_lower`, `yerr_upper`, the asymmetric flag,
+`ecolor`, `elinewidth`, and `capsize`.
+
 Negative values draw downward from zero. The automatic x extent includes grouped
-offsets, and the automatic y extent includes stacked bottoms and total heights.
-The y-axis includes zero. Category ticks are emitted once per call, even when the
-call contains several series.
+offsets, and the automatic y extent includes stacked bottoms, total heights, and
+bar error extents. The y-axis includes zero. Category ticks are emitted once per
+call, even when the call contains several series.
 
 ### `fig:xticks(values[, labels])` / `fig:yticks(values[, labels])`
 

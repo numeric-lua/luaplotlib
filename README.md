@@ -386,10 +386,14 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
   `fig:savefig(path)`
 - Line plots with colors, dashes, markers, labels, and alpha
-- Scatter plots rendered as SVG circles
-- Histograms with configurable bins and ranges
+- Scatter plots rendered as SVG circles, with per-point colors/sizes or numeric
+  `c` values mapped through the heat palette and an optional colorbar
+- Histograms with configurable bins and ranges, plus rectangular `hist2d`
+  counts/densities with explicit grids, value limits, and colorbars
 - Vertical bars with numeric positions or categorical labels, including
-  multi-series grouped and stacked bars
+  multi-series grouped and stacked bars and symmetric/asymmetric error bars
+- Gaussian-kernel violin plots with configurable bandwidth, positions,
+  quartiles, medians, extrema, and per-sample colors
 - Polar line, scatter, bar, error-bar, quiver, heatmap, and contour plots with
   circular grid, theta/r ticks, configurable orientation and limits, rotated
   collision-aware contour labels, explicit colorbar ticks, measured-text
@@ -408,6 +412,7 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands
 - Horizontal histograms and styled stems with custom bases and markers
+- Stacked areas with `zero`, `sym`, and `wiggle` baselines
 - Cartesian quiver vector fields with automatic/explicit scaling, pivots,
   normalization, deterministic arrow caps, and legend/scene metadata
 - Hexagonal binning with minimum counts, value limits, explicit or uniform
@@ -459,6 +464,11 @@ make examples
 # examples/output/stem.svg
 # examples/output/quiver.svg
 # examples/output/hexbin.svg
+# examples/output/hist2d.svg
+# examples/output/scatter-colors.svg
+# examples/output/violinplot.svg
+# examples/output/stack-baseline.svg
+# examples/output/bar-errors.svg
 # examples/output/heatmap-extent.svg
 # examples/output/contour-coords.svg
 # examples/output/aspect.svg
@@ -479,9 +489,10 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.23.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
-fill/step/stem/stack/fillx/pcolormesh/hexbin/pie/donut/error-bar/box/heatmap/
-contour/contourf plots, Cartesian quiver fields, image extents/origins, explicit
+`4.24.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
+fill/step/stem/stack/fillx/pcolormesh/hexbin/violin/pie/donut/error-bar/box/
+heatmap/contour/contourf plots, Cartesian quiver fields, image extents/origins,
+explicit
 contour coordinate grids, equal or numeric aspect ratios, polar
 line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with
 configurable orientation and grids, polar heatmap colorbars with explicit nice
@@ -492,9 +503,11 @@ bars, linear/log/date axes, twin x/y axes, minor ticks and minor grids, clipped
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference
 spans, masked fill bands, horizontal histograms, styled stems, independently
-styled minor grids, 3-D scene export, per-point scatter sizes/colors,
-histogram density, multi-column legends, marker shapes, shaded spans, log
-helpers, optional PNG/PDF export, and scene export. See
+styled minor grids, 3-D scene export, per-point scatter sizes/colors, numeric
+scatter color mapping with colorbars, rectangular 2-D histogram grids, KDE
+violins, configurable stack baselines, bar error bars, histogram density,
+multi-column legends, marker shapes, shaded spans, log helpers, optional
+PNG/PDF export, and scene export. See
 [docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations
@@ -528,6 +541,11 @@ helpers, optional PNG/PDF export, and scene export. See
   projected component displacement, `normalize` replaces magnitudes with unit
   directions, and arrow tips can be clipped at the axes rectangle. The input
   `x`/`y` anchors define automatic ranging.
+- **Distribution/color helpers are focused.** `violinplot` uses a Gaussian KDE
+  (no alternate kernels, split violins, or per-sample bandwidth arrays), and
+  numeric scatter colors always use the shared heat palette. `hist2d` omits
+  empty cells, and bar `yerr` takes one error specification per value series
+  rather than a freely mixed per-bar error matrix.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

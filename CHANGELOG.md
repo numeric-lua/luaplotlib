@@ -1,5 +1,50 @@
 # Changelog
 
+## 4.24.0
+
+- new `fig:hist2d(x, y, opts)` counts paired samples into a rectangular grid.
+  `bins` accepts a count or `{ nx, ny }`, `range` fixes
+  `{ xmin, xmax, ymin, ymax }`, `density` normalizes by in-range count and cell
+  area, and non-empty cells use the shared heat palette. A vertical count or
+  density colorbar supports a title, uniform `colorbar_ticks`, or explicit
+  `colorbar_tick_values`. Groups expose point/inside counts, grid dimensions,
+  norm, and value limits; each cell carries its row, column, count, value, and
+  source bounds. Scene export includes the input arrays, edges, cells, counts,
+  values, density flag, and colorbar settings;
+- `fig:scatter` accepts a numeric `c` array plus `vmin`/`vmax` and colorbar
+  options. Values map through the shared heat palette, a colorbar is enabled by
+  default, and per-point `colors` are generated for rendering and scene export.
+  `c` and `color` are mutually exclusive; colorbar and limit options require
+  `c`. The scatter group advertises mapped values and limits, the colorbar uses
+  `colorbar scatter-colorbar`, and scene export adds `c`/`color_values`,
+  resolved limits, and colorbar metadata;
+- new `fig:violinplot(samples, opts)` draws normalized Gaussian-kernel
+  violins for one or more samples. Sample-specific or explicit positions,
+  width fractions, KDE resolution, Silverman or explicit bandwidth, per-sample
+  colors, and extrema/median/quartile toggles are supported. Each body,
+  center, median, quartile, and extrema element has a stable class and the
+  group reports position, points, bandwidth, extrema, and quartiles. Scene
+  export includes sorted samples, densities, polygon coordinates, and display
+  flags;
+- `fig:stackplot` adds `baseline = "zero" | "sym" | "wiggle"`. `sym` centers
+  the complete stack; `wiggle` centers the average cumulative layer boundary.
+  Every layer keeps its thickness and the existing `y1`/`y2` geometry remains
+  canonical. Stack polygons expose baseline/index metadata and scene export
+  adds `stack_baseline`, `stack_index`, and the per-sample `stack_shift`;
+- `fig:bar` adds `yerr`, `ecolor`, `elinewidth`, and `capsize`. Errors may be
+  symmetric or asymmetric, and multiple series accept one error specification
+  per series. Bar errors are anchored at the bar top or stacked segment top and
+  participate in automatic ranging. Groups report `data-yerr`/asymmetric mode,
+  `bar-error` lines and `bar-error-cap` caps are emitted per bar, and scene
+  export preserves both extents and styling;
+- new examples `hist2d.lua`, `scatter_colors.lua`, `violinplot.lua`,
+  `stack_baseline.lua`, and `bar_errors.lua`. README, API docs, the Makefile,
+  and `scripts/visual-qa.sh` validate all five features, including cell/count
+  consistency, color-mapped scatter points, violin marks, baseline metadata,
+  and bar error/cap counts. The dependency-free suite grows from 312 to 335
+  tests. Existing Cartesian defaults are preserved, polar rendering is
+  unchanged, and there are no new runtime dependencies.
+
 ## 4.23.0
 
 - new `fig:quiver(x, y, u, v, opts)` draws Cartesian vector fields. `u`/`v`
