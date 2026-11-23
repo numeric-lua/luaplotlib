@@ -201,7 +201,7 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y[i], series_index, i, "step y")
       end
     elseif series.kind == "stem" then
-      include_y(0, series_index, 1, "stem baseline")
+      include_y(series.base or 0, series_index, 1, "stem baseline")
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "stem x")
         include_y(series.y[i], series_index, i, "stem y")
@@ -1014,19 +1014,37 @@ local function render_step(series, map_x, map_y, buf)
 end
 
 local function render_stem(series, map_x, map_y, buf)
-  local baseline = map_y(0)
+  local style = series.style
+  local baseline = map_y(series.base or 0)
+  local dash = ""
+  if style.linestyle == "dashed" then dash = ' stroke-dasharray="6 4"'
+  elseif style.linestyle == "dotted" then dash = ' stroke-dasharray="1.5 3"' end
+  local line_opacity = ""
+  if style.alpha < 1 then
+    line_opacity = string.format(' stroke-opacity="%s"', util.fmt(style.alpha))
+  end
+  local marker_opacity = ""
+  if style.alpha < 1 then
+    marker_opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
+  end
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-stem" data-base="%s" data-marker="%s" data-linestyle="%s">',
+    util.fmt(series.base or 0), style.marker or "none", style.linestyle or "solid")
   for i = 1, #series.x do
     local x = map_x(series.x[i])
     local y = map_y(series.y[i])
-    buf[#buf + 1] = string.format(
-      '  <line class="stem-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-      util.fmt(x), util.fmt(baseline), util.fmt(x), util.fmt(y),
-      series.style.color, util.fmt(series.style.linewidth or 1.5))
-    buf[#buf + 1] = string.format(
-      '  <circle class="stem-marker" cx="%s" cy="%s" r="%s" fill="%s"/>',
-      util.fmt(x), util.fmt(y), util.fmt(series.style.markersize or 4),
-      series.style.color)
+    if style.linestyle ~= "none" then
+      buf[#buf + 1] = string.format(
+        '   <line class="stem-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
+        util.fmt(x), util.fmt(baseline), util.fmt(x), util.fmt(y),
+        style.color, util.fmt(style.linewidth or 1.5), dash, line_opacity)
+    end
+    if style.marker ~= nil then
+      buf[#buf + 1] = markers.svg(style.marker, "stem-marker", x, y,
+        style.markersize or 4, style.color, marker_opacity, "")
+    end
   end
+  buf[#buf + 1] = '  </g>'
 end
 
 local function render_contour(series, map_x, map_y, buf)

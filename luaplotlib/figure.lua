@@ -215,7 +215,10 @@ local STEM_OPTIONS = {
   color = true,
   label = true,
   linewidth = true,
+  linestyle = true,
+  marker = true,
   markersize = true,
+  base = true,
   alpha = true,
 }
 
@@ -2417,11 +2420,23 @@ function Figure:stem(x, y, opts)
   linewidth = util.check_number(linewidth, "stem linewidth", 0)
   local markersize = opts.markersize or 4
   markersize = util.check_number(markersize, "stem markersize", 0.1)
+  local marker = "circle"
+  if opts.marker ~= nil then marker = checked_marker(opts.marker, "stem") end
+  local linestyle = opts.linestyle or "solid"
+  if not LINESTYLES[linestyle] then
+    fail("stem linestyle must be one of solid, dashed, dotted, or none")
+  end
+  local base = 0
+  if opts.base ~= nil then
+    base = util.check_number(opts.base, "stem base")
+  end
   local style = checked_style(self, opts, "stem")
   style.linewidth = linewidth
+  style.linestyle = linestyle
+  style.marker = marker
   style.markersize = markersize
   self._series[#self._series + 1] = {
-    kind = "stem", x = xv, y = yv, style = style,
+    kind = "stem", x = xv, y = yv, base = base, style = style,
   }
   return self
 end

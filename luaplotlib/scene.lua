@@ -303,9 +303,14 @@ function M.from_figure(figure)
     elseif series.kind == "stem" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
+      copy.base = series.base or 0
       update_xy_range(state, copy)
-      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
-      if state.ymax == nil or 0 > state.ymax then state.ymax = 0 end
+      if state.ymin == nil or copy.base < state.ymin then
+        state.ymin = copy.base
+      end
+      if state.ymax == nil or copy.base > state.ymax then
+        state.ymax = copy.base
+      end
     elseif series.kind == "image" then
       copy.rows = series.rows
       copy.cols = series.cols

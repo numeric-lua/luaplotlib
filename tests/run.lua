@@ -219,6 +219,7 @@ local test_files = {
   "test_grid_style.lua",
   "test_fill_where.lua",
   "test_hist_orientation.lua",
+  "test_stem_style.lua",
   "test_twiny.lua",
   "test_style.lua",
   "test_axes3d.lua",
