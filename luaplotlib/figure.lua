@@ -2945,8 +2945,14 @@ local REFERENCE_OPTIONS = {
   color = true, linewidth = true, linestyle = true, alpha = true, label = true,
 }
 
-local function reference_style(figure, opts, name)
-  opts = util.check_options(opts, REFERENCE_OPTIONS, name)
+local function reference_style(figure, opts, name, extra_options)
+  local allowed = REFERENCE_OPTIONS
+  if extra_options ~= nil then
+    allowed = {}
+    for key in pairs(REFERENCE_OPTIONS) do allowed[key] = true end
+    for key in pairs(extra_options) do allowed[key] = true end
+  end
+  opts = util.check_options(opts, allowed, name)
   local style = checked_style(figure, opts, name)
   style.linewidth = 1.5
   if opts.linewidth ~= nil then
@@ -2957,6 +2963,29 @@ local function reference_style(figure, opts, name)
     fail(name .. " linestyle must be one of solid, dashed, dotted, or none")
   end
   return style
+end
+
+-- Resolve the axes-fraction endpoints used by axhline/axvline. The defaults
+-- span the whole axes; explicit spans must be ordered and inside [0, 1].
+local function checked_fraction_span(opts, name, minimum_key, maximum_key)
+  if opts ~= nil and type(opts) ~= "table" then
+    fail(name .. " options must be a table")
+  end
+  opts = opts or {}
+  local minimum = 0
+  local maximum = 1
+  if opts[minimum_key] ~= nil then
+    minimum = util.check_number(opts[minimum_key],
+      name .. " " .. minimum_key, 0, 1)
+  end
+  if opts[maximum_key] ~= nil then
+    maximum = util.check_number(opts[maximum_key],
+      name .. " " .. maximum_key, 0, 1)
+  end
+  if minimum >= maximum then
+    fail(name .. " " .. minimum_key .. " must be less than " .. maximum_key)
+  end
+  return minimum, maximum
 end
 
 local SPAN_OPTIONS = { color = true, alpha = true, label = true }
@@ -3011,8 +3040,12 @@ function Figure:axhline(y, opts)
   if type(y) ~= "number" or y ~= y or y == math.huge or y == -math.huge then
     fail("axhline y must be a finite number")
   end
-  local style = reference_style(self, opts, "axhline")
-  self._series[#self._series + 1] = { kind = "axhline", y = y, style = style }
+  local xmin, xmax = checked_fraction_span(opts, "axhline", "xmin", "xmax")
+  local style = reference_style(self, opts, "axhline",
+    { xmin = true, xmax = true })
+  self._series[#self._series + 1] = {
+    kind = "axhline", y = y, xmin = xmin, xmax = xmax, style = style,
+  }
   return self
 end
 
@@ -3020,8 +3053,12 @@ function Figure:axvline(x, opts)
   if type(x) ~= "number" or x ~= x or x == math.huge or x == -math.huge then
     fail("axvline x must be a finite number")
   end
-  local style = reference_style(self, opts, "axvline")
-  self._series[#self._series + 1] = { kind = "axvline", x = x, style = style }
+  local ymin, ymax = checked_fraction_span(opts, "axvline", "ymin", "ymax")
+  local style = reference_style(self, opts, "axvline",
+    { ymin = true, ymax = true })
+  self._series[#self._series + 1] = {
+    kind = "axvline", x = x, ymin = ymin, ymax = ymax, style = style,
+  }
   return self
 end
 

@@ -546,19 +546,31 @@ local function render_reference(series, map_x, map_y, geom, buf)
     string.format(' stroke-opacity="%s"', util.fmt(style.alpha)) or ""
   local label = style.label and
     string.format(' data-label="%s"', attribute(style.label)) or ""
-  buf[#buf + 1] = string.format('  <g class="series series-%s"%s>',
-    series.kind, label)
   if series.kind == "axhline" then
+    local xmin = series.xmin or 0
+    local xmax = series.xmax or 1
     local y = map_y(series.y)
+    local x1 = geom.left + xmin * geom.plot_width
+    local x2 = geom.left + xmax * geom.plot_width
+    buf[#buf + 1] = string.format(
+      '  <g class="series series-%s" data-xmin="%s" data-xmax="%s"%s>',
+      series.kind, util.fmt(xmin), util.fmt(xmax), label)
     buf[#buf + 1] = string.format(
       '   <line class="reference" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
-      util.fmt(geom.left), util.fmt(y), util.fmt(geom.right), util.fmt(y),
+      util.fmt(x1), util.fmt(y), util.fmt(x2), util.fmt(y),
       style.color, util.fmt(style.linewidth), dash, opacity)
   else
+    local ymin = series.ymin or 0
+    local ymax = series.ymax or 1
     local x = map_x(series.x)
+    local y1 = geom.bottom - ymin * geom.plot_height
+    local y2 = geom.bottom - ymax * geom.plot_height
+    buf[#buf + 1] = string.format(
+      '  <g class="series series-%s" data-ymin="%s" data-ymax="%s"%s>',
+      series.kind, util.fmt(ymin), util.fmt(ymax), label)
     buf[#buf + 1] = string.format(
       '   <line class="reference" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
-      util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.bottom),
+      util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
       style.color, util.fmt(style.linewidth), dash, opacity)
   end
   buf[#buf + 1] = '  </g>'

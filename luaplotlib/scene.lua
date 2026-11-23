@@ -206,6 +206,18 @@ function M.from_figure(figure)
       if state.ymin == nil or series.y2 < state.ymin then state.ymin = series.y2 end
       if state.ymax == nil or series.y1 > state.ymax then state.ymax = series.y1 end
       if state.ymax == nil or series.y2 > state.ymax then state.ymax = series.y2 end
+    elseif series.kind == "axhline" then
+      copy.y = series.y
+      copy.xmin = series.xmin or 0
+      copy.xmax = series.xmax or 1
+      if state.ymin == nil or series.y < state.ymin then state.ymin = series.y end
+      if state.ymax == nil or series.y > state.ymax then state.ymax = series.y end
+    elseif series.kind == "axvline" then
+      copy.x = series.x
+      copy.ymin = series.ymin or 0
+      copy.ymax = series.ymax or 1
+      if state.xmin == nil or series.x < state.xmin then state.xmin = series.x end
+      if state.xmax == nil or series.x > state.xmax then state.xmax = series.x end
     elseif series.kind == "fill" then
       copy.x = copy_array(series.x)
       copy.y1 = copy_array(series.y1)
