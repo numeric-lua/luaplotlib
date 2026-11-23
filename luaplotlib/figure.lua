@@ -197,6 +197,8 @@ local FILL_OPTIONS = {
   label = true,
   alpha = true,
   edgecolor = true,
+  where = true,
+  interpolate = true,
 }
 
 local STEP_OPTIONS = {
@@ -2285,6 +2287,32 @@ function Figure:scatter3(x, y, z, opts)
   return self:scatter(px, py, opts)
 end
 
+-- Fill masks are boolean arrays with one entry per band sample.
+local function checked_where(value, count, name)
+  if value == nil then return nil end
+  if type(value) ~= "table" then
+    fail(name .. " must be a table of booleans")
+  end
+  if #value ~= count then
+    fail(string.format("%s must have one boolean per sample (%d ~= %d)",
+      name, #value, count))
+  end
+  local result = {}
+  for index = 1, count do
+    if type(value[index]) ~= "boolean" then
+      fail(string.format("%s[%d] must be a boolean", name, index))
+    end
+    result[index] = value[index]
+  end
+  return result
+end
+
+local function checked_interpolate(value, name)
+  if value == nil then return false end
+  util.check_boolean(value, name)
+  return value
+end
+
 function Figure:fill_between(x, y1, y2, opts)
   opts = util.check_options(opts, FILL_OPTIONS, "fill_between")
   local xv = data.sequence(x, "fill_between x")
@@ -2293,10 +2321,14 @@ function Figure:fill_between(x, y1, y2, opts)
   if #xv ~= #lower or #xv ~= #upper then
     fail("fill_between x, y1, and y2 must have the same length")
   end
+  local where = checked_where(opts.where, #xv, "fill_between where")
+  local interpolate = checked_interpolate(opts.interpolate,
+    "fill_between interpolate")
   local style = checked_style(self, opts, "fill_between")
   style.linewidth = 0
   self._series[#self._series + 1] = {
-    kind = "fill", x = xv, y1 = lower, y2 = upper, style = style,
+    kind = "fill", x = xv, y1 = lower, y2 = upper,
+    where = where, interpolate = interpolate, style = style,
   }
   return self
 end
@@ -2309,10 +2341,14 @@ function Figure:fill_betweenx(y, x1, x2, opts)
   if #yv ~= #left or #yv ~= #right then
     fail("fill_betweenx y, x1, and x2 must have the same length")
   end
+  local where = checked_where(opts.where, #yv, "fill_betweenx where")
+  local interpolate = checked_interpolate(opts.interpolate,
+    "fill_betweenx interpolate")
   local style = checked_style(self, opts, "fill_betweenx")
   style.linewidth = 0
   self._series[#self._series + 1] = {
-    kind = "fillx", y = yv, x1 = left, x2 = right, style = style,
+    kind = "fillx", y = yv, x1 = left, x2 = right,
+    where = where, interpolate = interpolate, style = style,
   }
   return self
 end

@@ -1,5 +1,6 @@
 -- Pure-Lua SVG renderer for luaplotlib figures.
 
+local area = require("luaplotlib.area")
 local grid = require("luaplotlib.grid")
 local markers = require("luaplotlib.markers")
 local ticks = require("luaplotlib.ticks")
@@ -146,17 +147,20 @@ local function data_extents(fig, xscale, yscale)
         include_y(y - yerr_lower, series_index, i, "errorbar y")
         include_y(y + yerr_upper, series_index, i, "errorbar y")
       end
-    elseif series.kind == "fill" then
-      for i = 1, #series.x do
-        include_x(series.x[i], series_index, i, "fill x")
-        include_y(series.y1[i], series_index, i, "fill lower")
-        include_y(series.y2[i], series_index, i, "fill upper")
-      end
-    elseif series.kind == "fillx" then
-      for i = 1, #series.y do
-        include_y(series.y[i], series_index, i, "fillx y")
-        include_x(series.x1[i], series_index, i, "fillx left")
-        include_x(series.x2[i], series_index, i, "fillx right")
+    elseif series.kind == "fill" or series.kind == "fillx" then
+      local fillx = series.kind == "fillx"
+      for _, run in ipairs(area.segments(series)) do
+        for i = 1, #run[fillx and "y" or "x"] do
+          if fillx then
+            include_y(run.y[i], series_index, i, "fillx y")
+            include_x(run.x1[i], series_index, i, "fillx left")
+            include_x(run.x2[i], series_index, i, "fillx right")
+          else
+            include_x(run.x[i], series_index, i, "fill x")
+            include_y(run.y1[i], series_index, i, "fill lower")
+            include_y(run.y2[i], series_index, i, "fill upper")
+          end
+        end
       end
     elseif series.kind == "eventplot" then
       for row = 1, #series.rows do
@@ -859,40 +863,85 @@ local function render_barh(series, map_x, map_y, baseline, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function fill_polygon_points(run, map_x, map_y)
+  local points = {}
+  if run.kind == "fillx" then
+    for index = 1, #run.y do
+      points[#points + 1] = string.format("%s,%s", util.fmt(map_x(run.x1[index])),
+        util.fmt(map_y(run.y[index])))
+    end
+    for index = #run.y, 1, -1 do
+      points[#points + 1] = string.format("%s,%s", util.fmt(map_x(run.x2[index])),
+        util.fmt(map_y(run.y[index])))
+    end
+  else
+    for index = 1, #run.x do
+      points[#points + 1] = string.format("%s,%s", util.fmt(map_x(run.x[index])),
+        util.fmt(map_y(run.y1[index])))
+    end
+    for index = #run.x, 1, -1 do
+      points[#points + 1] = string.format("%s,%s", util.fmt(map_x(run.x[index])),
+        util.fmt(map_y(run.y2[index])))
+    end
+  end
+  return table.concat(points, " ")
+end
+
 local function render_fill(series, map_x, map_y, buf)
   local style = series.style
   local opacity = ""
   if style.alpha < 1 then opacity = string.format(' fill-opacity="%s"',
     util.fmt(style.alpha)) end
-  local points = {}
-  for i = 1, #series.x do
-    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x[i])),
-      util.fmt(map_y(series.y1[i])))
+  if series.where == nil and not series.interpolate then
+    local points = fill_polygon_points({
+      kind = "fill", x = series.x, y1 = series.y1, y2 = series.y2,
+    }, map_x, map_y)
+    buf[#buf + 1] = string.format(
+      '  <polygon class="fill-between" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
+      points, style.color, opacity, style.edgecolor or style.color)
+    return
   end
-  for i = #series.x, 1, -1 do
-    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x[i])),
-      util.fmt(map_y(series.y2[i])))
-  end
+
+  local segments = area.segments(series)
   buf[#buf + 1] = string.format(
-    '  <polygon class="fill-between" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
-    table.concat(points, " "), style.color, opacity,
-    style.edgecolor or style.color)
+    '  <g class="series series-fill" data-where="masked" data-interpolate="%s" data-segments="%d">',
+    series.interpolate and "true" or "false", #segments)
+  for index, run in ipairs(segments) do
+    buf[#buf + 1] = string.format(
+      '   <polygon class="fill-between" data-index="%d" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
+      index, fill_polygon_points(run, map_x, map_y), style.color, opacity,
+      style.edgecolor or style.color)
+  end
+  buf[#buf + 1] = '  </g>'
 end
 
 local function render_fillx(series, map_x, map_y, buf)
-  local points = {}
-  for i = 1, #series.y do
-    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x1[i])),
-      util.fmt(map_y(series.y[i])))
+  local style = series.style
+  if series.where == nil and not series.interpolate then
+    local points = fill_polygon_points({
+      kind = "fillx", y = series.y, x1 = series.x1, x2 = series.x2,
+    }, map_x, map_y)
+    buf[#buf + 1] = string.format(
+      '  <polygon class="fill-betweenx" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
+      points, style.color, util.fmt(style.alpha),
+      style.edgecolor or style.color)
+    return
   end
-  for i = #series.y, 1, -1 do
-    points[#points + 1] = string.format("%s,%s", util.fmt(map_x(series.x2[i])),
-      util.fmt(map_y(series.y[i])))
-  end
+
+  local segments = area.segments(series)
+  local opacity = ""
+  if style.alpha < 1 then opacity = string.format(' fill-opacity="%s"',
+    util.fmt(style.alpha)) end
   buf[#buf + 1] = string.format(
-    '  <polygon class="fill-betweenx" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
-    table.concat(points, " "), series.style.color, util.fmt(series.style.alpha),
-    series.style.edgecolor or series.style.color)
+    '  <g class="series series-fillx" data-where="masked" data-interpolate="%s" data-segments="%d">',
+    series.interpolate and "true" or "false", #segments)
+  for index, run in ipairs(segments) do
+    buf[#buf + 1] = string.format(
+      '   <polygon class="fill-betweenx" data-index="%d" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
+      index, fill_polygon_points(run, map_x, map_y), style.color, opacity,
+      style.edgecolor or style.color)
+  end
+  buf[#buf + 1] = '  </g>'
 end
 
 local function render_step(series, map_x, map_y, buf)

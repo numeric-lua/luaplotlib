@@ -5,6 +5,7 @@
 -- plain Lua table that another backend (LÖVR, a rasterizer, an interactive
 -- canvas, ...) can render without depending on luaplotlib internals.
 --
+local area = require("luaplotlib.area")
 local grid = require("luaplotlib.grid")
 local util = require("luaplotlib.util")
 
@@ -242,15 +243,57 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y1 = copy_array(series.y1)
       copy.y2 = copy_array(series.y2)
-      for index = 1, #copy.x do
-        local x = copy.x[index]
-        local lower, upper = copy.y1[index], copy.y2[index]
-        if state.xmin == nil or x < state.xmin then state.xmin = x end
-        if state.xmax == nil or x > state.xmax then state.xmax = x end
-        if state.ymin == nil or lower < state.ymin then state.ymin = lower end
-        if state.ymin == nil or upper < state.ymin then state.ymin = upper end
-        if state.ymax == nil or lower > state.ymax then state.ymax = lower end
-        if state.ymax == nil or upper > state.ymax then state.ymax = upper end
+      if series.where ~= nil then
+        copy.where = copy_array(series.where)
+        copy.interpolate = series.interpolate == true
+        copy.segments = {}
+        for run_index, run in ipairs(area.segments(series)) do
+          copy.segments[run_index] = {
+            x = copy_array(run.x),
+            y1 = copy_array(run.y1),
+            y2 = copy_array(run.y2),
+          }
+        end
+      end
+      for _, run in ipairs(area.segments(series)) do
+        for index = 1, #run.x do
+          local x = run.x[index]
+          local lower, upper = run.y1[index], run.y2[index]
+          if state.xmin == nil or x < state.xmin then state.xmin = x end
+          if state.xmax == nil or x > state.xmax then state.xmax = x end
+          if state.ymin == nil or lower < state.ymin then state.ymin = lower end
+          if state.ymin == nil or upper < state.ymin then state.ymin = upper end
+          if state.ymax == nil or lower > state.ymax then state.ymax = lower end
+          if state.ymax == nil or upper > state.ymax then state.ymax = upper end
+        end
+      end
+    elseif series.kind == "fillx" then
+      copy.y = copy_array(series.y)
+      copy.x1 = copy_array(series.x1)
+      copy.x2 = copy_array(series.x2)
+      if series.where ~= nil then
+        copy.where = copy_array(series.where)
+        copy.interpolate = series.interpolate == true
+        copy.segments = {}
+        for run_index, run in ipairs(area.segments(series)) do
+          copy.segments[run_index] = {
+            y = copy_array(run.y),
+            x1 = copy_array(run.x1),
+            x2 = copy_array(run.x2),
+          }
+        end
+      end
+      for _, run in ipairs(area.segments(series)) do
+        for index = 1, #run.y do
+          local y = run.y[index]
+          local left, right = run.x1[index], run.x2[index]
+          if state.ymin == nil or y < state.ymin then state.ymin = y end
+          if state.ymax == nil or y > state.ymax then state.ymax = y end
+          if state.xmin == nil or left < state.xmin then state.xmin = left end
+          if state.xmin == nil or right < state.xmin then state.xmin = right end
+          if state.xmax == nil or left > state.xmax then state.xmax = left end
+          if state.xmax == nil or right > state.xmax then state.xmax = right end
+        end
       end
     elseif series.kind == "step" then
       copy.x = copy_array(series.x)
