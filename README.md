@@ -48,6 +48,9 @@ luajit examples/histogram.lua
 luajit examples/errorbar.lua
 luajit examples/annotations.lua
 luajit examples/axline.lua
+luajit examples/cartesian_controls.lua
+luajit examples/histogram_horizontal.lua
+luajit examples/stem.lua
 luajit examples/bars.lua
 luajit examples/heatmap.lua
 luajit examples/subplots.lua
@@ -136,6 +139,35 @@ subdivide linear major intervals into five parts and use the 2–9 mantissas on
 log axes, and `fig:grid(true, { minor = true })` adds their fainter grid. An
 `axline` is clipped to the plot rectangle and participates in automatic ranging
 only through its two defining points.
+
+Cartesian controls are additive and keep the existing defaults:
+
+```lua
+-- Reference lines can be limited to axes fractions (0..1).
+fig:axhline(0.5, { xmin = 0.10, xmax = 0.60 })
+fig:axvline(2.0, { ymin = 0.20, ymax = 0.90 })
+
+-- A boolean mask splits a filled band; interpolation joins the cut edges.
+fig:fill_between(x, lower, upper, { where = mask, interpolate = true })
+
+-- Major and minor grids accept independent color, width, dash, and alpha.
+fig:grid(true, {
+  alpha = 0.7,
+  minor = true,
+  minor_color = "#e2e8f0",
+  minor_linestyle = "dotted",
+  minor_alpha = 0.4,
+})
+
+-- Histograms can grow horizontally, and stems can use a custom base/marker.
+fig:hist(values, { orientation = "horizontal" })
+fig:stem(x, samples, { base = 0.5, marker = "diamond", linestyle = "dashed" })
+```
+
+A `where` mask must be a table with one boolean per band sample. With
+`interpolate = true`, each visible run gains a midpoint where it meets a hidden
+sample. Reference spans, fill runs, horizontal bins, and stem bases participate
+in automatic ranging as expected.
 
 Error bars can use independent lower and upper errors:
 
@@ -337,8 +369,11 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional major/minor grid, titles, axis labels, and
   legends
-- Clipped infinite `axline` reference lines, `axhline`/`axvline`, and marker
-  decimation through `markevery`
+- Clipped infinite `axline` reference lines, full or fractional
+  `axhline`/`axvline` spans, and marker decimation through `markevery`
+- Masked or interpolated `fill_between`/`fill_betweenx` bands
+- Horizontal histograms and styled stems with custom bases and markers
+- Independent major/minor grid color, width, dash, and opacity
 - X/y tick-label rotation, including twin y axes
 - XML-escaped text, no scripts, no external references, standalone SVG 1.1
 - Plain Lua tables, plus optional duck-typed 1-D tensor/array inputs
@@ -360,8 +395,9 @@ make test
 ```
 
 For an optional visual check, `scripts/visual-qa.sh` runs every example, checks
-polar/colorbar/quiver metadata, verifies the new Cartesian minor-tick,
-marker-decimation, asymmetric-error, rotated-label, and `axline` metadata, and
+polar/colorbar/quiver metadata, verifies the Cartesian minor-tick,
+marker-decimation, asymmetric-error, rotated-label, `axline`, fractional-span,
+masked-fill, horizontal-histogram, styled-stem, and grid-style metadata, and
 confirms that Cartesian examples stay Cartesian. When `rsvg-convert` is
 installed it also rasterizes the polar SVGs and the affected Cartesian examples
 for manual inspection. Rasterized files stay under the ignored
@@ -376,6 +412,9 @@ make examples
 # examples/output/errorbar.svg
 # examples/output/annotations.svg
 # examples/output/axline.svg
+# examples/output/cartesian-controls.svg
+# examples/output/histogram-horizontal.svg
+# examples/output/stem.svg
 # examples/output/bars-grouped.svg
 # examples/output/bars-stacked.svg
 # examples/output/polar.svg
@@ -393,7 +432,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.21.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
+`4.22.0`. The SVG/HTML backend supports line/scatter/histogram/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/pie/donut/error-bar/box/heatmap/contour/contourf plots,
 polar line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with configurable
 orientation and grids, polar heatmap colorbars with explicit nice ticks, rotated
@@ -402,9 +441,11 @@ clamping, measured-text polar legends, annotations, asymmetric error bars,
 linear/log/date axes, twin x/y axes, minor ticks and minor grids, clipped
 `axline` reference lines, marker decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
-legends, reference lines, axis-specific grid lines, 3-D scene export, per-point
-scatter sizes/colors, histogram density, multi-column legends, marker shapes,
-shaded spans, log helpers, optional PNG/PDF export, and scene export. See
+legends, reference lines, axis-specific grid lines, fractional reference
+spans, masked fill bands, horizontal histograms, styled stems, independently
+styled minor grids, 3-D scene export, per-point scatter sizes/colors,
+histogram density, multi-column legends, marker shapes, shaded spans, log
+helpers, optional PNG/PDF export, and scene export. See
 [docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations
@@ -434,8 +475,14 @@ shaded spans, log helpers, optional PNG/PDF export, and scene export. See
   There is no full text-measurement layout engine yet.
 - **Reference lines are clipped, not data series.** `axline` never expands the
   axes beyond its two defining points, and logarithmic axes draw it straight in
-  transformed space. Minor ticks use a fixed five-way linear subdivision and
-  skip logarithmic spans wider than 12 decades.
+  transformed space. `axhline`/`axvline` fractional spans only change their
+  screen extent; their data coordinate still defines automatic ranging. Minor
+  ticks use a fixed five-way linear subdivision and skip logarithmic spans wider
+  than 12 decades.
+- **Fill masks are boolean tables.** `where` does not accept a callback or a
+  numeric alpha mask, and interpolation uses the midpoint between adjacent
+  samples. Horizontal histograms still use the same bin/density/cumulative
+  calculation as vertical ones.
 - **One color per bar series.** Colors are not split per bar, and categorical
   series with different label sets share one categorical x-axis.
 - **Heuristic tensor interop.** luatorch/numlua-style one-dimensional objects
@@ -467,8 +514,10 @@ local scene = figure:to_scene()
 
 The scene contains series geometry, styles, axes labels, scales, explicit
 limits, category ticks, and annotation geometry/styles. Cartesian scenes also
-export asymmetric error extents, clipped `axline` anchors, normalized
-`markevery` lists, tick rotations, and minor tick/grid settings. Polar figures
+export asymmetric error extents, clipped `axline` anchors, fractional
+`axhline`/`axvline` spans, normalized `markevery` lists, masked fill runs,
+horizontal histogram orientation, stem bases, tick rotations, and resolved
+major/minor grid styles. Polar figures
 export a `polar` block with resolved theta/r ticks, series (including error bars
 and vector fields), heatmap cells and value ranges, annotations, and legend
 entries under `orientation = "polar"`. Streamplot lines add `closed`,

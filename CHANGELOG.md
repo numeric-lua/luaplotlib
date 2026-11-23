@@ -1,5 +1,42 @@
 # Changelog
 
+## 4.22.0
+
+- `fig:axhline` and `fig:axvline` now accept axes-fraction endpoints:
+  `xmin`/`xmax` for horizontal references and `ymin`/`ymax` for vertical
+  references. The endpoints default to the full axes, must lie in `[0, 1]`
+  and be ordered, and only change the visible screen span. SVG groups expose
+  `data-xmin`/`data-xmax` or `data-ymin`/`data-ymax`, and `to_scene()` exports
+  the same fields with the data coordinate;
+- `fig:grid` adds `alpha` plus independent minor-grid styling through
+  `minor_color`, `minor_linewidth`, `minor_linestyle`, and `minor_alpha`.
+  Minor lines inherit the major color/width/dash by default (65% width and 60%
+  opacity), so existing default grids are unchanged. `to_scene()` exports
+  resolved `grid_style` and `minor_grid_style` objects;
+- `fig:fill_between` and `fig:fill_betweenx` accept a boolean `where` mask and
+  `interpolate`. Each contiguous true run becomes its own polygon; interpolation
+  adds midpoint edges where a visible run meets a hidden sample. Hidden samples
+  do not contribute to automatic ranging. Masked groups report
+  `data-where="masked"`, `data-interpolate`, and `data-segments`, each polygon
+  reports `data-index`, and scene export includes the mask, interpolation flag,
+  and resolved `segments`;
+- `fig:hist` accepts `orientation = "horizontal"` to draw bins along x from the
+  zero count baseline with data values on y. Bin edges, counts, density, and
+  cumulative calculations are shared with vertical histograms; the SVG group
+  reports `data-orientation="horizontal"` and scene export swaps the automatic
+  axis ranges while carrying the orientation;
+- `fig:stem` adds `base`, `marker`, and `linestyle`. Stems can grow from any
+  finite data baseline, use every supported marker (or no marker), and hide
+  their lines independently. The group exposes `data-base`, `data-marker`, and
+  `data-linestyle`; base values participate in automatic ranging and scene
+  export;
+- new examples `cartesian_controls.lua`, `histogram_horizontal.lua`, and
+  `stem.lua` cover the five features. README, API docs, the Makefile, and
+  `scripts/visual-qa.sh` validate fractional spans, multiple masked fill runs,
+  horizontal bins, styled stems, and resolved major/minor grid styles. The
+  dependency-free suite grows to 293 tests. Polar rendering is unchanged, and
+  there are no new runtime dependencies.
+
 ## 4.21.0
 
 - `fig:errorbar` now accepts independent lower and upper errors. `yerr` and

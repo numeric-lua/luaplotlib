@@ -15,6 +15,9 @@ examples:
 	@$(LUA) examples/errorbar.lua
 	@$(LUA) examples/annotations.lua
 	@$(LUA) examples/axline.lua
+	@$(LUA) examples/cartesian_controls.lua
+	@$(LUA) examples/histogram_horizontal.lua
+	@$(LUA) examples/stem.lua
 	@$(LUA) examples/bars.lua
 	@$(LUA) examples/polar.lua
 	@$(LUA) examples/polar_bars.lua

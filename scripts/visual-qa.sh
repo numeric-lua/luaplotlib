@@ -337,6 +337,9 @@ for svg in \
   examples/output/errorbar.svg \
   examples/output/annotations.svg \
   examples/output/axline.svg \
+  examples/output/cartesian-controls.svg \
+  examples/output/histogram-horizontal.svg \
+  examples/output/stem.svg \
   examples/output/bars-grouped.svg \
   examples/output/bars-stacked.svg
 do
@@ -379,9 +382,73 @@ grep -q 'data-clipped="true"' "$AXLINE" ||
   fail "$AXLINE axline should be clipped to the plot"
 grep -q 'transform="rotate(30 ' "$AXLINE" ||
   fail "$AXLINE should rotate y tick labels"
+grep -q 'class="series series-axhline" data-xmin="0" data-xmax="1"' "$AXLINE" ||
+  fail "$AXLINE default axhline should still span the full axes"
+grep -q 'class="series series-axvline" data-ymin="0" data-ymax="1"' "$AXLINE" ||
+  fail "$AXLINE default axvline should still span the full axes"
 if grep -Eqi 'nan|inf' "$AXLINE"; then
   fail "$AXLINE contains non-finite geometry"
 fi
+
+# Fractional reference spans, masked fill bands, and independent grid styles.
+CONTROLS=examples/output/cartesian-controls.svg
+grep -q 'class="series series-fill" data-where="masked" data-interpolate="true"' \
+  "$CONTROLS" || fail "$CONTROLS has no masked fill series"
+fill_segments=$(grep -o 'data-segments="[0-9]*"' "$CONTROLS" | head -1 |
+  tr -dc '0-9')
+[ -n "$fill_segments" ] || fail "$CONTROLS has no fill segment count"
+[ "$fill_segments" -ge 2 ] ||
+  fail "$CONTROLS masked fill should split into multiple bands"
+fill_polygons=$(grep -o 'class="fill-between"' "$CONTROLS" | wc -l |
+  tr -d ' ')
+[ "$fill_polygons" -eq "$fill_segments" ] ||
+  fail "$CONTROLS has $fill_segments fill segments but $fill_polygons polygons"
+grep -q 'class="series series-axhline" data-xmin="0.06" data-xmax="0.4"' \
+  "$CONTROLS" || fail "$CONTROLS has no fractional axhline span"
+grep -q 'class="series series-axvline" data-ymin="0.18" data-ymax="0.82"' \
+  "$CONTROLS" || fail "$CONTROLS has no fractional axvline span"
+grep -q '<g class="grid" stroke="#cbd5e1" stroke-width="1" stroke-opacity="0.75">' \
+  "$CONTROLS" || fail "$CONTROLS has no custom-opacity major grid"
+grep -q '<g class="grid-minor" stroke="#e2e8f0" stroke-width="0.6" stroke-dasharray="2 3" stroke-opacity="0.4">' \
+  "$CONTROLS" || fail "$CONTROLS has no independently styled minor grid"
+grep -E 'class="reference"' "$CONTROLS" | head -1 | awk '
+  {
+    if (!match($0, /x1="[^"]*"/)) exit 1
+    x1 = substr($0, RSTART + 4, RLENGTH - 5) + 0
+    if (!match($0, /x2="[^"]*"/)) exit 1
+    x2 = substr($0, RSTART + 4, RLENGTH - 5) + 0
+    if (x2 <= x1 || x2 - x1 >= 696) exit 1
+  }
+' || fail "$CONTROLS fractional axhline should be shorter than the plot width"
+
+# Horizontal histograms place counts on x and bin edges on y.
+HIST_H=examples/output/histogram-horizontal.svg
+grep -q 'class="series series-hist" data-label="1800 samples" data-orientation="horizontal"' \
+  "$HIST_H" || fail "$HIST_H is not a horizontal histogram"
+hist_bins=$(grep -o 'class="hist-bin"' "$HIST_H" | wc -l | tr -d ' ')
+[ "$hist_bins" -gt 0 ] || fail "$HIST_H has no histogram bins"
+grep -o '<rect class="hist-bin"[^>]*/>' "$HIST_H" | awk '
+  {
+    if (!match($0, /width="[^"]*"/)) exit 1
+    width = substr($0, RSTART + 7, RLENGTH - 8) + 0
+    if (!match($0, /height="[^"]*"/)) exit 1
+    height = substr($0, RSTART + 8, RLENGTH - 9) + 0
+    if (width <= 0 || height <= 0) exit 1
+  }
+' || fail "$HIST_H has a degenerate horizontal histogram bin"
+
+# Styled stems expose their base and marker/line style and draw both parts.
+STEM=examples/output/stem.svg
+grep -q 'class="series series-stem" data-base="0.5" data-marker="diamond" data-linestyle="dashed"' \
+  "$STEM" || fail "$STEM is missing styled stem metadata"
+stem_lines=$(grep -o 'class="stem-line"' "$STEM" | wc -l | tr -d ' ')
+stem_markers=$(grep -o 'class="stem-marker"' "$STEM" | wc -l | tr -d ' ')
+[ "$stem_lines" -gt 0 ] && [ "$stem_lines" -eq "$stem_markers" ] ||
+  fail "$STEM should draw one marker per stem line"
+grep -q 'stroke-dasharray="6 4"' "$STEM" ||
+  fail "$STEM should use the dashed stem style"
+grep -q '<polygon class="stem-marker"' "$STEM" ||
+  fail "$STEM should use diamond stem markers"
 
 if ! command -v rsvg-convert >/dev/null 2>&1; then
   echo "rsvg-convert not found; polar SVGs are in examples/output/"
@@ -395,9 +462,9 @@ for svg in "${POLAR_SVGS[@]}"; do
   echo "wrote $png"
 done
 
-# Rasterize the examples that exercise the 4.21 Cartesian features too, so a
+# Rasterize the examples that exercise the 4.22 Cartesian features too, so a
 # reviewer can inspect marker density, minor grids, asymmetric caps, and clips.
-for svg in "$LINE" "$ERRORBAR" "$AXLINE"; do
+for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

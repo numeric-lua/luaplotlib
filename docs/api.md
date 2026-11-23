@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.21.0`. This document describes the public Lua API implemented
+Version: `4.22.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.21.0"`
+- `plt._VERSION` — currently `"4.22.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -499,6 +499,7 @@ Draw a histogram as adjacent filled rectangles.
 | --- | --- | --- |
 | `bins` | integer in [1, 1000] | `10` |
 | `range` | `{ min, max }` with `min < max` | data min/max |
+| `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
 | `alpha` | number in [0, 1] | `1` |
@@ -507,11 +508,15 @@ Draw a histogram as adjacent filled rectangles.
 | `cumulative` | boolean | `false` |
 
 `density` normalizes bin heights by total count and bin width. `cumulative`
-accumulates counts or density left-to-right.
+accumulates counts or density left-to-right. `orientation = "horizontal"` keeps
+the same bin edges and counts but draws each bin along x from the zero count
+baseline, with the data value on y. Horizontal groups carry
+`data-orientation="horizontal"`, and the scene exports `orientation` with the
+axis ranges swapped accordingly.
 
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
-y-axis includes zero. Empty bins are not emitted as rectangles.
+count axis includes zero. Empty bins are not emitted as rectangles.
 
 ### `fig:eventplot(positions[, opts])`
 
@@ -524,9 +529,26 @@ each row becomes a horizontal lane. Options: `color`, `label`, `linewidth`,
 Draw the empirical CDF as a post-step curve over the sorted values. Accepts the
 usual step styling options.
 
-### `fig:fill_between(x, y1, y2[, opts])`
+### `fig:fill_between(x, y1, y2[, opts])` / `fig:fill_betweenx(y, x1, x2[, opts])`
 
-Filled band between two y sequences.
+Filled band between two y sequences (or two x sequences). In addition to
+`color`, `label`, `alpha`, and `edgecolor`, both methods accept a boolean mask
+and an interpolation switch:
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `where` | table with one boolean per sample | no mask |
+| `interpolate` | boolean | `false` |
+
+A contiguous run of `true` mask entries becomes one polygon. With
+`interpolate = true`, a run that begins or ends next to a hidden sample gains a
+midpoint between the visible and hidden samples for the band edges, so the
+cut is interpolated rather than abrupt. Hidden samples do not contribute to
+automatic ranging. A masked group carries `data-where="masked"`,
+`data-interpolate`, and `data-segments`; each polygon carries `data-index`.
+`to_scene()` exports `where`, `interpolate`, and resolved `segments` arrays
+when a mask is present. Masks must match the sample count and contain only
+booleans; callbacks and numeric alpha masks are not supported.
 
 ### `fig:step(x, y[, opts])`
 
@@ -535,6 +557,22 @@ Step plot with `opts.where = "pre" | "post" | "mid"` (default `pre`).
 ### `fig:stem(x, y[, opts])`
 
 Stem plot with vertical lines and markers at each point.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `base` | finite number, data y coordinate | `0` |
+| `marker` | marker name, `true`, or `false` | `"circle"` |
+| `markersize` | number > 0 | `4` |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
+| `linewidth` | number ≥ 0 | `1.5` |
+| `color` | color string | next palette color |
+| `alpha` | number in [0, 1] | `1` |
+| `label` | string | no legend entry |
+
+The stem group exposes `data-base`, `data-marker`, and `data-linestyle`. A
+non-zero `base` participates in automatic ranging, `linestyle = "none"` keeps
+only the markers, and `marker = false` keeps only the stems. `to_scene()`
+exports the base plus the marker/line style through the normal series style.
 
 ### `fig:stackplot(x, series[, opts])`
 
@@ -637,7 +675,14 @@ both axes, `semilogx` sets x, and `semilogy` sets y.
 Draw a horizontal or vertical reference line in data coordinates. Options:
 `color`, `linewidth`, `linestyle` (`solid`, `dashed`, `dotted`, `none`),
 `alpha`, and `label`. A horizontal line extends the y range; a vertical line
-extends the x range.
+extends the x range. `axhline` also accepts `xmin`/`xmax` and `axvline` accepts
+`ymin`/`ymax` as axes-fraction endpoints in `[0, 1]` (defaults `0` and `1`).
+The fractions only change the visible screen span; they do not change the data
+coordinate used for automatic ranging. Each endpoint pair must be ordered.
+
+The group exposes `data-xmin`/`data-xmax` for `axhline` and
+`data-ymin`/`data-ymax` for `axvline`; `to_scene()` exports the same fields
+with the data coordinate.
 
 ### `fig:axline(x1, y1, x2, y2[, opts])`
 
@@ -778,6 +823,14 @@ adds a fainter minor grid at the minor tick intervals. Minor grid lines use the
 `grid-minor` group and `minor-grid-line` class, and the SVG root reports
 `data-minor-grid="true"`.
 
+`alpha` sets the major-grid stroke opacity. Minor lines inherit the major
+color, width, and dash pattern, defaulting to 65% of the major width and 60% of
+its opacity. Override them independently with `minor_color`,
+`minor_linewidth`, `minor_linestyle`, and `minor_alpha`; the minor style still
+requires `minor = true` to draw. `to_scene()` exports resolved `grid_style` and,
+when the minor grid is enabled, `minor_grid_style` objects with color, width,
+style, alpha, and (for the major style) axis.
+
 ### `fig:minorticks([enabled[, opts]])`
 
 ```lua
@@ -881,8 +934,9 @@ match these forms raise errors.
 - A clip path limiting series and annotations to the axes rectangle
 - Groups with classes such as `figure`, `grid`, `grid-minor`, `series-layer`,
   `series-line`, `series-scatter`, `series-hist`, `series-bar`, `series-axline`,
-  `annotation-layer`, `annotation`, `annotation-text`, `annotation-arrow`,
-  `axes`, `ticks`, `minor-tick-mark`, `xlabel`, `ylabel`, `title`, and `legend`
+  `series-fill`, `series-fillx`, `series-stem`, `annotation-layer`,
+  `annotation`, `annotation-text`, `annotation-arrow`, `axes`, `ticks`,
+  `minor-tick-mark`, `xlabel`, `ylabel`, `title`, and `legend`
 - No scripts, embedded images, or external references/hrefs
 - User text XML-escaped; invalid control characters replaced with U+FFFD
 - No external fonts; text uses a generic Helvetica/Arial/sans-serif stack
@@ -968,6 +1022,8 @@ across columns and 1-D `y` across rows. `.png`/`.pdf` require `rsvg-convert`.
   not a full text-measurement engine.
 - 3-D axes support line/scatter/surface/mesh, not full camera/lighting.
 - Basic fixed/adaptive margins; crowded category labels can overlap.
+- Fill masks are boolean tables; callbacks and numeric alpha masks are not
+  supported. Interpolation uses the midpoint between adjacent samples.
 - Tensor/array interop is heuristic and reader-only; optional integrations are
   not required to use the library.
 
@@ -989,6 +1045,10 @@ Returns a renderer-agnostic scene table:
   minorticks = false, minor_tick_axis = "both", minor_grid = false,
   xlim = { min, max }, ylim = { min, max },
   grid = false, legend = false,
+  grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
+                 alpha = 1, axis = "both" },
+  minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
+                       linestyle = "solid", alpha = 0.6 },
   category_ticks = nil,
   series = {
     { kind = "line", x = {...}, y = {...}, style = {...} },
@@ -997,6 +1057,14 @@ Returns a renderer-agnostic scene table:
       yerr = {...}, yerr_lower = {...}, yerr_upper = {...},
       xerr = {...}, xerr_lower = {...}, xerr_upper = {...} },
     { kind = "axline", x1 = 0, y1 = 0, x2 = 1, y2 = 1, style = {...} },
+    { kind = "axhline", y = 2, xmin = 0.1, xmax = 0.6, style = {...} },
+    { kind = "axvline", x = 2, ymin = 0.2, ymax = 0.9, style = {...} },
+    { kind = "fill", x = {...}, y1 = {...}, y2 = {...},
+      where = { true, true, false, ... }, interpolate = true,
+      segments = { { x = {...}, y1 = {...}, y2 = {...} }, ... },
+      style = {...} },
+    { kind = "fillx", y = {...}, x1 = {...}, x2 = {...}, style = {...} },
+    { kind = "stem", x = {...}, y = {...}, base = 0.5, style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8 },
     -- Grouped bars keep category centers in x and add a per-series offset:
     { kind = "bar", x = {...}, y = {...}, width = 0.4, mode = "grouped",
@@ -1004,7 +1072,8 @@ Returns a renderer-agnostic scene table:
     -- Stacked bars add the bottom/top interval for every bar:
     { kind = "bar", x = {...}, y = {...}, width = 0.8, mode = "stacked",
       stacked = true, bottom = {...}, top = {...}, stack = {...} },
-    { kind = "hist", edges = {...}, counts = {...} },
+    { kind = "hist", edges = {...}, counts = {...},
+      orientation = "horizontal" },
   },
   annotations = {
     {
@@ -1022,7 +1091,12 @@ Returns a renderer-agnostic scene table:
 with 5% padding, or the explicit `xlim`/`ylim` values. Log-axis limits are
 padded in log space and remain positive. Annotations retain data coordinates
 and style so another backend can apply its own coordinate transform; they do not
-affect the exported limits. Bar series always keep category centers in `x`.
+affect the exported limits. Cartesian root scenes also export `grid_style` and,
+when enabled, `minor_grid_style`. `axhline`/`axvline` scenes carry their data
+coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
+`where`, `interpolate`, and resolved `segments`; histogram scenes carry
+`orientation`; and stem scenes carry `base`. Bar series always keep category
+centers in `x`.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
 series expose the per-bar `bottom`, `top`, and `stack` arrays so a backend does
 not have to infer the layout from the rendered SVG. Error-bar scenes always
