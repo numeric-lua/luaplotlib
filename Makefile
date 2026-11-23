@@ -18,6 +18,10 @@ examples:
 	@$(LUA) examples/cartesian_controls.lua
 	@$(LUA) examples/histogram_horizontal.lua
 	@$(LUA) examples/stem.lua
+	@$(LUA) examples/quiver.lua
+	@$(LUA) examples/hexbin.lua
+	@$(LUA) examples/field_coordinates.lua
+	@$(LUA) examples/aspect.lua
 	@$(LUA) examples/bars.lua
 	@$(LUA) examples/polar.lua
 	@$(LUA) examples/polar_bars.lua

@@ -258,6 +258,35 @@ local CONTOUR_OPTIONS = {
   label = true,
   labels = true,
   linestyle = true,
+  x = true,
+  y = true,
+}
+
+local HEXBIN_OPTIONS = {
+  gridsize = true,
+  mincnt = true,
+  vmin = true,
+  vmax = true,
+  colorbar = true,
+  colorbar_label = true,
+  colorbar_ticks = true,
+  colorbar_tick_values = true,
+  alpha = true,
+  edgecolor = true,
+  linewidth = true,
+  label = true,
+}
+
+local QUIVER_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  alpha = true,
+  head = true,
+  scale = true,
+  pivot = true,
+  max_arrows = true,
+  normalize = true,
 }
 
 
@@ -627,6 +656,7 @@ function Figure.new(opts)
     _legend_opts = { loc = "upper right", frame = true },
     _category_ticks = nil,
     _colorbar = false,
+    _aspect = nil,
     _xtick_rotation = 0,
     _ytick_rotation = 0,
     _xticks = nil,
@@ -672,6 +702,71 @@ function Figure:plot(x, y, opts)
     kind = "line",
     x = xv,
     y = yv,
+    style = style,
+  }
+  return self
+end
+
+-- Draw a Cartesian vector field.  `u` and `v` are the vector components in
+-- data coordinates; directions and lengths are projected through the current
+-- x/y transforms so the glyphs remain legible on linear and log axes.  Large
+-- fields are decimated deterministically with `max_arrows`.
+function Figure:quiver(x, y, u, v, opts)
+  opts = util.check_options(opts, QUIVER_OPTIONS, "quiver")
+  local xv = data.sequence(x, "quiver x")
+  local yv = data.sequence(y, "quiver y")
+  local uv = data.sequence(u, "quiver u")
+  local vv = data.sequence(v, "quiver v")
+  local count = #xv
+  if #yv ~= count or #uv ~= count or #vv ~= count then
+    fail(string.format(
+      "quiver x, y, u, and v must have the same length (%d, %d, %d, %d)",
+      count, #yv, #uv, #vv))
+  end
+
+  local linewidth = 1.2
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "quiver linewidth", 0)
+  end
+  local head = 6
+  if opts.head ~= nil then
+    head = util.check_number(opts.head, "quiver head", 0)
+  end
+  local scale = nil
+  if opts.scale ~= nil then
+    scale = util.check_number(opts.scale, "quiver scale", 0)
+    if scale <= 0 then
+      fail("quiver scale must be positive")
+    end
+  end
+  local pivot = opts.pivot or "tail"
+  if type(pivot) ~= "string" or not QUIVER_PIVOTS[pivot] then
+    fail("quiver pivot must be 'tail', 'middle', or 'tip'")
+  end
+  local max_arrows = 512
+  if opts.max_arrows ~= nil then
+    max_arrows = util.check_integer(opts.max_arrows,
+      "quiver max_arrows", 1, 4096)
+  end
+  local normalize = false
+  if opts.normalize ~= nil then
+    normalize = util.check_boolean(opts.normalize, "quiver normalize")
+  end
+
+  local style = checked_style(self, opts, "quiver")
+  style.linewidth = linewidth
+  style.head = head
+
+  self._series[#self._series + 1] = {
+    kind = "quiver",
+    x = xv,
+    y = yv,
+    u = uv,
+    v = vv,
+    scale = scale,
+    pivot = pivot,
+    max_arrows = max_arrows,
+    normalize = normalize,
     style = style,
   }
   return self
@@ -1785,6 +1880,198 @@ function Figure:hist(values, opts)
   return self
 end
 
+-- Aggregate scattered points into regular pointy-top hexagons.  `gridsize`
+-- is the number of hexagons across the x span; rows are derived from the
+-- y span so every cell stays regular in data coordinates.  Cell counts are
+-- rendered with the shared heat palette and can add a vertical colorbar.
+function Figure:hexbin(x, y, opts)
+  opts = util.check_options(opts, HEXBIN_OPTIONS, "hexbin")
+  local xv = data.sequence(x, "hexbin x")
+  local yv = data.sequence(y, "hexbin y")
+  if #xv ~= #yv then
+    fail(string.format("hexbin x and y must have the same length (%d ~= %d)",
+      #xv, #yv))
+  end
+  if #xv == 0 then
+    fail("hexbin requires at least one point")
+  end
+
+  local gridsize = 20
+  if opts.gridsize ~= nil then
+    gridsize = util.check_integer(opts.gridsize, "hexbin gridsize", 2, 200)
+  end
+  local mincnt = 1
+  if opts.mincnt ~= nil then
+    mincnt = util.check_integer(opts.mincnt, "hexbin mincnt", 1, #xv)
+  end
+
+  local minimum_x, maximum_x = xv[1], xv[1]
+  local minimum_y, maximum_y = yv[1], yv[1]
+  for index = 2, #xv do
+    if xv[index] < minimum_x then minimum_x = xv[index] end
+    if xv[index] > maximum_x then maximum_x = xv[index] end
+    if yv[index] < minimum_y then minimum_y = yv[index] end
+    if yv[index] > maximum_y then maximum_y = yv[index] end
+  end
+  if minimum_x == maximum_x then
+    local pad = math.abs(minimum_x) * 0.5
+    if pad == 0 then pad = 0.5 end
+    minimum_x, maximum_x = minimum_x - pad, maximum_x + pad
+  end
+  if minimum_y == maximum_y then
+    local pad = math.abs(minimum_y) * 0.5
+    if pad == 0 then pad = 0.5 end
+    minimum_y, maximum_y = minimum_y - pad, maximum_y + pad
+  end
+
+  local span_x = maximum_x - minimum_x
+  local span_y = maximum_y - minimum_y
+  local width = span_x / gridsize
+  local radius = width / math.sqrt(3)
+  local row_step = 1.5 * radius
+  local rows = math.ceil(span_y / row_step) + 3
+
+  local bins = {}
+  local bin_order = {}
+  local function bin_for(row, column)
+    local key = tostring(row) .. ":" .. tostring(column)
+    local bin = bins[key]
+    if bin == nil then
+      bin = {
+        row = row,
+        column = column,
+        x = minimum_x + width / 2 + (row % 2) * width / 2 + column * width,
+        y = minimum_y + radius + row * row_step,
+        count = 0,
+      }
+      bins[key] = bin
+      bin_order[#bin_order + 1] = bin
+    end
+    return bin
+  end
+
+  for index = 1, #xv do
+    local px, py = xv[index], yv[index]
+    local row_guess = math.floor((py - (minimum_y + radius)) / row_step)
+    local best, best_distance
+    for row = row_guess - 1, row_guess + 1 do
+      if row >= 0 and row < rows then
+        local offset = (row % 2) * width / 2
+        local column_guess = math.floor((px - (minimum_x + width / 2 + offset)) /
+          width)
+        for column = column_guess - 1, column_guess + 1 do
+          local cx = minimum_x + width / 2 + offset + column * width
+          local cy = minimum_y + radius + row * row_step
+          local dx, dy = px - cx, py - cy
+          local distance = dx * dx + dy * dy
+          if best_distance == nil or distance < best_distance then
+            best_distance = distance
+            best = bin_for(row, column)
+          end
+        end
+      end
+    end
+    best.count = best.count + 1
+  end
+
+  local cells = {}
+  local count_minimum, count_maximum
+  for _, bin in ipairs(bin_order) do
+    if bin.count >= mincnt and bin.count > 0 then
+      cells[#cells + 1] = bin
+      if count_minimum == nil or bin.count < count_minimum then
+        count_minimum = bin.count
+      end
+      if count_maximum == nil or bin.count > count_maximum then
+        count_maximum = bin.count
+      end
+    end
+  end
+
+  local vmin = count_minimum
+  local vmax = count_maximum
+  if vmin == nil then
+    vmin = 0
+    vmax = 1
+  elseif vmin == vmax then
+    vmin = vmin - 0.5
+    vmax = vmax + 0.5
+  end
+  if opts.vmin ~= nil then
+    vmin = util.check_number(opts.vmin, "hexbin vmin")
+  end
+  if opts.vmax ~= nil then
+    vmax = util.check_number(opts.vmax, "hexbin vmax")
+  end
+  if vmax <= vmin then
+    fail("hexbin vmax must be greater than vmin")
+  end
+
+  local colorbar = opts.colorbar
+  if colorbar == nil then colorbar = true end
+  util.check_boolean(colorbar, "hexbin colorbar")
+  local colorbar_label = opts.colorbar_label
+  if colorbar_label ~= nil then
+    util.check_string(colorbar_label, "hexbin colorbar_label", true)
+  end
+  local colorbar_ticks = nil
+  if opts.colorbar_ticks ~= nil then
+    colorbar_ticks = util.check_integer(opts.colorbar_ticks,
+      "hexbin colorbar_ticks", 2, 10)
+  end
+  local colorbar_tick_values = nil
+  if opts.colorbar_tick_values ~= nil then
+    if colorbar_ticks ~= nil then
+      fail("hexbin colorbar_ticks and colorbar_tick_values cannot both be set")
+    end
+    if type(opts.colorbar_tick_values) ~= "table" or
+        #opts.colorbar_tick_values == 0 then
+      fail("hexbin colorbar_tick_values must be a non-empty table")
+    end
+    colorbar_tick_values = {}
+    for index = 1, #opts.colorbar_tick_values do
+      colorbar_tick_values[index] = util.check_number(
+        opts.colorbar_tick_values[index],
+        "hexbin colorbar_tick_values[" .. index .. "]")
+    end
+  end
+
+  local style = checked_style(self, opts, "hexbin")
+  local edgecolor = opts.edgecolor
+  if edgecolor ~= nil then
+    edgecolor = util.check_color(edgecolor, "hexbin edgecolor")
+  else
+    edgecolor = "#ffffff"
+  end
+  local linewidth = 0.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "hexbin linewidth", 0)
+  end
+
+  self._colorbar = colorbar
+  self._series[#self._series + 1] = {
+    kind = "hexbin",
+    cells = cells,
+    vmin = vmin,
+    vmax = vmax,
+    gridsize = gridsize,
+    mincnt = mincnt,
+    width = width,
+    radius = radius,
+    point_count = #xv,
+    x = xv,
+    y = yv,
+    colorbar = colorbar,
+    colorbar_label = colorbar_label,
+    colorbar_ticks = colorbar_ticks,
+    colorbar_tick_values = colorbar_tick_values,
+    style = style,
+    edgecolor = edgecolor,
+    linewidth = linewidth,
+  }
+  return self
+end
+
 -- A table is treated as bar options only when every key is a supported option.
 -- Series tables use numeric keys, and series descriptors use keys such as
 -- values/label/color, so both remain distinguishable from a trailing opts table.
@@ -2171,6 +2458,34 @@ local function checked_ticks(values, name)
     result[index] = util.check_number(values[index], name .. " value " .. index)
   end
   return result
+end
+
+-- Image extents use the matplotlib order {left, right, bottom, top}.  The
+-- rectangle must be ordered so row/column cells have a positive width/height.
+local function checked_extent(value, name)
+  if value == nil then return nil end
+  if type(value) ~= "table" or #value ~= 4 then
+    fail(name .. " extent must be a {left, right, bottom, top} table")
+  end
+  local left = util.check_number(value[1], name .. " extent left")
+  local right = util.check_number(value[2], name .. " extent right")
+  local bottom = util.check_number(value[3], name .. " extent bottom")
+  local top = util.check_number(value[4], name .. " extent top")
+  if right <= left then
+    fail(name .. " extent right must be greater than left")
+  end
+  if top <= bottom then
+    fail(name .. " extent top must be greater than bottom")
+  end
+  return { left, right, bottom, top }
+end
+
+local function checked_origin(value, name)
+  if value == nil then return "upper" end
+  if value ~= "upper" and value ~= "lower" then
+    fail(name .. " origin must be 'upper' or 'lower'")
+  end
+  return value
 end
 
 -- Format x-axis tick labels as calendar dates.  Values are Unix timestamps;
@@ -2629,6 +2944,7 @@ end
 function Figure:imshow(values, opts)
   opts = util.check_options(opts, {
     vmin = true, vmax = true, colorbar = true, label = true,
+    extent = true, origin = true,
   }, "imshow")
   local rows, cols, matrix = data.matrix(values, "imshow values")
   local minimum, maximum = math.huge, -math.huge
@@ -2651,10 +2967,12 @@ function Figure:imshow(values, opts)
   local colorbar = opts.colorbar
   if colorbar == nil then colorbar = true end
   util.check_boolean(colorbar, "imshow colorbar")
+  local extent = checked_extent(opts.extent, "imshow")
+  local origin = checked_origin(opts.origin, "imshow")
   self._colorbar = colorbar
   self._series[#self._series + 1] = {
     kind = "image", values = matrix, rows = rows, cols = cols,
-    vmin = minimum, vmax = maximum,
+    vmin = minimum, vmax = maximum, extent = extent, origin = origin,
     style = { color = "#000000", label = opts.label, alpha = 1 },
   }
   return self
@@ -2695,6 +3013,32 @@ function Figure:contour(values, opts)
   local linestyle = opts.linestyle or "solid"
   if not LINESTYLES[linestyle] then fail("invalid contour linestyle") end
   if opts.labels ~= nil then util.check_boolean(opts.labels, "contour labels") end
+
+  local x_coords, y_coords = {}, {}
+  for column = 1, cols do x_coords[column] = column - 1 end
+  for row = 1, rows do y_coords[row] = rows - row + 1 end
+  local explicit_coords = opts.x ~= nil or opts.y ~= nil
+  if opts.x ~= nil then
+    if type(opts.x) ~= "table" or #opts.x ~= cols then
+      fail(string.format(
+        "contour x must have one coordinate per column (%d)", cols))
+    end
+    for column = 1, cols do
+      x_coords[column] = util.check_number(opts.x[column],
+        "contour x[" .. column .. "]")
+    end
+  end
+  if opts.y ~= nil then
+    if type(opts.y) ~= "table" or #opts.y ~= rows then
+      fail(string.format(
+        "contour y must have one coordinate per row (%d)", rows))
+    end
+    for row = 1, rows do
+      y_coords[row] = util.check_number(opts.y[row],
+        "contour y[" .. row .. "]")
+    end
+  end
+
   for _, level in ipairs(levels) do
     if type(level) ~= "number" then fail("contour levels must be numeric") end
     local segments = {}
@@ -2706,17 +3050,18 @@ function Figure:contour(values, opts)
     end
     for r = 1, rows - 1 do
       for c = 1, cols - 1 do
-        local x0, y0 = c - 1, rows - r
+        local x0, x1 = x_coords[c], x_coords[c + 1]
+        local y0, y1 = y_coords[r], y_coords[r + 1]
         local v0, v1 = matrix[r][c], matrix[r][c + 1]
         local v2, v3 = matrix[r + 1][c + 1], matrix[r + 1][c]
         local intersections = {}
         local function add(point)
           if point ~= nil then intersections[#intersections + 1] = point end
         end
-        add(crossing(v0, v1, x0, y0 + 1, x0 + 1, y0 + 1))
-        add(crossing(v1, v2, x0 + 1, y0 + 1, x0 + 1, y0))
-        add(crossing(v2, v3, x0 + 1, y0, x0, y0))
-        add(crossing(v3, v0, x0, y0, x0, y0 + 1))
+        add(crossing(v0, v1, x0, y0, x1, y0))
+        add(crossing(v1, v2, x1, y0, x1, y1))
+        add(crossing(v2, v3, x1, y1, x0, y1))
+        add(crossing(v3, v0, x0, y1, x0, y0))
         if #intersections == 2 then
           segments[#segments + 1] = {
             intersections[1][1], intersections[1][2],
@@ -2737,6 +3082,8 @@ function Figure:contour(values, opts)
     self._series[#self._series + 1] = {
       kind = "contour", segments = segments, level = level, rows = rows,
       cols = cols, level_label = opts.labels and level or nil,
+      x_coords = explicit_coords and x_coords or nil,
+      y_coords = explicit_coords and y_coords or nil,
       style = { color = color, label = opts.label, linewidth = linewidth,
         linestyle = linestyle, alpha = 1 },
     }
@@ -3000,6 +3347,30 @@ end
 function Figure:yscale(scale)
   self._yscale = checked_scale(scale, "yscale")
   return self
+end
+
+-- Constrain the plot box so one y unit is `value` times one x unit on screen.
+-- "equal" is shorthand for 1 and "auto" restores the adaptive box.  The box is
+-- centered inside the normal layout margins, so labels and legends continue to
+-- use the same outside area.
+function Figure:aspect(value)
+  if value == nil or value == "auto" then
+    self._aspect = nil
+    return self
+  end
+  if value == "equal" then
+    self._aspect = 1
+    return self
+  end
+  if type(value) == "number" then
+    value = util.check_number(value, "aspect")
+    if value <= 0 then
+      fail("aspect must be positive")
+    end
+    self._aspect = value
+    return self
+  end
+  fail("aspect must be 'auto', 'equal', or a positive number")
 end
 
 local REFERENCE_OPTIONS = {

@@ -45,6 +45,31 @@ local function layout(fig)
   }
 end
 
+-- Shrink and center the plot box so the requested data-unit aspect ratio is
+-- honored.  The label margins around the returned box stay untouched.
+local function apply_aspect(geom, aspect, xspan, yspan)
+  if aspect == nil or xspan <= 0 or yspan <= 0 then return end
+  local desired_height = aspect * (yspan / xspan) * geom.plot_width
+  if desired_height <= geom.plot_height then
+    if desired_height < 20 then
+      util.fail("aspect ratio leaves no drawable plot height", 3)
+    end
+    local offset = (geom.plot_height - desired_height) / 2
+    geom.top = geom.top + offset
+    geom.bottom = geom.top + desired_height
+    geom.plot_height = desired_height
+  else
+    local desired_width = geom.plot_height * xspan / (aspect * yspan)
+    if desired_width < 20 then
+      util.fail("aspect ratio leaves no drawable plot width", 3)
+    end
+    local offset = (geom.plot_width - desired_width) / 2
+    geom.left = geom.left + offset
+    geom.right = geom.left + desired_width
+    geom.plot_width = desired_width
+  end
+end
+
 -- Collect data extents in axis coordinates. Linear axes use the raw values;
 -- log axes use log10(value) and reject non-positive values with a clear error.
 local function data_extents(fig, xscale, yscale)
@@ -89,10 +114,17 @@ local function data_extents(fig, xscale, yscale)
 
   for series_index, series in ipairs(fig._series) do
     if series.kind == "image" then
-      include_x(0, series_index, 1, "image")
-      include_x(series.cols, series_index, 1, "image")
-      include_y(0, series_index, 1, "image")
-      include_y(series.rows, series_index, 1, "image")
+      if series.extent ~= nil then
+        include_x(series.extent[1], series_index, 1, "image")
+        include_x(series.extent[2], series_index, 1, "image")
+        include_y(series.extent[3], series_index, 1, "image")
+        include_y(series.extent[4], series_index, 1, "image")
+      else
+        include_x(0, series_index, 1, "image")
+        include_x(series.cols, series_index, 1, "image")
+        include_y(0, series_index, 1, "image")
+        include_y(series.rows, series_index, 1, "image")
+      end
     elseif series.kind == "axhspan" then
       include_y(series.y1, series_index, 1, "axhspan")
       include_y(series.y2, series_index, 1, "axhspan")
@@ -108,10 +140,24 @@ local function data_extents(fig, xscale, yscale)
       include_x(series.x2, series_index, 2, "axline")
       include_y(series.y1, series_index, 1, "axline")
       include_y(series.y2, series_index, 2, "axline")
-    elseif series.kind == "line" or series.kind == "scatter" then
+    elseif series.kind == "line" or series.kind == "scatter" or
+        series.kind == "quiver" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "series")
         include_y(series.y[i], series_index, i, "series")
+      end
+    elseif series.kind == "hexbin" then
+      for _, cell in ipairs(series.cells) do
+        include_x(cell.x - series.width / 2, series_index, 1, "hexbin")
+        include_x(cell.x + series.width / 2, series_index, 1, "hexbin")
+        include_y(cell.y - series.radius, series_index, 1, "hexbin")
+        include_y(cell.y + series.radius, series_index, 1, "hexbin")
+      end
+      if #series.cells == 0 then
+        for i = 1, #series.x do
+          include_x(series.x[i], series_index, i, "hexbin point")
+          include_y(series.y[i], series_index, i, "hexbin point")
+        end
       end
     elseif series.kind == "hist" then
       local horizontal = series.orientation == "horizontal"
@@ -207,10 +253,22 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y[i], series_index, i, "stem y")
       end
     elseif series.kind == "contour" then
-      include_x(0, series_index, 1, "contour")
-      include_x(series.cols or 1, series_index, 1, "contour")
-      include_y(0, series_index, 1, "contour")
-      include_y(series.rows or 1, series_index, 1, "contour")
+      if series.x_coords ~= nil then
+        for _, value in ipairs(series.x_coords) do
+          include_x(value, series_index, 1, "contour x")
+        end
+      else
+        include_x(0, series_index, 1, "contour")
+        include_x(series.cols or 1, series_index, 1, "contour")
+      end
+      if series.y_coords ~= nil then
+        for _, value in ipairs(series.y_coords) do
+          include_y(value, series_index, 1, "contour y")
+        end
+      else
+        include_y(0, series_index, 1, "contour")
+        include_y(series.rows or 1, series_index, 1, "contour")
+      end
     elseif series.kind == "barh" then
       include_x(0, series_index, 1, "barh baseline")
       for i = 1, #series.x do
@@ -412,10 +470,18 @@ local function swatch(buf, kind, color, x, y)
     buf[#buf + 1] = string.format(
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
       util.fmt(x), util.fmt(y - 4), color)
-  elseif kind == "hist" or kind == "bar" then
+  elseif kind == "hist" or kind == "bar" or kind == "hexbin" then
     buf[#buf + 1] = string.format(
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
       util.fmt(x), util.fmt(y - 4), color)
+  elseif kind == "quiver" then
+    buf[#buf + 1] = string.format(
+      '  <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
+      util.fmt(x), util.fmt(y), util.fmt(x + 14), util.fmt(y), color)
+    buf[#buf + 1] = string.format(
+      '  <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
+      util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
+      util.fmt(x + 13), util.fmt(y + 3.5), color)
   else
     buf[#buf + 1] = string.format(
       '  <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
@@ -504,21 +570,55 @@ end
 
 local function render_image(series, map_x, map_y, buf)
   local colors = require("luaplotlib.colors")
-  buf[#buf + 1] = '  <g class="heatmap">'
+  local extent = series.extent
+  local lower = series.origin == "lower"
+  local metadata = ""
+  if extent ~= nil or lower then
+    local ext = extent or { 0, series.cols, 0, series.rows }
+    metadata = string.format(
+      ' data-origin="%s" data-extent="%s,%s,%s,%s"',
+      series.origin or "upper", util.fmt(ext[1]), util.fmt(ext[2]),
+      util.fmt(ext[3]), util.fmt(ext[4]))
+  end
+  if extent == nil and lower then
+    extent = { 0, series.cols, 0, series.rows }
+  end
+  buf[#buf + 1] = string.format('  <g class="heatmap"%s>', metadata)
   for row = 1, series.rows do
     for col = 1, series.cols do
-      local x0 = map_x(col - 1)
-      local x1 = map_x(col)
-      local y0 = map_y(series.rows - row)
-      local y1 = map_y(series.rows - row + 1)
+      local data_x0, data_x1, data_y0, data_y1
+      if extent ~= nil then
+        local step_x = (extent[2] - extent[1]) / series.cols
+        local step_y = (extent[4] - extent[3]) / series.rows
+        data_x0 = extent[1] + (col - 1) * step_x
+        data_x1 = extent[1] + col * step_x
+        if lower then
+          data_y0 = extent[3] + (row - 1) * step_y
+          data_y1 = extent[3] + row * step_y
+        else
+          data_y0 = extent[4] - row * step_y
+          data_y1 = extent[4] - (row - 1) * step_y
+        end
+      else
+        data_x0, data_x1 = col - 1, col
+        data_y0, data_y1 = series.rows - row, series.rows - row + 1
+      end
+      local x0 = map_x(data_x0)
+      local x1 = map_x(data_x1)
+      local y0 = map_y(data_y0)
+      local y1 = map_y(data_y1)
       local left = math.min(x0, x1)
       local top = math.min(y0, y1)
       local color = colors.heat(series.values[row][col], series.vmin,
         series.vmax)
+      local cell_metadata = ""
+      if metadata ~= "" then
+        cell_metadata = string.format(' data-row="%d" data-col="%d"', row, col)
+      end
       buf[#buf + 1] = string.format(
-        '   <rect class="heatmap-cell" x="%s" y="%s" width="%s" height="%s" fill="%s"/>',
+        '   <rect class="heatmap-cell" x="%s" y="%s" width="%s" height="%s" fill="%s"%s/>',
         util.fmt(left), util.fmt(top), util.fmt(math.abs(x1 - x0)),
-        util.fmt(math.abs(y1 - y0)), color)
+        util.fmt(math.abs(y1 - y0)), color, cell_metadata)
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -760,6 +860,204 @@ local function render_scatter(series, map_x, map_y, buf)
     local color = style.colors and style.colors[i] or style.color
     buf[#buf + 1] = markers.svg(style.marker, "point",
       map_x(series.x[i]), map_y(series.y[i]), radius, color, fade, outline)
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local CARTESIAN_QUIVER_AUTO_LENGTH = 18
+local QUIVER_PIVOT_FRACTIONS = { tail = 0, middle = 0.5, tip = 1 }
+
+local function render_quiver(series, map_x, map_y, buf)
+  local style = series.style
+  local count = #series.x
+  local stride = math.max(1, math.ceil(count / series.max_arrows))
+  local entries = {}
+  local maximum = 0
+  for index = 1, count, stride do
+    local u, v = series.u[index], series.v[index]
+    local magnitude = math.sqrt(u * u + v * v)
+    if magnitude > 1e-12 then
+      local x, y = series.x[index], series.y[index]
+      local dx = map_x(x + u) - map_x(x)
+      local dy = map_y(y + v) - map_y(y)
+      local length = math.sqrt(dx * dx + dy * dy)
+      if length > 1e-12 then
+        if series.normalize then
+          dx, dy = dx / length, dy / length
+          length = 1
+        end
+        entries[#entries + 1] = {
+          index = index, x = x, y = y, magnitude = magnitude,
+          dx = dx, dy = dy, length = length,
+        }
+        if length > maximum then maximum = length end
+      end
+    end
+  end
+  local automatic = series.scale == nil
+  local scale = series.scale
+  if scale == nil then
+    scale = maximum > 0 and CARTESIAN_QUIVER_AUTO_LENGTH / maximum or 1
+  end
+  local pivot = QUIVER_PIVOT_FRACTIONS[series.pivot] or 0
+  local stroke_opacity, fill_opacity = "", ""
+  if style.alpha < 1 then
+    local alpha = util.fmt(style.alpha)
+    stroke_opacity = string.format(' stroke-opacity="%s"', alpha)
+    fill_opacity = string.format(' fill-opacity="%s"', alpha)
+  end
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', attribute(style.label))
+  end
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-quiver" data-count="%d" data-drawn="%d" data-stride="%d" data-max-arrows="%d" data-scale="%s" data-scale-mode="%s" data-pivot="%s" data-normalize="%s"%s>',
+    count, #entries, stride, series.max_arrows, util.fmt(scale),
+    automatic and "auto" or "explicit", series.pivot,
+    series.normalize and "true" or "false", label)
+
+  for _, entry in ipairs(entries) do
+    local length = entry.length * scale
+    local base_length = entry.length
+    local ux, uy = entry.dx / base_length, entry.dy / base_length
+    local anchor_x, anchor_y = map_x(entry.x), map_y(entry.y)
+    local tail_x = anchor_x - ux * length * pivot
+    local tail_y = anchor_y - uy * length * pivot
+    local tip_x = tail_x + ux * length
+    local tip_y = tail_y + uy * length
+    local head = math.min(style.head or 0, length)
+    local neck_x = tip_x - ux * head
+    local neck_y = tip_y - uy * head
+    local angle = math.deg(math.atan2(entry.dy, entry.dx))
+    buf[#buf + 1] = string.format(
+      '   <g class="quiver-arrow" data-index="%d" data-magnitude="%s" data-x="%s" data-y="%s" data-angle="%s">',
+      entry.index, util.fmt(entry.magnitude), util.fmt(entry.x),
+      util.fmt(entry.y), util.fmt(angle))
+    if style.linewidth > 0 and length - head > 1e-9 then
+      buf[#buf + 1] = string.format(
+        '    <line class="quiver-shaft" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s" stroke-linecap="round"%s/>',
+        util.fmt(tail_x), util.fmt(tail_y), util.fmt(neck_x),
+        util.fmt(neck_y), style.color, util.fmt(style.linewidth),
+        stroke_opacity)
+    end
+    if head > 1e-9 then
+      local half = head * 0.45
+      local px, py = -uy * half, ux * half
+      buf[#buf + 1] = string.format(
+        '    <polygon class="quiver-head" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
+        util.fmt(tip_x), util.fmt(tip_y),
+        util.fmt(neck_x + px), util.fmt(neck_y + py),
+        util.fmt(neck_x - px), util.fmt(neck_y - py),
+        style.color, fill_opacity)
+    end
+    buf[#buf + 1] = '   </g>'
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_hexbin(series, map_x, map_y, buf)
+  local colors = require("luaplotlib.colors")
+  local style = series.style
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', attribute(style.label))
+  end
+  local opacity = ""
+  if style.alpha < 1 then
+    opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
+  end
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-hexbin" data-bins="%d" data-points="%d" data-gridsize="%d" data-mincnt="%d" data-vmin="%s" data-vmax="%s"%s>',
+    #series.cells, series.point_count, series.gridsize, series.mincnt,
+    util.fmt(series.vmin), util.fmt(series.vmax), label)
+  local half_width = series.width / 2
+  local half_height = series.radius / 2
+  for _, cell in ipairs(series.cells) do
+    local left = map_x(cell.x - half_width)
+    local right = map_x(cell.x + half_width)
+    local center_x = map_x(cell.x)
+    local top = map_y(cell.y + series.radius)
+    local bottom = map_y(cell.y - series.radius)
+    local upper = map_y(cell.y + half_height)
+    local lower = map_y(cell.y - half_height)
+    local points = string.format(
+      "%s,%s %s,%s %s,%s %s,%s %s,%s %s,%s",
+      util.fmt(center_x), util.fmt(top), util.fmt(right), util.fmt(upper),
+      util.fmt(right), util.fmt(lower), util.fmt(center_x), util.fmt(bottom),
+      util.fmt(left), util.fmt(lower), util.fmt(left), util.fmt(upper))
+    buf[#buf + 1] = string.format(
+      '   <polygon class="hexbin-cell" data-row="%d" data-col="%d" data-count="%d" data-x="%s" data-y="%s" points="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
+      cell.row, cell.column, cell.count, util.fmt(cell.x), util.fmt(cell.y),
+      points, colors.heat(cell.count, series.vmin, series.vmax),
+      series.edgecolor, util.fmt(series.linewidth), opacity)
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function hexbin_colorbar_values(series)
+  if series.colorbar_tick_values ~= nil then
+    return series.colorbar_tick_values, "explicit"
+  end
+  local count = series.colorbar_ticks or 3
+  local values = {}
+  for index = 1, count do
+    values[index] = series.vmin +
+      (series.vmax - series.vmin) * (index - 1) / (count - 1)
+  end
+  return values, "uniform"
+end
+
+local function render_hexbin_colorbar(series, geom, buf)
+  local colors = require("luaplotlib.colors")
+  local values, source = hexbin_colorbar_values(series)
+  local x = geom.right + 14
+  local y = geom.top
+  local width = 16
+  local height = geom.plot_height
+  local span = series.vmax - series.vmin
+  buf[#buf + 1] = string.format(
+    '  <g class="colorbar hexbin-colorbar" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-tick-source="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s">',
+    util.fmt(series.vmin), util.fmt(series.vmax), #values, source,
+    util.fmt(x), util.fmt(y), util.fmt(width), util.fmt(height))
+  local steps = 40
+  for index = 1, steps do
+    local value = series.vmax - (series.vmax - series.vmin) *
+      ((index - 0.5) / steps)
+    buf[#buf + 1] = string.format(
+      '   <rect class="colorbar-step" x="%s" y="%s" width="%s" height="%s" fill="%s"/>',
+      util.fmt(x), util.fmt(y + height * (index - 1) / steps),
+      util.fmt(width), util.fmt(height / steps + 0.5),
+      colors.heat(value, series.vmin, series.vmax))
+  end
+  buf[#buf + 1] = string.format(
+    '   <rect class="colorbar-frame" x="%s" y="%s" width="%s" height="%s" fill="none" stroke="%s" stroke-width="1"/>',
+    util.fmt(x - 0.5), util.fmt(y - 0.5), util.fmt(width + 1),
+    util.fmt(height + 1), AXIS_COLOR)
+  local maximum_label = 0
+  for _, value in ipairs(values) do
+    local fraction = span == 0 and 0 or (value - series.vmin) / span
+    local tick_y = y + height - height * fraction
+    local label = util.fmt_tick(value)
+    local measured = #label * 6
+    if measured > maximum_label then maximum_label = measured end
+    buf[#buf + 1] = string.format(
+      '   <line class="colorbar-tick" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" data-value="%s" data-fraction="%s"/>',
+      util.fmt(x + width), util.fmt(tick_y), util.fmt(x + width + 4),
+      util.fmt(tick_y), AXIS_COLOR, util.fmt(value), util.fmt(fraction))
+    buf[#buf + 1] = string.format(
+      '   <text class="colorbar-label" x="%s" y="%s" font-size="10" fill="%s" text-anchor="start" data-value="%s" data-fraction="%s">%s</text>',
+      util.fmt(x + width + 8), util.fmt(tick_y + 3.5), TEXT_COLOR,
+      util.fmt(value), util.fmt(fraction), util.escape_xml(label))
+  end
+  if series.colorbar_label ~= nil and series.colorbar_label ~= "" then
+    local label_x = x + width + 8 + maximum_label + 14
+    local label_y = y + height / 2
+    buf[#buf + 1] = string.format(
+      '   <text class="colorbar-title" x="%s" y="%s" font-size="11" fill="%s" text-anchor="middle" transform="rotate(-90 %s %s)">%s</text>',
+      util.fmt(label_x), util.fmt(label_y), TEXT_COLOR,
+      util.fmt(label_x), util.fmt(label_y),
+      util.escape_xml(series.colorbar_label))
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -1423,6 +1721,20 @@ function M.to_svg(fig)
     extents and extents.has_y and extents.max_y or nil,
     y_target, extents and extents.baseline_y or false, 0, 1)
 
+  if fig._aspect ~= nil then
+    apply_aspect(geom, fig._aspect, xaxis.maximum - xaxis.minimum,
+      yaxis.maximum - yaxis.minimum)
+    x_target, y_target = tick_count(geom.plot_width, geom.plot_height)
+    xaxis = make_axis("xlim", xscale, fig._xlim,
+      extents and extents.has_x and extents.min_x or nil,
+      extents and extents.has_x and extents.max_x or nil,
+      x_target, extents and extents.baseline_x or false, 0, 1)
+    yaxis = make_axis("ylim", yscale, fig._ylim,
+      extents and extents.has_y and extents.min_y or nil,
+      extents and extents.has_y and extents.max_y or nil,
+      y_target, extents and extents.baseline_y or false, 0, 1)
+  end
+
   local twiny_xaxis
   if twiny ~= nil then
     twiny_xaxis = make_axis("twin xlim", twiny._xscale or "linear",
@@ -1584,15 +1896,22 @@ function M.to_svg(fig)
   end
 
   local clip_id = "luaplotlib-plot-clip-" .. tostring(fig):gsub("%W", "")
+  local aspect_metadata = ""
+  if fig._aspect ~= nil then
+    aspect_metadata = string.format(
+      ' data-aspect="%s" data-plot-width="%s" data-plot-height="%s"',
+      fig._aspect == 1 and "equal" or util.fmt(fig._aspect),
+      util.fmt(geom.plot_width), util.fmt(geom.plot_height))
+  end
 
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s" data-minorticks="%s" data-minor-grid="%s">',
+  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s" data-minorticks="%s" data-minor-grid="%s"%s>',
     util.fmt(fig.width), util.fmt(fig.height),
     util.fmt(fig.width), util.fmt(fig.height),
     util.escape_xml(fig._aria_label or fig._title or "luaplotlib figure"),
     util.fmt(fig.dpi), util.escape_xml(xscale), util.escape_xml(yscale),
     minorticks.enabled and minor_axis or "none",
-    grid_minor and "true" or "false")
+    grid_minor and "true" or "false", aspect_metadata)
   add(' <title>' .. util.escape_xml(fig._title or "luaplotlib figure") .. '</title>')
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   printf(' <rect class="background" x="0" y="0" width="%s" height="%s" fill="%s"/>',
@@ -1677,6 +1996,10 @@ function M.to_svg(fig)
       render_line(series, map_x, map_y, buf)
     elseif series.kind == "scatter" then
       render_scatter(series, map_x, map_y, buf)
+    elseif series.kind == "quiver" then
+      render_quiver(series, map_x, map_y, buf)
+    elseif series.kind == "hexbin" then
+      render_hexbin(series, map_x, map_y, buf)
     elseif series.kind == "hist" then
       render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
     elseif series.kind == "bar" then
@@ -1894,6 +2217,8 @@ function M.to_svg(fig)
   for _, series in ipairs(fig._series) do
     if series.kind == "image" and fig._colorbar then
       render_colorbar(series, geom, buf)
+    elseif series.kind == "hexbin" and series.colorbar then
+      render_hexbin_colorbar(series, geom, buf)
     end
   end
   render_legend(fig, geom, buf)

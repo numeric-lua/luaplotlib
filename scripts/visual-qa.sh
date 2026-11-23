@@ -340,6 +340,11 @@ for svg in \
   examples/output/cartesian-controls.svg \
   examples/output/histogram-horizontal.svg \
   examples/output/stem.svg \
+  examples/output/quiver.svg \
+  examples/output/hexbin.svg \
+  examples/output/heatmap-extent.svg \
+  examples/output/contour-coords.svg \
+  examples/output/aspect.svg \
   examples/output/bars-grouped.svg \
   examples/output/bars-stacked.svg
 do
@@ -450,6 +455,106 @@ grep -q 'stroke-dasharray="6 4"' "$STEM" ||
 grep -q '<polygon class="stem-marker"' "$STEM" ||
   fail "$STEM should use diamond stem markers"
 
+# Cartesian quiver glyph groups must agree with their decimation metadata.
+QUIVER_CART=examples/output/quiver.svg
+grep -q 'class="series series-quiver"' "$QUIVER_CART" ||
+  fail "$QUIVER_CART has no quiver series"
+quiver_count=$(grep -o 'data-count="[0-9]*"' "$QUIVER_CART" | head -1 |
+  tr -dc '0-9')
+quiver_drawn=$(grep -o 'data-drawn="[0-9]*"' "$QUIVER_CART" | head -1 |
+  tr -dc '0-9')
+quiver_heads=$(grep -o 'class="quiver-head"' "$QUIVER_CART" | wc -l |
+  tr -d ' ')
+[ -n "$quiver_count" ] && [ -n "$quiver_drawn" ] ||
+  fail "$QUIVER_CART is missing quiver count metadata"
+[ "$quiver_heads" -eq "$quiver_drawn" ] ||
+  fail "$QUIVER_CART has $quiver_drawn drawn vectors but $quiver_heads heads"
+[ "$quiver_drawn" -le "$quiver_count" ] ||
+  fail "$QUIVER_CART drew more arrows than its input"
+grep -q 'data-scale-mode="auto"' "$QUIVER_CART" ||
+  fail "$QUIVER_CART should advertise its automatic scale"
+grep -q 'data-pivot="middle"' "$QUIVER_CART" ||
+  fail "$QUIVER_CART should advertise its middle pivot"
+grep -q 'class="legend"' "$QUIVER_CART" ||
+  fail "$QUIVER_CART has no legend"
+angled=$(grep -o 'class="quiver-arrow"[^>]*data-angle="[^"]*"' "$QUIVER_CART" |
+  wc -l | tr -d ' ')
+[ "$angled" -eq "$quiver_drawn" ] ||
+  fail "$QUIVER_CART arrows are missing data-angle metadata"
+if grep -Eqi 'nan|inf' "$QUIVER_CART"; then
+  fail "$QUIVER_CART contains non-finite geometry"
+fi
+
+# Hexbin cells, counts, and colorbar labels must stay consistent.
+HEXBIN=examples/output/hexbin.svg
+grep -q 'class="series series-hexbin"' "$HEXBIN" ||
+  fail "$HEXBIN has no hexbin series"
+hexbin_points=$(grep -o 'data-points="[0-9]*"' "$HEXBIN" | head -1 |
+  tr -dc '0-9')
+hexbin_cells=$(grep -o 'class="hexbin-cell"' "$HEXBIN" | wc -l |
+  tr -d ' ')
+hexbin_bins=$(grep -o 'data-bins="[0-9]*"' "$HEXBIN" | head -1 |
+  tr -dc '0-9')
+[ -n "$hexbin_points" ] && [ -n "$hexbin_bins" ] ||
+  fail "$HEXBIN is missing hexbin metadata"
+[ "$hexbin_cells" -eq "$hexbin_bins" ] ||
+  fail "$HEXBIN reports $hexbin_bins bins but draws $hexbin_cells cells"
+[ "$hexbin_cells" -gt 0 ] || fail "$HEXBIN has no drawn cells"
+hexbin_sum=$(grep -o 'class="hexbin-cell"[^>]*data-count="[0-9]*"' "$HEXBIN" |
+  sed -E 's/.*data-count="([0-9]+)"/\1/' |
+  awk '{ total += $1 } END { print total + 0 }')
+[ "$hexbin_sum" -gt 0 ] && [ "$hexbin_sum" -le "$hexbin_points" ] ||
+  fail "$HEXBIN cell counts do not fit its input point count"
+grep -q 'class="colorbar hexbin-colorbar"' "$HEXBIN" ||
+  fail "$HEXBIN has no count colorbar"
+hexbin_ticks=$(grep -o 'data-ticks="[0-9]*"' "$HEXBIN" | head -1 |
+  tr -dc '0-9')
+hexbin_labels=$(grep -o 'class="colorbar-label"' "$HEXBIN" | wc -l |
+  tr -d ' ')
+[ "$hexbin_labels" -eq "$hexbin_ticks" ] ||
+  fail "$HEXBIN has $hexbin_ticks colorbar ticks but $hexbin_labels labels"
+if grep -Eqi 'nan|inf' "$HEXBIN"; then
+  fail "$HEXBIN contains non-finite geometry"
+fi
+
+# Custom image extents and origins must survive into the SVG contract.
+HEATMAP_EXTENT=examples/output/heatmap-extent.svg
+grep -q 'class="heatmap" data-origin="lower" data-extent="100,280,20,70"' \
+  "$HEATMAP_EXTENT" || fail "$HEATMAP_EXTENT is missing extent/origin metadata"
+extent_cells=$(grep -o 'class="heatmap-cell"' "$HEATMAP_EXTENT" | wc -l |
+  tr -d ' ')
+[ "$extent_cells" -eq 54 ] ||
+  fail "$HEATMAP_EXTENT should draw 54 extent-mapped cells"
+grep -q 'class="colorbar"' "$HEATMAP_EXTENT" ||
+  fail "$HEATMAP_EXTENT has no colorbar"
+
+# Explicit contour coordinates must produce real isolines and labels.
+CONTOUR_COORDS=examples/output/contour-coords.svg
+grep -q 'class="contour"' "$CONTOUR_COORDS" ||
+  fail "$CONTOUR_COORDS has no contour series"
+contour_segments=$(grep -o 'class="contour-segment"' "$CONTOUR_COORDS" |
+  wc -l | tr -d ' ')
+[ "$contour_segments" -gt 0 ] ||
+  fail "$CONTOUR_COORDS has no contour segments"
+contour_labels=$(grep -o 'class="contour-label"' "$CONTOUR_COORDS" |
+  wc -l | tr -d ' ')
+[ "$contour_labels" -gt 0 ] ||
+  fail "$CONTOUR_COORDS has no contour labels"
+
+# Equal aspect must produce a square plot box.
+ASPECT=examples/output/aspect.svg
+grep -q 'data-aspect="equal"' "$ASPECT" ||
+  fail "$ASPECT does not advertise equal aspect"
+aspect_width=$(grep -o 'data-plot-width="[0-9.]*"' "$ASPECT" | head -1 |
+  tr -dc '0-9.')
+aspect_height=$(grep -o 'data-plot-height="[0-9.]*"' "$ASPECT" | head -1 |
+  tr -dc '0-9.')
+[ -n "$aspect_width" ] && [ -n "$aspect_height" ] ||
+  fail "$ASPECT is missing plot-box metadata"
+awk -v width="$aspect_width" -v height="$aspect_height" \
+  'BEGIN { difference = width - height; if (difference < 0) difference = -difference; exit difference > 0.002 }' ||
+  fail "$ASPECT plot box should be square for equal data spans"
+
 if ! command -v rsvg-convert >/dev/null 2>&1; then
   echo "rsvg-convert not found; polar SVGs are in examples/output/"
   exit 0
@@ -462,9 +567,11 @@ for svg in "${POLAR_SVGS[@]}"; do
   echo "wrote $png"
 done
 
-# Rasterize the examples that exercise the 4.22 Cartesian features too, so a
-# reviewer can inspect marker density, minor grids, asymmetric caps, and clips.
-for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM"; do
+# Rasterize the Cartesian feature examples too, so a reviewer can inspect
+# marker density, minor grids, asymmetric caps, vector glyphs, hexagons,
+# extent/origin placement, explicit contour coordinates, and equal aspect.
+for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
+  "$QUIVER_CART" "$HEXBIN" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" "$ASPECT"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

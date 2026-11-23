@@ -136,6 +136,12 @@ function M.from_figure(figure)
     annotations = {},
   }
 
+  if figure._aspect ~= nil then
+    scene.aspect = figure._aspect
+    scene.aspect_mode = figure._aspect == 1 and "equal" or "numeric"
+    scene.aspect_adjustable = "box"
+  end
+
   if figure._grid then
     local major, minor = grid.styles(figure._grid_opts)
     scene.grid_style = {
@@ -188,6 +194,63 @@ function M.from_figure(figure)
         for i, color in ipairs(series.style.colors) do copy.colors[i] = color end
       end
       update_xy_range(state, copy)
+    elseif series.kind == "quiver" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      copy.u = copy_array(series.u)
+      copy.v = copy_array(series.v)
+      copy.scale = series.scale
+      copy.scale_mode = series.scale == nil and "auto" or "explicit"
+      copy.scale_unit = "screen_multiplier"
+      copy.auto_length = 18
+      copy.pivot = series.pivot
+      copy.max_arrows = series.max_arrows
+      copy.normalize = series.normalize
+      local stride = math.max(1, math.ceil(#series.x / series.max_arrows))
+      local drawn = 0
+      for index = 1, #series.x, stride do
+        local u, v = series.u[index], series.v[index]
+        if math.sqrt(u * u + v * v) > 1e-12 then drawn = drawn + 1 end
+      end
+      copy.stride = stride
+      copy.drawn = drawn
+      update_xy_range(state, copy)
+    elseif series.kind == "hexbin" then
+      copy.x = copy_array(series.x)
+      copy.y = copy_array(series.y)
+      copy.cells = {}
+      copy.counts = {}
+      for index, cell in ipairs(series.cells) do
+        copy.cells[index] = {
+          row = cell.row,
+          column = cell.column,
+          x = cell.x,
+          y = cell.y,
+          count = cell.count,
+        }
+        copy.counts[index] = cell.count
+        local left = cell.x - series.width / 2
+        local right = cell.x + series.width / 2
+        local bottom = cell.y - series.radius
+        local top = cell.y + series.radius
+        if state.xmin == nil or left < state.xmin then state.xmin = left end
+        if state.xmax == nil or right > state.xmax then state.xmax = right end
+        if state.ymin == nil or bottom < state.ymin then state.ymin = bottom end
+        if state.ymax == nil or top > state.ymax then state.ymax = top end
+      end
+      copy.gridsize = series.gridsize
+      copy.mincnt = series.mincnt
+      copy.width = series.width
+      copy.radius = series.radius
+      copy.point_count = series.point_count
+      copy.vmin = series.vmin
+      copy.vmax = series.vmax
+      copy.colorbar = series.colorbar and true or false
+      copy.colorbar_label = series.colorbar_label
+      copy.colorbar_ticks = series.colorbar_ticks
+      if series.colorbar_tick_values ~= nil then
+        copy.colorbar_tick_values = copy_array(series.colorbar_tick_values)
+      end
     elseif series.kind == "errorbar" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
@@ -318,11 +381,18 @@ function M.from_figure(figure)
       for row = 1, series.rows do copy.values[row] = copy_array(series.values[row]) end
       copy.vmin = series.vmin
       copy.vmax = series.vmax
+      copy.origin = series.origin or "upper"
       copy.colorbar = figure._colorbar and true or false
-      if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
-      if state.xmax == nil or series.cols > state.xmax then state.xmax = series.cols end
-      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
-      if state.ymax == nil or series.rows > state.ymax then state.ymax = series.rows end
+      local left, right, bottom, top = 0, series.cols, 0, series.rows
+      if series.extent ~= nil then
+        left, right = series.extent[1], series.extent[2]
+        bottom, top = series.extent[3], series.extent[4]
+        copy.extent = { left, right, bottom, top }
+      end
+      if state.xmin == nil or left < state.xmin then state.xmin = left end
+      if state.xmax == nil or right > state.xmax then state.xmax = right end
+      if state.ymin == nil or bottom < state.ymin then state.ymin = bottom end
+      if state.ymax == nil or top > state.ymax then state.ymax = top end
     elseif series.kind == "barh" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
@@ -366,10 +436,28 @@ function M.from_figure(figure)
       copy.level = series.level
       copy.rows = series.rows
       copy.cols = series.cols
-      if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
-      if state.xmax == nil or series.cols > state.xmax then state.xmax = series.cols end
-      if state.ymin == nil or 0 < state.ymin then state.ymin = 0 end
-      if state.ymax == nil or series.rows > state.ymax then state.ymax = series.rows end
+      local xmin, xmax = 0, series.cols
+      local ymin, ymax = 0, series.rows
+      if series.x_coords ~= nil then
+        copy.x = copy_array(series.x_coords)
+        xmin, xmax = series.x_coords[1], series.x_coords[1]
+        for _, value in ipairs(series.x_coords) do
+          if value < xmin then xmin = value end
+          if value > xmax then xmax = value end
+        end
+      end
+      if series.y_coords ~= nil then
+        copy.y = copy_array(series.y_coords)
+        ymin, ymax = series.y_coords[1], series.y_coords[1]
+        for _, value in ipairs(series.y_coords) do
+          if value < ymin then ymin = value end
+          if value > ymax then ymax = value end
+        end
+      end
+      if state.xmin == nil or xmin < state.xmin then state.xmin = xmin end
+      if state.xmax == nil or xmax > state.xmax then state.xmax = xmax end
+      if state.ymin == nil or ymin < state.ymin then state.ymin = ymin end
+      if state.ymax == nil or ymax > state.ymax then state.ymax = ymax end
     elseif series.kind == "bar" then
       local mode = series.mode or "single"
       local offset = series.offset or 0

@@ -223,6 +223,10 @@ local test_files = {
   "test_twiny.lua",
   "test_style.lua",
   "test_axes3d.lua",
+  "test_quiver.lua",
+  "test_hexbin.lua",
+  "test_field_coordinates.lua",
+  "test_aspect.lua",
   "test_export.lua",
 }
 
