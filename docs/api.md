@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.26.0`. This document describes the public Lua API implemented
+Version: `4.27.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.26.0"`
+- `plt._VERSION` — currently `"4.27.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -92,8 +92,25 @@ Unknown options, invalid colors, and malformed data raise errors.
 ### `fig:pie(values[, opts])` / `fig:donut(values[, opts])`
 
 Pie and donut charts. Values must be non-negative with a positive total.
-Options include `labels`, `colors`, `startangle`, `radius`, `inner_radius`,
-`autopct`, and `legend`. `donut` defaults `inner_radius` to 0.55.
+`donut` defaults `inner_radius` to 0.55.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `labels` | one label per value | `slice N` |
+| `colors` | one color per value | palette |
+| `startangle` | finite number, degrees | `90` |
+| `radius` | number in [0.05, 0.5] | `0.34` |
+| `inner_radius` | number in [0, 0.95] | `0` (`0.55` for donut) |
+| `explode` | number or per-slice array in [0, 0.5] | `0` |
+| `shadow` | boolean | `false` |
+| `autopct` | `false`, `true`, or a format string | `false` |
+| `legend` | boolean | `true` |
+
+`explode` shifts each wedge outward by that fraction of the radius along its
+mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
+wedges keep their labels, leader lines, and percentage text attached to the
+shifted slice. `to_scene()` exports `pie.shadow` and each slice's `explode`
+value.
 
 ### `plt.polar(theta, r[, opts])` / `fig:polar(theta, r[, opts])`
 
@@ -551,6 +568,7 @@ Draw a histogram as adjacent filled rectangles.
 | `range` | `{ min, max }` with `min < max` | data min/max |
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `histtype` | `"bar"`, `"step"`, or `"stepfilled"` | `"bar"` |
+| `linewidth` | number ≥ 0, outline stroke | `1` (`1.5` for step) |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
 | `alpha` | number in [0, 1] | `1` |
@@ -571,7 +589,9 @@ empty bins, and closes to the zero baseline at both ends. `"stepfilled"` draws
 the same staircase as one filled polygon (`hist-step-filled`) using `color` as
 its fill and `edgecolor` (or the series color) as its stroke. Both outlines
 respect `orientation`, `density`, `cumulative`, `alpha`, and the automatic
-count range; `to_scene()` exports `histtype` alongside the edges/counts.
+count range. `linewidth` sets the outline stroke for all three styles and is
+exported through the series style; `to_scene()` also exports `histtype`
+alongside the edges/counts.
 
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
@@ -654,6 +674,7 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `lineoffsets` | number or array, one offset per row | row index |
 | `linelengths` | positive number or array, one length per row | `0.8` |
 | `colors` | array with one color per row | series `color` |
+| `labels` | array with one axis label per row | no labels |
 | `color`, `label`, `linewidth`, `alpha` | normal series style | palette / `2` / `1` |
 
 In the default vertical orientation each value is an x coordinate and the mark
@@ -739,6 +760,27 @@ the canonical band shape.
 ### `fig:contourf(values[, opts])`
 
 Filled contour-style field with optional overlay contour lines (`opts.contours = false` disables them).
+
+### `fig:broken_barh(xranges, yrange[, opts])`
+
+Draw horizontal broken bars at one y interval. `xranges` is a non-empty list of
+`{ start, width }` pairs with positive widths; `yrange` is a single
+`{ y, height }` pair with a positive height. Each range becomes one
+`broken-barh` rectangle, so a call can describe gaps or multiple phases.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `color` | color string | next palette color |
+| `label` | string | no legend entry |
+| `alpha` | number in [0, 1] | `1` |
+| `edgecolor` | color string | `#ffffff` |
+| `linewidth` | number ≥ 0 | `1` |
+
+All ranges and the y interval participate in automatic ranging. The series
+group carries `data-y` and `data-height`, each rectangle carries
+`data-index`/`data-start`/`data-width`, and labelled calls join the normal
+legend with a rectangle swatch. `to_scene()` exports `ranges`, `y`, `height`,
+and the resolved style.
 
 ### `fig:imshow(values, opts)`
 
@@ -982,12 +1024,18 @@ twin y axis, `ytick_rotation` applies to both right-hand label columns.
 
 ```lua
 fig:title("text")
+fig:title("left aligned", { loc = "left" })
+fig:title("right aligned", { loc = "right" })
 fig:xlabel("text")
 fig:ylabel("text")
 ```
 
-Arguments must be strings (empty strings are allowed). Text is XML-escaped and
-invalid XML control characters are replaced. The y label is rotated -90°.
+Arguments must be strings (empty strings are allowed). `title` accepts
+`loc = "left"`, `"center"` (default), or `"right"` and aligns the title to the
+axes box (Cartesian), canvas (pie/polar), or outer grid (subplots). Calling
+`title(text)` without options keeps the last alignment. Scenes export the
+resolved `title_align`. Text is XML-escaped and invalid XML control characters
+are replaced. The y label is rotated -90°.
 
 ### Annotations and arrows
 
@@ -1267,9 +1315,12 @@ includes, but is not limited to:
 - invalid histogram histtype names
 - invalid boxplot orientations or non-boolean mean options
 - invalid violin mean options
-- eventplot color arrays whose length does not match the rows
-- negative bar or barh line widths
+- eventplot color or label arrays whose length does not match the rows
+- negative bar, barh, broken_barh, or histogram line widths
+- malformed broken_barh ranges or non-positive broken_barh widths/heights
+- pie explode values outside [0, 0.5] or non-boolean shadow options
 - invalid image colorbar tick counts, labels, out-of-range tick values, or alpha
+- unknown title alignment values
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1351,7 +1402,8 @@ Returns a renderer-agnostic scene table:
   version = 1,
   type = "luaplotlib",
   width = 640, height = 480, dpi = 100,
-  title = "...", xlabel = "...", ylabel = "...",
+  title = "...", title_align = "center",
+  xlabel = "...", ylabel = "...",
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
   minorticks = false, minor_tick_axis = "both", minor_subdivisions = 5,
@@ -1398,7 +1450,11 @@ Returns a renderer-agnostic scene table:
     { kind = "eventplot", orientation = "horizontal",
       rows = { { 0.4, 1.1 }, { 0.8, 1.4 } },
       lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 },
-      colors = { "#2ca02c", "#d62728" }, style = {...} },
+      colors = { "#2ca02c", "#d62728" },
+      labels = { "fast", "slow" }, style = {...} },
+    { kind = "broken_barh",
+      ranges = { { 0, 3 }, { 5, 2 } }, y = 2, height = 0.6,
+      style = {...} },
     { kind = "box", position = 1, width = 0.6, orientation = "horizontal",
       mean = 3, showmeans = true, meanline = false,
       q1 = 2, median = 3, q3 = 4, low = 1, high = 5, outliers = { 9 },
@@ -1437,8 +1493,10 @@ when enabled, `minor_grid_style`. `axhline`/`axvline` scenes carry their data
 coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `where`, `interpolate`, and resolved `segments`; histogram scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
-`lineoffsets`, `linelengths`, and optional `colors`; box and violin scenes
-carry `mean`, `showmeans`, and `meanline`; and stem scenes carry `base`. Bar series always keep category centers in `x`. The scene
+`lineoffsets`, `linelengths`, and optional `colors`/`labels`; broken-bar scenes
+carry their `ranges`, `y`, and `height`; box and violin scenes carry `mean`,
+`showmeans`, and `meanline`; and stem scenes carry `base`. Cartesian scene roots
+export `title_align`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
@@ -1457,7 +1515,10 @@ normalization flag, decimation stride, and drawn count. Hexbin scenes export the
 input points, filtered cell records, counts, regular-cell width/radius, value
 limits, and colorbar settings. Image scenes add `extent` and `origin` when the
 image uses explicit field coordinates, plus `colorbar_label`, `colorbar_ticks`,
-and `colorbar_tick_values` when the extended colorbar is active. Contour scenes export `x`/`y` coordinate
+and `colorbar_tick_values` when the extended colorbar is active. Pie scenes use
+a separate `pie` block with `radius`, `inner_radius`, `shadow`, and per-slice
+`value`, `percent`, `start_angle`, `end_angle`, `color`, `label`, and
+`explode` fields. Contour scenes export `x`/`y` coordinate
 arrays when the figure supplied them and keep the per-level `segments`. Aspect
 constraints appear at the root as `aspect`, `aspect_mode`, and
 `aspect_adjustable = "box"`.
@@ -1474,7 +1535,7 @@ schema, the Cartesian `series` array is empty, and geometry lives under
   type = "luaplotlib",
   orientation = "polar",
   width = 620, height = 620, dpi = 100,
-  title = "Polar rose",
+  title = "Polar rose", title_align = "center",
   grid = true,
   legend = true,
   series = {},

@@ -348,6 +348,8 @@ for svg in \
   examples/output/stack-baseline.svg \
   examples/output/bar-errors.svg \
   examples/output/bar-linewidth.svg \
+  examples/output/broken-barh.svg \
+  examples/output/pie-explode.svg \
   examples/output/heatmap-extent.svg \
   examples/output/contour-coords.svg \
   examples/output/aspect.svg \
@@ -413,6 +415,11 @@ grep -o '<line class="event"[^>]*/>' "$EVENT" | awk '
 ' || fail "$EVENT contains a non-horizontal event mark"
 grep -q 'data-colors="true"' "$EVENT" ||
   fail "$EVENT should use per-row event colors"
+grep -q 'data-labels="true"' "$EVENT" ||
+  fail "$EVENT should expose lane labels"
+for label in fast nominal slow; do
+  grep -q ">$label<" "$EVENT" || fail "$EVENT is missing the $label lane label"
+done
 event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$event_colors" -eq 3 ] ||
@@ -429,6 +436,12 @@ hist_filled=$(grep -o 'class="hist-step-filled"' "$HIST_STYLES" |
   wc -l | tr -d ' ')
 [ "$hist_steps" -eq 1 ] && [ "$hist_filled" -eq 1 ] ||
   fail "$HIST_STYLES should draw one outline and one filled staircase"
+hist_thick=$(grep -o 'class="hist-step"[^>]*stroke-width="2.5"' "$HIST_STYLES" |
+  wc -l | tr -d ' ')
+hist_filled_thick=$(grep -o   'class="hist-step-filled"[^>]*stroke-width="2.5"' "$HIST_STYLES" |
+  wc -l | tr -d ' ')
+[ "$hist_thick" -eq 1 ] && [ "$hist_filled_thick" -eq 1 ] ||
+  fail "$HIST_STYLES should use a 2.5-pixel outline"
 
 # Horizontal boxplots keep their category labels on the y axis.
 BOX_H=examples/output/boxplot-horizontal.svg
@@ -771,6 +784,36 @@ bar_width_rects=$(grep -o 'class="bar"[^>]*stroke-width="3"' "$BAR_WIDTH" |
 [ "$bar_width_rects" -eq 8 ] ||
   fail "$BAR_WIDTH should draw eight bars with a three-pixel outline"
 
+# Broken horizontal bars expose one rectangle per range and an aligned title.
+BROKEN_BARH=examples/output/broken-barh.svg
+grep -q 'class="series series-broken-barh"' "$BROKEN_BARH" ||
+  fail "$BROKEN_BARH has no broken-bar series"
+broken_rects=$(grep -o 'class="broken-barh"' "$BROKEN_BARH" | wc -l |
+  tr -d ' ')
+[ "$broken_rects" -eq 7 ] ||
+  fail "$BROKEN_BARH should draw seven range rectangles"
+grep -q 'text-anchor="end">Project schedule</text>' "$BROKEN_BARH" ||
+  fail "$BROKEN_BARH should use a right-aligned title"
+grep -q 'class="legend"' "$BROKEN_BARH" ||
+  fail "$BROKEN_BARH has no legend"
+
+# Exploded pie slices must carry offsets, shadows, and percentage labels.
+PIE_EXPLODE=examples/output/pie-explode.svg
+grep -q 'data-pie="true"' "$PIE_EXPLODE" ||
+  fail "$PIE_EXPLODE is not a pie SVG"
+pie_slices=$(grep -o 'class="pie-slice"' "$PIE_EXPLODE" | wc -l | tr -d ' ')
+pie_shadows=$(grep -o 'class="pie-shadow"' "$PIE_EXPLODE" | wc -l | tr -d ' ')
+[ "$pie_slices" -eq 4 ] && [ "$pie_shadows" -eq 4 ] ||
+  fail "$PIE_EXPLODE should draw four slices and four shadows"
+grep -q 'data-explode="0"' "$PIE_EXPLODE" ||
+  fail "$PIE_EXPLODE should keep at least one slice unshifted"
+grep -q 'data-explode="0.12"' "$PIE_EXPLODE" ||
+  fail "$PIE_EXPLODE should shift its largest slice"
+pie_percent=$(grep -o 'class="pie-percent"' "$PIE_EXPLODE" | wc -l |
+  tr -d ' ')
+[ "$pie_percent" -eq 4 ] ||
+  fail "$PIE_EXPLODE should label every slice percentage"
+
 # Equal aspect must produce a square plot box.
 ASPECT=examples/output/aspect.svg
 grep -q 'data-aspect="equal"' "$ASPECT" ||
@@ -802,9 +845,9 @@ done
 # extent/origin placement, explicit contour coordinates, and equal aspect.
 for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
   "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
-  "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$HEATMAP_EXTENT" \
-  "$CONTOUR_COORDS" "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" \
-  "$BOX_H" "$IMSHOW"; do
+  "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BROKEN_BARH" \
+  "$PIE_EXPLODE" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" "$ASPECT" \
+  "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

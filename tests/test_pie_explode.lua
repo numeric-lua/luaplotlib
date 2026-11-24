@@ -1,0 +1,63 @@
+local plt = require("luaplotlib")
+
+local function count(svg, pattern)
+  return select(2, svg:gsub(pattern, ""))
+end
+
+test("pie slices are unshifted and shadow-free by default", function()
+  local fig = plt.figure()
+  fig:pie({ 2, 3, 5 }, { labels = { "a", "b", "c" } })
+  local svg = fig:to_svg()
+  assert_equal(count(svg, 'class="pie%-slice"'), 3)
+  assert_equal(count(svg, 'data%-explode="0"'), 3)
+  assert_not_contains(svg, "pie-shadow")
+  local pie = fig:to_scene().pie
+  assert_equal(pie.shadow, false)
+  assert_equal(pie.slices[1].explode, 0)
+end)
+
+test("pie explode offsets slices and shadow draws behind them", function()
+  local fig = plt.figure()
+  fig:pie({ 2, 3, 5 }, {
+    labels = { "a", "b", "c" }, explode = 0.15, shadow = true,
+  })
+  local svg = fig:to_svg()
+  assert_equal(count(svg, 'data%-explode="0.15"'), 3)
+  assert_equal(count(svg, 'class="pie%-shadow"'), 3)
+  assert_equal(count(svg, 'class="pie%-slice"'), 3)
+  local pie = fig:to_scene().pie
+  assert_equal(pie.shadow, true)
+  assert_equal(pie.slices[2].explode, 0.15)
+end)
+
+test("pie explode accepts one offset per slice", function()
+  local fig = plt.figure()
+  fig:pie({ 2, 3, 5 }, { explode = { 0, 0.1, 0.25 } })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-explode="0"')
+  assert_contains(svg, 'data-explode="0.1"')
+  assert_contains(svg, 'data-explode="0.25"')
+  local slices = fig:to_scene().pie.slices
+  assert_equal(slices[1].explode, 0)
+  assert_equal(slices[2].explode, 0.1)
+  assert_equal(slices[3].explode, 0.25)
+end)
+
+test("pie explode and shadow validate their inputs", function()
+  local fig = plt.figure()
+  assert_error("one entry per value", function()
+    fig:pie({ 1, 2, 3 }, { explode = { 0.1, 0.2 } })
+  end)
+  assert_error("explode must be >= 0", function()
+    fig:pie({ 1, 2 }, { explode = -0.1 })
+  end)
+  assert_error("explode must be <= 0.5", function()
+    fig:pie({ 1, 2 }, { explode = 0.6 })
+  end)
+  assert_error("must be a number or a table", function()
+    fig:pie({ 1, 2 }, { explode = true })
+  end)
+  assert_error("shadow must be a boolean", function()
+    fig:pie({ 1, 2 }, { shadow = "yes" })
+  end)
+end)

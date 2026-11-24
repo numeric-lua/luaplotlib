@@ -242,6 +242,11 @@ local test_files = {
   "test_violin_means.lua",
   "test_bar_linewidth.lua",
   "test_imshow_alpha.lua",
+  "test_broken_barh.lua",
+  "test_eventplot_labels.lua",
+  "test_pie_explode.lua",
+  "test_hist_linewidth.lua",
+  "test_title_loc.lua",
   "test_export.lua",
 }
 

@@ -1,3 +1,30 @@
+## 4.27.0
+
+- new `fig:broken_barh(xranges, yrange, opts)` draws horizontal Gantt-style
+  intervals. `xranges` holds one `{start, width}` pair per rectangle and
+  `yrange` is `{y, height}`; ranges and the y interval participate in automatic
+  ranging. The series exposes range/y/height metadata, joins the legend, and
+  exports `ranges`/`y`/`height` through `to_scene()`;
+- `fig:eventplot` accepts `labels`, one tick label per lane. Horizontal lanes
+  label the x axis and vertical lanes label the y axis using `lineoffsets` as
+  category positions; scenes export the labels and resolved
+  `category_axis`/`category_ticks`;
+- `fig:pie`/`fig:donut` add `explode` and `shadow`. `explode` shifts one or more
+  wedges outward by up to half the radius, `shadow` draws a soft offset wedge
+  behind each slice, and labels/leader lines/percentages follow the shifted
+  geometry. Scenes export the shadow flag and per-slice explode values;
+- `fig:hist` adds `linewidth` for the outline stroke across `bar`, `step`, and
+  `stepfilled` styles. The default remains one pixel, and the resolved width is
+  exported through the series style;
+- `fig:title` accepts `loc = "left" | "center" | "right"`, aligned to the axes
+  box for Cartesian figures, the canvas for pie/polar figures, and the outer
+  grid for subplot figures. Scenes export `title_align`. New examples
+  `broken_barh.lua` and `pie_explode.lua` plus updated eventplot, histogram, and
+  title coverage demonstrate the features. README, API docs, Makefile, and
+  `scripts/visual-qa.sh` validate the new metadata. The dependency-free suite
+  grows from 373 to 391 tests. Existing Cartesian APIs remain compatible, polar
+  rendering is unchanged, and there are no new runtime dependencies.
+
 ## 4.26.0
 
 - `fig:eventplot` accepts `colors`, one stroke color per row. Row colors are

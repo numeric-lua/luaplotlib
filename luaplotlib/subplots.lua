@@ -117,6 +117,7 @@ function SubplotFigure.new(rows, cols, opts)
     rows = rows, cols = cols,
     axes = axes,
     _title = title,
+    _title_loc = "center",
     _gap = gap, _margin = margin, _top = top,
     _cell_width = col_widths[1], _cell_height = row_heights[1],
     _x_positions = x_positions, _y_positions = y_positions,
@@ -126,9 +127,22 @@ function SubplotFigure.new(rows, cols, opts)
   }, SubplotFigure)
 end
 
-function SubplotFigure:title(text)
+function SubplotFigure:title(text, opts)
   if text ~= nil then util.check_string(text, "subplots title", false) end
+  local loc = self._title_loc or "center"
+  if opts ~= nil then
+    opts = util.check_options(opts, { loc = true }, "subplots title")
+    if opts.loc ~= nil then
+      if opts.loc ~= "left" and opts.loc ~= "center" and
+          opts.loc ~= "right" then
+        error("luaplotlib: subplots title loc must be left, center, or right",
+          3)
+      end
+      loc = opts.loc
+    end
+  end
   self._title = text
+  self._title_loc = loc
   return self
 end
 
@@ -257,10 +271,17 @@ function SubplotFigure:to_svg()
     ' <rect class="figure-background" width="%s" height="%s" fill="%s"/>',
     util.fmt(self.width), util.fmt(self.height), self._facecolor or "#ffffff")
   if self._title ~= nil then
+    local title_x, title_anchor = self.width / 2, "middle"
+    if self._title_loc == "left" then
+      title_x, title_anchor = self._margin, "start"
+    elseif self._title_loc == "right" then
+      title_x, title_anchor = self.width - self._margin, "end"
+    end
     buffers[#buffers + 1] = string.format(
       ' <text class="suptitle" x="%s" y="%s" font-size="20" fill="#222222" ' ..
-      'text-anchor="middle">%s</text>', util.fmt(self.width / 2),
-      util.fmt(self._margin + 26), util.escape_xml(self._title))
+      'text-anchor="%s">%s</text>', util.fmt(title_x),
+      util.fmt(self._margin + 26), title_anchor,
+      util.escape_xml(self._title))
   end
   for row = 1, self.rows do
     for col = 1, self.cols do
@@ -319,7 +340,8 @@ function SubplotFigure:to_scene()
   end
   return {
     version = 1, type = "luaplotlib.subplots", width = self.width,
-    height = self.height, dpi = self.dpi, title = self._title, axes = axes,
+    height = self.height, dpi = self.dpi, title = self._title,
+    title_align = self._title_loc or "center", axes = axes,
   }
 end
 

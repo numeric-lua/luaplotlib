@@ -1867,11 +1867,19 @@ local function render_annotations(figure, cfg, geom, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local function title_geometry(figure, geom)
+  local loc = figure._title_loc or "center"
+  if loc == "left" then return 8, "start" end
+  if loc == "right" then return geom.width - 8, "end" end
+  return geom.width / 2, "middle"
+end
+
 local function render_title(figure, geom, buf)
   if figure._title == nil then return end
+  local x, anchor = title_geometry(figure, geom)
   buf[#buf + 1] = string.format(
-    '  <text class="title" x="%s" y="30" font-size="18" fill="%s" text-anchor="middle">%s</text>',
-    util.fmt(geom.width / 2), TEXT_COLOR, util.escape_xml(figure._title))
+    '  <text class="title" x="%s" y="30" font-size="18" fill="%s" text-anchor="%s">%s</text>',
+    util.fmt(x), TEXT_COLOR, anchor, util.escape_xml(figure._title))
 end
 
 local function clamp(value, minimum, maximum)
@@ -2070,7 +2078,8 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
   local theta_boxes, radius_boxes = tick_boxes(figure, cfg, geom)
   local title_box = nil
   if figure._title ~= nil then
-    title_box = text.bounds(geom.width / 2, 30, figure._title, 18, "middle")
+    local title_x, title_anchor = title_geometry(figure, geom)
+    title_box = text.bounds(title_x, 30, figure._title, 18, title_anchor)
   end
 
   -- Keep the legend out of the reserved colorbar column as well.
@@ -2608,6 +2617,7 @@ function M.to_scene(figure)
     height = figure.height,
     dpi = figure.dpi,
     title = figure._title,
+    title_align = figure._title_loc or "center",
     grid = true,
     legend = figure._legend_requested and true or false,
     series = {},

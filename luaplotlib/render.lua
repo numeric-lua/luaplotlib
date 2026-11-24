@@ -296,6 +296,16 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y[i] - series.height / 2, series_index, i, "barh")
         include_y(series.y[i] + series.height / 2, series_index, i, "barh")
       end
+    elseif series.kind == "broken_barh" then
+      for index = 1, #series.ranges do
+        local range = series.ranges[index]
+        include_x(range[1], series_index, index, "broken_barh start")
+        include_x(range[1] + range[2], series_index, index,
+          "broken_barh end")
+      end
+      include_y(series.y, series_index, 1, "broken_barh y")
+      include_y(series.y + series.height, series_index, 1,
+        "broken_barh height")
     elseif series.kind == "violin" then
       include_x(series.position - series.width / 2, series_index, 1, "violin")
       include_x(series.position + series.width / 2, series_index, 1, "violin")
@@ -523,7 +533,7 @@ local function swatch(buf, kind, color, x, y)
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
       util.fmt(x), util.fmt(y - 4), color)
   elseif kind == "hist" or kind == "bar" or kind == "hexbin" or
-      kind == "hist2d" or kind == "violin" then
+      kind == "hist2d" or kind == "violin" or kind == "broken_barh" then
     buf[#buf + 1] = string.format(
       '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
       util.fmt(x), util.fmt(y - 4), color)
@@ -1283,14 +1293,14 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
           util.fmt(style.alpha))
       end
       buf[#buf + 1] = string.format(
-        '   <polyline class="hist-step" points="%s" fill="none" stroke="%s" stroke-width="1.5"%s/>',
-        points, style.color, stroke_opacity)
+        '   <polyline class="hist-step" points="%s" fill="none" stroke="%s" stroke-width="%s"%s/>',
+        points, style.color, util.fmt(style.linewidth or 1), stroke_opacity)
     else
       local fill = style.color
       local stroke = style.edgecolor or style.color
       buf[#buf + 1] = string.format(
-        '   <polygon class="hist-step-filled" points="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
-        points, fill, stroke, opacity)
+        '   <polygon class="hist-step-filled" points="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
+        points, fill, stroke, util.fmt(style.linewidth or 1), opacity)
     end
   else
     for i = 1, #series.counts do
@@ -1303,18 +1313,20 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
           local left = math.min(x_baseline, value_x)
           local top = math.min(y1, y2)
           buf[#buf + 1] = string.format(
-            '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+            '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(left), util.fmt(top),
             util.fmt(math.abs(value_x - x_baseline)),
-            util.fmt(math.abs(y2 - y1)), style.color, edge, opacity)
+            util.fmt(math.abs(y2 - y1)), style.color, edge,
+            util.fmt(style.linewidth or 1), opacity)
         else
           local x1 = map_x(series.edges[i])
           local x2 = map_x(series.edges[i + 1])
           local top = map_y(count)
           buf[#buf + 1] = string.format(
-            '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+            '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
-            util.fmt(y_baseline - top), style.color, edge, opacity)
+            util.fmt(y_baseline - top), style.color, edge,
+            util.fmt(style.linewidth or 1), opacity)
         end
       end
     end
@@ -1355,6 +1367,37 @@ local function render_barh(series, map_x, map_y, baseline, buf)
         util.fmt(text_x), util.fmt(center + 3), anchor, TEXT_COLOR,
         util.fmt_tick(value))
     end
+  end
+  buf[#buf + 1] = '  </g>'
+end
+
+local function render_broken_barh(series, map_x, map_y, buf)
+  local style = series.style
+  local opacity = ""
+  if style.alpha < 1 then
+    local a = util.fmt(style.alpha)
+    opacity = string.format(' fill-opacity="%s" stroke-opacity="%s"', a, a)
+  end
+  local edge = style.edgecolor or "#ffffff"
+  local label = ""
+  if style.label ~= nil then
+    label = string.format(' data-label="%s"', attribute(style.label))
+  end
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-broken-barh" data-y="%s" data-height="%s"%s>',
+    util.fmt(series.y), util.fmt(series.height), label)
+  for index, range in ipairs(series.ranges) do
+    local x1 = map_x(range[1])
+    local x2 = map_x(range[1] + range[2])
+    local y1 = map_y(series.y)
+    local y2 = map_y(series.y + series.height)
+    local left, right = math.min(x1, x2), math.max(x1, x2)
+    local top, bottom = math.min(y1, y2), math.max(y1, y2)
+    buf[#buf + 1] = string.format(
+      '   <rect class="broken-barh" data-index="%d" data-start="%s" data-width="%s" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
+      index, util.fmt(range[1]), util.fmt(range[2]), util.fmt(left),
+      util.fmt(top), util.fmt(right - left), util.fmt(bottom - top),
+      style.color, edge, util.fmt(style.linewidth or 1), opacity)
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -1958,31 +2001,45 @@ function M.to_pie_svg(fig)
   add(' <rect class="background" width="' .. util.fmt(width) .. '" height="' ..
     util.fmt(height) .. '" fill="#ffffff"/>')
   if fig._title ~= nil then
-    add(string.format(' <text class="title" x="%s" y="28" font-size="18" fill="#222222" text-anchor="middle">%s</text>',
-      util.fmt(cx), util.escape_xml(fig._title)))
+    local title_x, title_anchor = cx, "middle"
+    if fig._title_loc == "left" then
+      title_x, title_anchor = width * 0.05, "start"
+    elseif fig._title_loc == "right" then
+      title_x, title_anchor = width * 0.95, "end"
+    end
+    add(string.format(' <text class="title" x="%s" y="28" font-size="18" fill="#222222" text-anchor="%s">%s</text>',
+      util.fmt(title_x), title_anchor, util.escape_xml(fig._title)))
   end
   add(' <g class="pie" font-family="Helvetica, Arial, sans-serif">')
   for index, slice in ipairs(pie.slices) do
     if slice.end_angle < slice.start_angle then
       local sweep = slice.start_angle - slice.end_angle
-      local x1, y1 = pie_point(cx, cy, radius, slice.start_angle)
-      local x2, y2 = pie_point(cx, cy, radius, slice.end_angle)
-      local large = sweep > 180 and 1 or 0
-      add(string.format('  <path class="pie-slice" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="%s" stroke="#ffffff" stroke-width="1.5"/>',
-        util.fmt(cx), util.fmt(cy), util.fmt(x1), util.fmt(y1),
-        util.fmt(radius), util.fmt(radius), large, util.fmt(x2), util.fmt(y2),
-        slice.color))
       local middle = (slice.start_angle + slice.end_angle) / 2
+      local offset = radius * (slice.explode or 0)
+      local slice_cx, slice_cy = pie_point(cx, cy, offset, middle)
+      local x1, y1 = pie_point(slice_cx, slice_cy, radius, slice.start_angle)
+      local x2, y2 = pie_point(slice_cx, slice_cy, radius, slice.end_angle)
+      local large = sweep > 180 and 1 or 0
+      if pie.shadow then
+        add(string.format('  <path class="pie-shadow" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="#000000" fill-opacity="0.18"/>',
+          util.fmt(slice_cx + 4), util.fmt(slice_cy + 4),
+          util.fmt(x1 + 4), util.fmt(y1 + 4), util.fmt(radius),
+          util.fmt(radius), large, util.fmt(x2 + 4), util.fmt(y2 + 4)))
+      end
+      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="%s" stroke="#ffffff" stroke-width="1.5"/>',
+        util.fmt(slice.explode or 0), util.fmt(slice_cx), util.fmt(slice_cy),
+        util.fmt(x1), util.fmt(y1), util.fmt(radius), util.fmt(radius),
+        large, util.fmt(x2), util.fmt(y2), slice.color))
       if pie.autopct then
-        local tx, ty = pie_point(cx, cy, radius * 0.64, middle)
+        local tx, ty = pie_point(slice_cx, slice_cy, radius * 0.64, middle)
         local format_string = pie.autopct == true and "%.1f%%" or pie.autopct
         local ok, text = pcall(string.format, format_string, slice.percent)
         if not ok then text = string.format("%.1f%%", slice.percent) end
         add(string.format('  <text class="pie-percent" x="%s" y="%s" font-size="12" fill="#ffffff" text-anchor="middle">%s</text>',
           util.fmt(tx), util.fmt(ty + 4), util.escape_xml(text)))
       end
-      local lx, ly = pie_point(cx, cy, radius * 1.08, middle)
-      local edge_x, edge_y = pie_point(cx, cy, radius, middle)
+      local lx, ly = pie_point(slice_cx, slice_cy, radius * 1.08, middle)
+      local edge_x, edge_y = pie_point(slice_cx, slice_cy, radius, middle)
       add(string.format('  <line class="pie-label-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="#777777" stroke-width="1"/>',
         util.fmt(edge_x), util.fmt(edge_y), util.fmt(lx), util.fmt(ly)))
       local anchor = math.cos(math.rad(middle)) >= 0 and "start" or "end"
@@ -2385,9 +2442,10 @@ function M.to_svg(fig)
       end
       local row_colors = series.colors
       buf[#buf + 1] = string.format(
-        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s"%s>',
+        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-labels="%s"%s>',
         horizontal and "horizontal" or "vertical", #series.rows,
-        row_colors ~= nil and "true" or "false", label)
+        row_colors ~= nil and "true" or "false",
+        series.labels ~= nil and "true" or "false", label)
       for row, events in ipairs(series.rows) do
         local offset = series.lineoffsets[row]
         local half = series.linelengths[row] / 2
@@ -2421,6 +2479,8 @@ function M.to_svg(fig)
       render_stem(series, map_x, map_y, buf)
     elseif series.kind == "barh" then
       render_barh(series, map_x, map_y, map_x(0), buf)
+    elseif series.kind == "broken_barh" then
+      render_broken_barh(series, map_x, map_y, buf)
     elseif series.kind == "contour" then
       render_contour(series, map_x, map_y, buf)
     elseif series.kind == "violin" then
@@ -2598,9 +2658,15 @@ function M.to_svg(fig)
   end
 
   if fig._title ~= nil then
-    printf('   <text class="title" x="%s" y="%s" font-size="18" fill="%s" text-anchor="middle">%s</text>',
-      util.fmt(geom.width / 2), util.fmt(math.max(16, geom.top - 22)),
-      TEXT_COLOR, util.escape_xml(fig._title))
+    local title_x, title_anchor = geom.left + geom.plot_width / 2, "middle"
+    if fig._title_loc == "left" then
+      title_x, title_anchor = geom.left, "start"
+    elseif fig._title_loc == "right" then
+      title_x, title_anchor = geom.right, "end"
+    end
+    printf('   <text class="title" x="%s" y="%s" font-size="18" fill="%s" text-anchor="%s">%s</text>',
+      util.fmt(title_x), util.fmt(math.max(16, geom.top - 22)),
+      TEXT_COLOR, title_anchor, util.escape_xml(fig._title))
   end
   add('  </g>')
 

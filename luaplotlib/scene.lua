@@ -120,6 +120,7 @@ function M.from_figure(figure)
     height = figure.height,
     dpi = figure.dpi,
     title = figure._title,
+    title_align = figure._title_loc or "center",
     xlabel = figure._xlabel,
     ylabel = figure._ylabel,
     xscale = figure._xscale or "linear",
@@ -167,6 +168,7 @@ function M.from_figure(figure)
     scene.pie = {
       radius = figure._pie.radius,
       inner_radius = figure._pie.inner_radius,
+      shadow = figure._pie.shadow and true or false,
       slices = {},
     }
     for index, slice in ipairs(figure._pie.slices) do
@@ -174,6 +176,7 @@ function M.from_figure(figure)
         value = slice.value, percent = slice.percent,
         start_angle = slice.start_angle, end_angle = slice.end_angle,
         color = slice.color, label = slice.label,
+        explode = slice.explode or 0,
       }
     end
     return scene
@@ -430,6 +433,7 @@ function M.from_figure(figure)
       copy.lineoffsets = copy_array(series.lineoffsets)
       copy.linelengths = copy_array(series.linelengths)
       copy.colors = series.colors and copy_array(series.colors) or nil
+      copy.labels = series.labels and copy_array(series.labels) or nil
       local horizontal = copy.orientation == "horizontal"
       for row = 1, #copy.rows do
         local offset = copy.lineoffsets[row]
@@ -515,6 +519,28 @@ function M.from_figure(figure)
         local low, high = y - copy.height / 2, y + copy.height / 2
         if state.ymin == nil or low < state.ymin then state.ymin = low end
         if state.ymax == nil or high > state.ymax then state.ymax = high end
+      end
+    elseif series.kind == "broken_barh" then
+      copy.ranges = {}
+      for index = 1, #series.ranges do
+        copy.ranges[index] = copy_array(series.ranges[index])
+      end
+      copy.y = series.y
+      copy.height = series.height
+      for index = 1, #copy.ranges do
+        local range = copy.ranges[index]
+        if state.xmin == nil or range[1] < state.xmin then
+          state.xmin = range[1]
+        end
+        if state.xmax == nil or range[1] + range[2] > state.xmax then
+          state.xmax = range[1] + range[2]
+        end
+      end
+      if state.ymin == nil or series.y < state.ymin then
+        state.ymin = series.y
+      end
+      if state.ymax == nil or series.y + series.height > state.ymax then
+        state.ymax = series.y + series.height
       end
     elseif series.kind == "violin" then
       copy.position = series.position

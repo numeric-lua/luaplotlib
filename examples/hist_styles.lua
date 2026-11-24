@@ -41,10 +41,11 @@ local fig = plt.figure({ width = 820, height = 500 })
 fig:hist(first, {
   bins = 22, range = { 0, 9 }, histtype = "stepfilled",
   color = "#1f77b4", alpha = 0.45, label = "sample A (stepfilled)",
+  linewidth = 2.5,
 })
 fig:hist(second, {
   bins = 22, range = { 0, 9 }, histtype = "step",
-  color = "#ff7f0e", label = "sample B (step)",
+  color = "#ff7f0e", label = "sample B (step)", linewidth = 2.5,
 })
 fig:title("Histogram outline styles")
 fig:xlabel("value")

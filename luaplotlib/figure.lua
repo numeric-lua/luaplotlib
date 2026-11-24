@@ -183,6 +183,7 @@ local HIST_OPTIONS = {
   cumulative = true,
   orientation = true,
   histtype = true,
+  linewidth = true,
 }
 
 local HIST2D_OPTIONS = {
@@ -286,6 +287,8 @@ local PIE_OPTIONS = {
   autopct = true,
   radius = true,
   inner_radius = true,
+  explode = true,
+  shadow = true,
   legend = true,
 }
 
@@ -299,6 +302,14 @@ local BARH_OPTIONS = {
   edgecolor = true,
   bar_colors = true,
   show_values = true,
+}
+
+local BROKEN_BARH_OPTIONS = {
+  color = true,
+  label = true,
+  alpha = true,
+  edgecolor = true,
+  linewidth = true,
 }
 
 local IMAGE_OPTIONS = {
@@ -431,6 +442,12 @@ local LEGEND_LOCATIONS = {
   ["lower right"] = true,
   ["lower left"] = true,
   ["best"] = true,
+}
+
+local TITLE_LOCATIONS = {
+  left = true,
+  center = true,
+  right = true,
 }
 
 local SCALES = {
@@ -763,6 +780,7 @@ function Figure.new(opts)
     _annotations = {},
     _color_serial = 0,
     _title = nil,
+    _title_loc = "center",
     _twin = nil,
     _twiny = nil,
     _xlabel = nil,
@@ -1914,7 +1932,8 @@ function Figure:scatter(x, y, opts)
 end
 
 local EVENT_OPTIONS = {
-  color = true, colors = true, label = true, linewidth = true, alpha = true,
+  color = true, colors = true, label = true, labels = true,
+  linewidth = true, alpha = true,
   orientation = true, lineoffsets = true, linelengths = true,
 }
 
@@ -1964,6 +1983,13 @@ function Figure:eventplot(positions, opts)
     function(index) return index end)
   local linelengths = event_layout(opts.linelengths, #rows, "linelengths",
     function() return 0.8 end, 0.000001)
+  local row_labels = nil
+  if opts.labels ~= nil then
+    row_labels = data.labels(opts.labels, "eventplot labels")
+    if #row_labels ~= #rows then
+      fail("eventplot labels must have one entry per row")
+    end
+  end
   local row_colors = nil
   if opts.colors ~= nil then
     if opts.color ~= nil then
@@ -1987,8 +2013,16 @@ function Figure:eventplot(positions, opts)
   self._series[#self._series + 1] = {
     kind = "eventplot", rows = rows, orientation = orientation,
     lineoffsets = lineoffsets, linelengths = linelengths,
-    colors = row_colors, style = style,
+    colors = row_colors, labels = row_labels, style = style,
   }
+  if row_labels ~= nil then
+    local ticks = {}
+    for index = 1, #rows do
+      ticks[index] = { position = lineoffsets[index], label = row_labels[index] }
+    end
+    self._category_ticks = ticks
+    self._category_axis = orientation == "horizontal" and "x" or "y"
+  end
   return self
 end
 
@@ -2063,6 +2097,10 @@ function Figure:hist(values, opts)
   if histtype ~= "bar" and histtype ~= "step" and histtype ~= "stepfilled" then
     fail("hist histtype must be 'bar', 'step', or 'stepfilled'")
   end
+  local linewidth = histtype == "step" and 1.5 or 1
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "hist linewidth", 0)
+  end
   local bin_width = (hi - lo) / bins
   local counts = {}
   for i = 1, bins do
@@ -2096,6 +2134,7 @@ function Figure:hist(values, opts)
 
   local style = checked_style(self, opts, "hist")
   style.bins = bins
+  style.linewidth = linewidth
 
   self._series[#self._series + 1] = {
     kind = "hist",
@@ -3335,6 +3374,27 @@ function Figure:pie(values, opts)
   local legend = opts.legend
   if legend == nil then legend = true end
   util.check_boolean(legend, "pie legend")
+  local explode = {}
+  if opts.explode == nil then
+    for index = 1, #values_v do explode[index] = 0 end
+  elseif type(opts.explode) == "number" then
+    local amount = util.check_number(opts.explode, "pie explode", 0, 0.5)
+    for index = 1, #values_v do explode[index] = amount end
+  elseif type(opts.explode) == "table" then
+    if #opts.explode ~= #values_v then
+      fail("pie explode must have one entry per value")
+    end
+    for index = 1, #values_v do
+      explode[index] = util.check_number(opts.explode[index],
+        "pie explode[" .. index .. "]", 0, 0.5)
+    end
+  else
+    fail("pie explode must be a number or a table")
+  end
+  local shadow = opts.shadow == true
+  if opts.shadow ~= nil then
+    util.check_boolean(opts.shadow, "pie shadow")
+  end
   local slices = {}
   local angle = startangle
   for index, value in ipairs(values_v) do
@@ -3346,12 +3406,13 @@ function Figure:pie(values, opts)
       end_angle = angle - sweep,
       color = colors_list[index],
       label = labels and labels[index] or ("slice " .. index),
+      explode = explode[index],
     }
     angle = angle - sweep
   end
   self._pie = {
     slices = slices, radius = radius, inner_radius = inner,
-    autopct = autopct, legend = legend,
+    autopct = autopct, shadow = shadow, legend = legend,
   }
   return self
 end
@@ -3432,6 +3493,46 @@ function Figure:barh(labels_or_y, values, opts)
     bar_colors = bar_colors, show_values = opts.show_values == true,
     style = { color = color, label = opts.label, alpha = alpha,
       edgecolor = edgecolor, linewidth = linewidth },
+  }
+  return self
+end
+
+-- Draw a horizontal broken bar (Gantt-style) made of one or more x ranges at
+-- a fixed y interval. Ranges are {start, width} pairs; yrange is {y, height}.
+function Figure:broken_barh(xranges, yrange, opts)
+  opts = util.check_options(opts, BROKEN_BARH_OPTIONS, "broken_barh")
+  if type(xranges) ~= "table" or #xranges == 0 then
+    fail("broken_barh xranges must be a non-empty table")
+  end
+  local ranges = {}
+  for index = 1, #xranges do
+    local range = xranges[index]
+    if type(range) ~= "table" or #range ~= 2 then
+      fail(string.format(
+        "broken_barh xranges[%d] must be a {start, width} table", index))
+    end
+    local start = util.check_number(range[1],
+      string.format("broken_barh xranges[%d] start", index))
+    local width = util.check_number(range[2],
+      string.format("broken_barh xranges[%d] width", index), 0.000001)
+    ranges[index] = { start, width }
+  end
+  if type(yrange) ~= "table" or #yrange ~= 2 then
+    fail("broken_barh yrange must be a {y, height} table")
+  end
+  local y = util.check_number(yrange[1], "broken_barh yrange y")
+  local height = util.check_number(yrange[2],
+    "broken_barh yrange height", 0.000001)
+  local linewidth = 1
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth,
+      "broken_barh linewidth", 0)
+  end
+  local style = checked_style(self, opts, "broken_barh")
+  style.linewidth = linewidth
+  self._series[#self._series + 1] = {
+    kind = "broken_barh", ranges = ranges, y = y, height = height,
+    style = style,
   }
   return self
 end
@@ -4063,9 +4164,20 @@ function Figure:annotate(text, x, y, opts)
   return self
 end
 
-function Figure:title(text)
+function Figure:title(text, opts)
   util.check_string(text, "title", true)
+  local loc = self._title_loc or "center"
+  if opts ~= nil then
+    opts = util.check_options(opts, { loc = true }, "title")
+    if opts.loc ~= nil then
+      if type(opts.loc) ~= "string" or not TITLE_LOCATIONS[opts.loc] then
+        fail("title loc must be left, center, or right")
+      end
+      loc = opts.loc
+    end
+  end
   self._title = text
+  self._title_loc = loc
   return self
 end
 

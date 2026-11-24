@@ -30,6 +30,7 @@ fig:eventplot({
   orientation = "horizontal",
   lineoffsets = { 1, 4, 7 },
   linelengths = { 0.7, 1.0, 0.55 },
+  labels = { "fast", "nominal", "slow" },
   colors = { "#2ca02c", "#d62728", "#9467bd" },
   linewidth = 2.5,
   label = "events",

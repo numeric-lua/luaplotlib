@@ -57,6 +57,8 @@ luajit examples/field_coordinates.lua
 luajit examples/aspect.lua
 luajit examples/bars.lua
 luajit examples/bar_linewidth.lua
+luajit examples/broken_barh.lua
+luajit examples/pie_explode.lua
 luajit examples/heatmap.lua
 luajit examples/minor_subdivisions.lua
 luajit examples/eventplot_layout.lua
@@ -223,9 +225,34 @@ fig:imshow(matrix, { alpha = 0.8 })
 
 `colors` supplies one event color per lane. `showmeans` adds a mean marker,
 and `meanline` replaces it with a dashed line across the box or violin;
-`to_scene()` exports the mean and both flags. `linewidth` sets the bar outline
-stroke, and image `alpha` fades every heatmap cell while leaving the colorbar
-fully opaque.
+`to_scene()` exports the mean and both flags. `linewidth` sets the bar outline stroke, and image `alpha` fades every
+heatmap cell while leaving the colorbar fully opaque.
+
+Schedules, event labels, pie offsets, histogram outlines, and title alignment
+round out the Cartesian controls:
+
+```lua
+-- One rectangle per {start, width} range at a fixed y interval.
+fig:broken_barh({ { 0, 3 }, { 5, 2 } }, { 2, 0.6 }, { label = "build" })
+
+-- Label event lanes; horizontal labels become x categories, vertical y.
+fig:eventplot(rows, { labels = { "fast", "nominal", "slow" } })
+
+-- Shift slices outward and draw soft shadows behind them.
+fig:pie(values, { explode = { 0.08, 0, 0.12 }, shadow = true })
+
+-- Thicker histogram outlines work for bar, step, and stepfilled styles.
+fig:hist(values, { histtype = "step", linewidth = 2.5 })
+
+fig:title("Aligned left", { loc = "left" })
+```
+
+`explode` accepts one offset or one per slice in [0, 0.5] of the radius.
+`shadow` draws behind each wedge. `broken_barh` participates in automatic
+ranging and legend/scene export, and histogram `linewidth` resolves through the
+series style. `title` accepts `loc = "left"`, `"center"` (default), or
+`"right"` for Figures, SubplotFigures, pies, and polar figures; scenes export
+`title_align`.
 
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
@@ -442,18 +469,21 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Line plots with colors, dashes, markers, labels, and alpha
 - Scatter plots rendered as SVG circles, with per-point colors/sizes or numeric
   `c` values mapped through the heat palette and an optional colorbar
-- Histograms with configurable bins, ranges, and `bar`/`step`/`stepfilled`
-  outlines, plus rectangular `hist2d` counts/densities with explicit grids,
-  value limits, and colorbars
+- Histograms with configurable bins, ranges, `bar`/`step`/`stepfilled`
+  outlines, and outline widths, plus rectangular `hist2d` counts/densities with
+  explicit grids, value limits, and colorbars
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars, configurable outline widths, and
   symmetric/asymmetric error bars
+- Pie and donut charts with exploded slices, soft shadows, labels, and
+  percentage annotations
 - Vertical or horizontal box-and-whisker plots with optional mean markers or
   mean lines
 - Gaussian-kernel violin plots with configurable bandwidth, positions,
   quartiles, medians, extrema, optional mean marks, and per-sample colors
-- Vertical or horizontal event lanes with per-row offsets, lengths, colors, and
-  scene export
+- Vertical or horizontal event lanes with per-row offsets, lengths, colors,
+  axis labels, and scene export
+- Horizontal broken bars for schedules and Gantt-style intervals
 - Polar line, scatter, bar, error-bar, quiver, heatmap, and contour plots with
   circular grid, theta/r ticks, configurable orientation and limits, rotated
   collision-aware contour labels, explicit colorbar ticks, measured-text
@@ -507,7 +537,8 @@ marker-decimation, asymmetric-error, rotated-label, `axline`, fractional-span,
 masked-fill, horizontal-histogram, styled-stem, grid-style, Cartesian-quiver,
 hexbin-count, image-extent/origin, contour-coordinate, minor-subdivision,
 horizontal-event, histogram-step, horizontal-box, image-colorbar, event-color,
-distribution-mean, bar-outline, image-alpha, and equal-aspect metadata, and
+event-label, distribution-mean, bar-outline, broken-bar, pie-explode,
+histogram-outline, title-align, image-alpha, and equal-aspect metadata, and
 confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
@@ -534,6 +565,8 @@ make examples
 # examples/output/stack-baseline.svg
 # examples/output/bar-errors.svg
 # examples/output/bar-linewidth.svg
+# examples/output/broken-barh.svg
+# examples/output/pie-explode.svg
 # examples/output/heatmap-extent.svg
 # examples/output/contour-coords.svg
 # examples/output/aspect.svg
@@ -559,7 +592,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.26.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
+`4.27.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/hexbin/violin/pie/donut/error-bar/box/
 heatmap/contour/contourf plots, Cartesian quiver fields, image extents/origins,
 explicit
@@ -569,8 +602,9 @@ configurable orientation and grids, polar heatmap colorbars with explicit nice
 ticks, rotated collision-aware polar contour labels, polar annotations with
 canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
-per-row event colors, box/violin means, configurable bar outlines, image alpha,
-minor ticks and minor grids, clipped `axline` reference lines, marker
+per-row event colors, event lane labels, box/violin means, broken horizontal
+bars, pie explode/shadow, configurable bar/histogram outlines, image alpha,
+aligned titles, minor ticks and minor grids, clipped `axline` reference lines, marker
 decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference
