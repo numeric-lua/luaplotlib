@@ -429,6 +429,7 @@ function M.from_figure(figure)
       end
       copy.lineoffsets = copy_array(series.lineoffsets)
       copy.linelengths = copy_array(series.linelengths)
+      copy.colors = series.colors and copy_array(series.colors) or nil
       local horizontal = copy.orientation == "horizontal"
       for row = 1, #copy.rows do
         local offset = copy.lineoffsets[row]
@@ -526,12 +527,15 @@ function M.from_figure(figure)
       copy.body_y = copy_array(series.body_y)
       copy.minimum = series.minimum
       copy.maximum = series.maximum
+      copy.mean = series.mean
       copy.q1 = series.q1
       copy.median = series.median
       copy.q3 = series.q3
       copy.showextrema = series.showextrema and true or false
       copy.showmedians = series.showmedians and true or false
       copy.showquartiles = series.showquartiles and true or false
+      copy.showmeans = series.showmeans and true or false
+      copy.meanline = series.meanline and true or false
       local left, right = series.position - series.width / 2,
         series.position + series.width / 2
       if state.xmin == nil or left < state.xmin then state.xmin = left end
@@ -546,6 +550,9 @@ function M.from_figure(figure)
       copy.position = series.position
       copy.width = series.width
       copy.orientation = series.orientation or "vertical"
+      copy.mean = series.mean
+      copy.showmeans = series.showmeans and true or false
+      copy.meanline = series.meanline and true or false
       copy.q1 = series.q1
       copy.median = series.median
       copy.q3 = series.q3

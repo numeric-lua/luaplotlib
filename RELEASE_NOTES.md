@@ -1,37 +1,29 @@
-# luaplotlib 4.25.0
+# luaplotlib 4.26.0
 
 This release adds five additive Cartesian renderer/API features. Existing
 Cartesian APIs remain compatible, polar rendering is unchanged, and there are
-no new runtime dependencies. The boxplot lower-whisker correction is the only
-intentional visual change to an existing chart.
+no new runtime dependencies.
 
-- **Configurable minor ticks.** `fig:minorticks(true, { subdivisions = n })`
-  splits each linear major interval into 2–10 parts (five by default), and the
-  minor grid follows the same count. Log axes keep their 2–9 mantissa ticks.
-  SVG roots and scenes expose the resolved subdivision count.
-- **Eventplot layouts.** `fig:eventplot` gains `orientation`, `lineoffsets`, and
-  `linelengths`. Event rows can be vertical or horizontal, lanes can sit at
-  arbitrary offsets, and each row can have its own span. Eventplot scenes now
-  export the rows, orientation, offsets, and lengths.
-- **Histogram step styles.** `fig:hist` accepts `histtype = "bar"`, `"step"`,
-  or `"stepfilled"`. Step histograms draw one stepped outline; stepfilled
-  histograms fill the same staircase. Both work with horizontal orientation,
-  density, cumulative counts, alpha, and scene export.
-- **Horizontal boxplots.** `fig:boxplot` accepts
-  `orientation = "horizontal"`, placing categories on y and measurements on x.
-  The shared 1.5×IQR calculation now makes the lower whisker reach the lowest
-  inlier instead of stopping at Q1.
-- **Image colorbars.** `fig:imshow` accepts `colorbar_label`,
-  `colorbar_ticks`, and `colorbar_tick_values` within `vmin`/`vmax`. Supplying
-  any of these selects the shared ticked colorbar with per-tick metadata and a
-  title; the compact legacy bar remains the default.
+- **Per-row event colors.** `fig:eventplot` accepts `colors`, one stroke color
+  per lane. The first color seeds the legend swatch and the scene exports the
+  optional color array.
+- **Boxplot means.** `fig:boxplot` gains `showmeans` and `meanline`. Means can
+  be drawn as a marker or as a dashed line across the box, and the scene
+  exports the calculated mean plus both display flags.
+- **Violin means.** `fig:violinplot` gains the same `showmeans`/`meanline`
+  controls, with `violin-mean-marker` and `violin-mean-line` output and scene
+  metadata.
+- **Bar outline widths.** `fig:bar` and `fig:barh` accept `linewidth`. The
+  default remains one pixel, and grouped/stacked series in a call share the
+  requested outline width.
+- **Image alpha.** `fig:imshow` accepts `alpha` in [0, 1]. Cells are rendered
+  translucent, the group reports `data-alpha`, and the colorbar stays opaque.
 
-Examples: `examples/minor_subdivisions.lua`, `examples/eventplot_layout.lua`,
-`examples/hist_styles.lua`, `examples/boxplot_horizontal.lua`, and
-`examples/imshow_colorbar.lua`. `make examples` and `scripts/visual-qa.sh`
-exercise all five features, including minor subdivision and lane metadata,
-histogram outline geometry, horizontal category labels, and explicit image
-colorbar ticks, then rasterize the new examples when `rsvg-convert` is
-available.
+Examples: updated `examples/eventplot_layout.lua`,
+`examples/boxplot_horizontal.lua`, `examples/violinplot.lua`, and
+`examples/imshow_colorbar.lua`, plus new `examples/bar_linewidth.lua`.
+`make examples` and `scripts/visual-qa.sh` exercise the new row colors, mean
+marks, outline width, and cell alpha, then rasterize the affected examples when
+`rsvg-convert` is available.
 
-Tests: `./scripts/test.sh` runs 356 dependency-free tests, all passing.
+Tests: `./scripts/test.sh` runs 373 dependency-free tests, all passing.

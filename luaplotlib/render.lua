@@ -633,6 +633,12 @@ local function render_image(series, map_x, map_y, buf)
       series.origin or "upper", util.fmt(ext[1]), util.fmt(ext[2]),
       util.fmt(ext[3]), util.fmt(ext[4]))
   end
+  local alpha = series.style.alpha or 1
+  local opacity = ""
+  if alpha < 1 then
+    metadata = metadata .. string.format(' data-alpha="%s"', util.fmt(alpha))
+    opacity = string.format(' fill-opacity="%s"', util.fmt(alpha))
+  end
   if extent == nil and lower then
     extent = { 0, series.cols, 0, series.rows }
   end
@@ -669,9 +675,9 @@ local function render_image(series, map_x, map_y, buf)
         cell_metadata = string.format(' data-row="%d" data-col="%d"', row, col)
       end
       buf[#buf + 1] = string.format(
-        '   <rect class="heatmap-cell" x="%s" y="%s" width="%s" height="%s" fill="%s"%s/>',
+        '   <rect class="heatmap-cell" x="%s" y="%s" width="%s" height="%s" fill="%s"%s%s/>',
         util.fmt(left), util.fmt(top), util.fmt(math.abs(x1 - x0)),
-        util.fmt(math.abs(y1 - y0)), color, cell_metadata)
+        util.fmt(math.abs(y1 - y0)), color, cell_metadata, opacity)
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -1338,9 +1344,9 @@ local function render_barh(series, map_x, map_y, baseline, buf)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
     if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
-      '   <rect class="barh" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+      '   <rect class="barh" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(left), util.fmt(top), util.fmt(width), util.fmt(height), fill,
-      edge, opacity)
+      edge, util.fmt(style.linewidth or 1), opacity)
     if series.show_values then
       local text_x = value >= 0 and (value_x + 4) or (value_x - 4)
       local anchor = value >= 0 and "start" or "end"
@@ -1535,10 +1541,12 @@ local function render_violin(series, map_x, map_y, buf)
     label = string.format(' data-label="%s"', attribute(style.label))
   end
   buf[#buf + 1] = string.format(
-    '  <g class="series series-violin" data-position="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-q1="%s" data-median="%s" data-q3="%s"%s>',
+    '  <g class="series series-violin" data-position="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-mean="%s" data-q1="%s" data-median="%s" data-q3="%s" data-showmeans="%s" data-meanline="%s"%s>',
     util.fmt(series.position), series.points, util.fmt(series.bandwidth),
-    util.fmt(series.minimum), util.fmt(series.maximum), util.fmt(series.q1),
-    util.fmt(series.median), util.fmt(series.q3), label)
+    util.fmt(series.minimum), util.fmt(series.maximum), util.fmt(series.mean),
+    util.fmt(series.q1), util.fmt(series.median), util.fmt(series.q3),
+    series.showmeans and "true" or "false",
+    series.meanline and "true" or "false", label)
   buf[#buf + 1] = string.format(
     '   <polygon class="violin-body" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="%s"/>',
     table.concat(points, " "), style.color, util.fmt(style.alpha),
@@ -1576,6 +1584,22 @@ local function render_violin(series, map_x, map_y, buf)
         style.edgecolor or style.color)
     end
   end
+  if series.showmeans then
+    if series.meanline then
+      local half = (map_x(series.position + series.width * 0.5) -
+        map_x(series.position - series.width * 0.5)) / 2
+      buf[#buf + 1] = string.format(
+        '   <line class="violin-mean-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5" stroke-dasharray="4 2"/>',
+        util.fmt(center - half), util.fmt(map_y(series.mean)),
+        util.fmt(center + half), util.fmt(map_y(series.mean)),
+        style.edgecolor or style.color)
+    else
+      buf[#buf + 1] = string.format(
+        '   <circle class="violin-mean-marker" cx="%s" cy="%s" r="3" fill="%s"/>',
+        util.fmt(center), util.fmt(map_y(series.mean)),
+        style.edgecolor or style.color)
+    end
+  end
   buf[#buf + 1] = '  </g>'
 end
 
@@ -1594,6 +1618,8 @@ local function render_box(series, map_x, map_y, buf)
   local high_screen = horizontal and map_x(series.high) or map_y(series.high)
   local median_screen = horizontal and map_x(series.median) or
     map_y(series.median)
+  local mean_screen = horizontal and map_x(series.mean) or
+    map_y(series.mean)
   local cap_a = horizontal and map_y(series.position - half + 0.1) or
     map_x(series.position - half + 0.1)
   local cap_b = horizontal and map_y(series.position + half - 0.1) or
@@ -1609,8 +1635,10 @@ local function render_box(series, map_x, map_y, buf)
     (q3_screen - q1_screen))
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-box" data-position="%s" data-orientation="%s">',
-    util.fmt(series.position), horizontal and "horizontal" or "vertical")
+    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s">',
+    util.fmt(series.position), horizontal and "horizontal" or "vertical",
+    util.fmt(series.mean), series.showmeans and "true" or "false",
+    series.meanline and "true" or "false")
   buf[#buf + 1] = string.format(
     '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
     util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
@@ -1657,6 +1685,31 @@ local function render_box(series, map_x, map_y, buf)
       '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
       util.fmt(cap_a), util.fmt(low_screen), util.fmt(cap_b),
       util.fmt(low_screen), color)
+  end
+  if series.showmeans then
+    if series.meanline then
+      if horizontal then
+        buf[#buf + 1] = string.format(
+          '   <line class="box-mean-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5" stroke-dasharray="4 2"/>',
+          util.fmt(mean_screen), util.fmt(math.min(position_a, position_b)),
+          util.fmt(mean_screen), util.fmt(math.max(position_a, position_b)),
+          color)
+      else
+        buf[#buf + 1] = string.format(
+          '   <line class="box-mean-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5" stroke-dasharray="4 2"/>',
+          util.fmt(math.min(position_a, position_b)), util.fmt(mean_screen),
+          util.fmt(math.max(position_a, position_b)), util.fmt(mean_screen),
+          color)
+      end
+    elseif horizontal then
+      buf[#buf + 1] = string.format(
+        '   <circle class="box-mean-marker" cx="%s" cy="%s" r="3" fill="%s"/>',
+        util.fmt(mean_screen), util.fmt(center), color)
+    else
+      buf[#buf + 1] = string.format(
+        '   <circle class="box-mean-marker" cx="%s" cy="%s" r="3" fill="%s"/>',
+        util.fmt(center), util.fmt(mean_screen), color)
+    end
   end
   for _, value in ipairs(series.outliers) do
     if horizontal then
@@ -1759,9 +1812,9 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
     if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
-      '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+      '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
-      fill, edge, opacity)
+      fill, edge, util.fmt(style.linewidth or 1), opacity)
     if series.yerr_lower ~= nil then
       local reference = value
       if series.bottom ~= nil then reference = series.bottom[i] + value end
@@ -2330,12 +2383,15 @@ function M.to_svg(fig)
       if style.label ~= nil then
         label = string.format(' data-label="%s"', attribute(style.label))
       end
+      local row_colors = series.colors
       buf[#buf + 1] = string.format(
-        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d"%s>',
-        horizontal and "horizontal" or "vertical", #series.rows, label)
+        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s"%s>',
+        horizontal and "horizontal" or "vertical", #series.rows,
+        row_colors ~= nil and "true" or "false", label)
       for row, events in ipairs(series.rows) do
         local offset = series.lineoffsets[row]
         local half = series.linelengths[row] / 2
+        local row_color = row_colors and row_colors[row] or style.color
         for _, value in ipairs(events) do
           local line
           if horizontal then
@@ -2345,7 +2401,7 @@ function M.to_svg(fig)
               '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x1), util.fmt(y), util.fmt(x2), util.fmt(y),
-              style.color, util.fmt(style.linewidth), opacity)
+              row_color, util.fmt(style.linewidth), opacity)
           else
             local x = map_x(value)
             local y1, y2 = map_y(offset - half), map_y(offset + half)
@@ -2353,7 +2409,7 @@ function M.to_svg(fig)
               '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
-              style.color, util.fmt(style.linewidth), opacity)
+              row_color, util.fmt(style.linewidth), opacity)
           end
           buf[#buf + 1] = line
         end

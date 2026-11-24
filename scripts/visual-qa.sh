@@ -347,6 +347,7 @@ for svg in \
   examples/output/violinplot.svg \
   examples/output/stack-baseline.svg \
   examples/output/bar-errors.svg \
+  examples/output/bar-linewidth.svg \
   examples/output/heatmap-extent.svg \
   examples/output/contour-coords.svg \
   examples/output/aspect.svg \
@@ -410,6 +411,12 @@ grep -o '<line class="event"[^>]*/>' "$EVENT" | awk '
     if (y1 != y2) exit 1
   }
 ' || fail "$EVENT contains a non-horizontal event mark"
+grep -q 'data-colors="true"' "$EVENT" ||
+  fail "$EVENT should use per-row event colors"
+event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$event_colors" -eq 3 ] ||
+  fail "$EVENT should use three distinct row colors"
 
 # Histogram step styles must render the outline and filled staircase variants.
 HIST_STYLES=examples/output/hist-styles.svg
@@ -433,6 +440,11 @@ for label in control treatment follow-up; do
   grep -q ">$label<" "$BOX_H" ||
     fail "$BOX_H is missing the $label category label"
 done
+box_means=$(grep -o 'class="box-mean-marker"' "$BOX_H" | wc -l | tr -d ' ')
+[ "$box_means" -eq 3 ] ||
+  fail "$BOX_H should draw one mean marker per box"
+grep -q 'data-showmeans="true"' "$BOX_H" ||
+  fail "$BOX_H should advertise its mean markers"
 
 # Image colorbars accept a title and explicit tick values.
 IMSHOW=examples/output/imshow-colorbar.svg
@@ -448,6 +460,12 @@ imshow_labels=$(grep -o 'class="colorbar-label"' "$IMSHOW" | wc -l |
   fail "$IMSHOW has five ticks but $imshow_labels labels"
 grep -q 'class="colorbar-title"' "$IMSHOW" ||
   fail "$IMSHOW has no colorbar title"
+grep -q 'class="heatmap" data-alpha="0.8"' "$IMSHOW" ||
+  fail "$IMSHOW should apply an 0.8 heatmap alpha"
+imshow_faded=$(grep -o 'class="heatmap-cell"[^>]*fill-opacity="0.8"' "$IMSHOW" |
+  wc -l | tr -d ' ')
+[ "$imshow_faded" -gt 0 ] ||
+  fail "$IMSHOW heatmap cells should carry the alpha opacity"
 
 # Asymmetric error bars must expose both modes.
 ERRORBAR=examples/output/errorbar.svg
@@ -702,6 +720,12 @@ violin_extrema=$(grep -o 'class="violin-extrema"' "$VIOLIN" | wc -l |
   fail "$VIOLIN should draw two extrema per violin"
 grep -q 'data-points="80"' "$VIOLIN" ||
   fail "$VIOLIN should use 80 KDE points"
+violin_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN" | wc -l |
+  tr -d ' ')
+[ "$violin_means" -eq 3 ] ||
+  fail "$VIOLIN should draw one mean marker per violin"
+grep -q 'data-showmeans="true"' "$VIOLIN" ||
+  fail "$VIOLIN should advertise its mean markers"
 if grep -Eqi 'nan|inf' "$VIOLIN"; then
   fail "$VIOLIN contains non-finite geometry"
 fi
@@ -740,6 +764,13 @@ if grep -Eqi 'nan|inf' "$BAR_ERRORS"; then
   fail "$BAR_ERRORS contains non-finite geometry"
 fi
 
+# Bar outlines use the requested three-pixel stroke.
+BAR_WIDTH=examples/output/bar-linewidth.svg
+bar_width_rects=$(grep -o 'class="bar"[^>]*stroke-width="3"' "$BAR_WIDTH" |
+  wc -l | tr -d ' ')
+[ "$bar_width_rects" -eq 8 ] ||
+  fail "$BAR_WIDTH should draw eight bars with a three-pixel outline"
+
 # Equal aspect must produce a square plot box.
 ASPECT=examples/output/aspect.svg
 grep -q 'data-aspect="equal"' "$ASPECT" ||
@@ -771,8 +802,9 @@ done
 # extent/origin placement, explicit contour coordinates, and equal aspect.
 for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
   "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
-  "$STACK_BASELINE" "$BAR_ERRORS" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" \
-  "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do
+  "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$HEATMAP_EXTENT" \
+  "$CONTOUR_COORDS" "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" \
+  "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

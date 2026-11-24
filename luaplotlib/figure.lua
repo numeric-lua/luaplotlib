@@ -208,6 +208,7 @@ local BAR_OPTIONS = {
   series_labels = true,
   colors = true,
   width = true,
+  linewidth = true,
   alpha = true,
   edgecolor = true,
   stacked = true,
@@ -266,6 +267,8 @@ local VIOLIN_OPTIONS = {
   showextrema = true,
   showmedians = true,
   showquartiles = true,
+  showmeans = true,
+  meanline = true,
   colors = true,
   color = true,
   labels = true,
@@ -291,6 +294,7 @@ local BARH_OPTIONS = {
   label = true,
   labels = true,
   height = true,
+  linewidth = true,
   alpha = true,
   edgecolor = true,
   bar_colors = true,
@@ -304,6 +308,7 @@ local IMAGE_OPTIONS = {
   colorbar_label = true,
   colorbar_ticks = true,
   colorbar_tick_values = true,
+  alpha = true,
   label = true,
   extent = true,
   origin = true,
@@ -354,6 +359,8 @@ local BOX_OPTIONS = {
   labels = true,
   width = true,
   orientation = true,
+  showmeans = true,
+  meanline = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -1907,7 +1914,7 @@ function Figure:scatter(x, y, opts)
 end
 
 local EVENT_OPTIONS = {
-  color = true, label = true, linewidth = true, alpha = true,
+  color = true, colors = true, label = true, linewidth = true, alpha = true,
   orientation = true, lineoffsets = true, linelengths = true,
 }
 
@@ -1957,14 +1964,30 @@ function Figure:eventplot(positions, opts)
     function(index) return index end)
   local linelengths = event_layout(opts.linelengths, #rows, "linelengths",
     function() return 0.8 end, 0.000001)
+  local row_colors = nil
+  if opts.colors ~= nil then
+    if opts.color ~= nil then
+      fail("eventplot colors and color cannot both be set")
+    end
+    if type(opts.colors) ~= "table" or #opts.colors ~= #rows then
+      fail("eventplot colors must have one entry per row")
+    end
+    row_colors = {}
+    for index = 1, #rows do
+      row_colors[index] = util.check_color(opts.colors[index],
+        "eventplot colors[" .. index .. "]")
+    end
+  end
   local linewidth = opts.linewidth
   if linewidth == nil then linewidth = 2 end
   linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
   local style = checked_style(self, opts, "eventplot")
   style.linewidth = linewidth
+  if row_colors ~= nil then style.color = row_colors[1] end
   self._series[#self._series + 1] = {
     kind = "eventplot", rows = rows, orientation = orientation,
-    lineoffsets = lineoffsets, linelengths = linelengths, style = style,
+    lineoffsets = lineoffsets, linelengths = linelengths,
+    colors = row_colors, style = style,
   }
   return self
 end
@@ -2663,6 +2686,10 @@ function Figure:bar(labels_or_x, values, opts, ...)
   if opts.width ~= nil then
     width_fraction = util.check_number(opts.width, "bar width", 0.01, 1)
   end
+  local bar_linewidth = 1
+  if opts.linewidth ~= nil then
+    bar_linewidth = util.check_number(opts.linewidth, "bar linewidth", 0)
+  end
 
   local bar_colors = nil
   if opts.bar_colors ~= nil then
@@ -2799,6 +2826,7 @@ function Figure:bar(labels_or_x, values, opts, ...)
       edgecolor = meta.edgecolor ~= nil and meta.edgecolor or opts.edgecolor,
     }, "bar")
     style.width_fraction = width_fraction
+    style.linewidth = bar_linewidth
     styles[i] = style
   end
 
@@ -3359,6 +3387,10 @@ function Figure:barh(labels_or_y, values, opts)
   if opts.height ~= nil then
     height = util.check_number(opts.height, "barh height", 0.01, 1)
   end
+  local linewidth = 1
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "barh linewidth", 0)
+  end
   local color = opts.color and util.check_color(opts.color, "barh color") or
     colors.next(self._color_serial)
   if opts.color == nil then self._color_serial = self._color_serial + 1 end
@@ -3399,7 +3431,7 @@ function Figure:barh(labels_or_y, values, opts)
     kind = "barh", x = values_v, y = positions, height = height,
     bar_colors = bar_colors, show_values = opts.show_values == true,
     style = { color = color, label = opts.label, alpha = alpha,
-      edgecolor = edgecolor },
+      edgecolor = edgecolor, linewidth = linewidth },
   }
   return self
 end
@@ -3443,6 +3475,10 @@ function Figure:imshow(values, opts)
   end
   local extent = checked_extent(opts.extent, "imshow")
   local origin = checked_origin(opts.origin, "imshow")
+  local alpha = 1
+  if opts.alpha ~= nil then
+    alpha = util.check_alpha(opts.alpha, "imshow alpha")
+  end
   self._colorbar = colorbar
   self._series[#self._series + 1] = {
     kind = "image", values = matrix, rows = rows, cols = cols,
@@ -3450,7 +3486,7 @@ function Figure:imshow(values, opts)
     colorbar_label = colorbar_label,
     colorbar_ticks = colorbar_ticks,
     colorbar_tick_values = colorbar_tick_values,
-    style = { color = "#000000", label = opts.label, alpha = 1 },
+    style = { color = "#000000", label = opts.label, alpha = alpha },
   }
   return self
 end
@@ -3583,6 +3619,14 @@ function Figure:boxplot(values, opts)
   if orientation ~= "vertical" and orientation ~= "horizontal" then
     fail("boxplot orientation must be 'vertical' or 'horizontal'")
   end
+  local showmeans = opts.showmeans == true
+  if opts.showmeans ~= nil then
+    util.check_boolean(opts.showmeans, "boxplot showmeans")
+  end
+  local meanline = opts.meanline == true
+  if opts.meanline ~= nil then
+    util.check_boolean(opts.meanline, "boxplot meanline")
+  end
   local labels = opts.labels
   if labels ~= nil then
     if type(labels) ~= "table" or #labels ~= #samples then
@@ -3608,6 +3652,9 @@ function Figure:boxplot(values, opts)
       local fraction = position - math.floor(position)
       return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction
     end
+    local mean = 0
+    for _, value in ipairs(sorted) do mean = mean + value end
+    mean = mean / #sorted
     local q1, median, q3 = quantile(0.25), quantile(0.5), quantile(0.75)
     local iqr = q3 - q1
     local low_limit, high_limit = q1 - 1.5 * iqr, q3 + 1.5 * iqr
@@ -3633,7 +3680,8 @@ function Figure:boxplot(values, opts)
     end
     self._series[#self._series + 1] = {
       kind = "box", position = index, width = width,
-      orientation = orientation,
+      orientation = orientation, mean = mean,
+      showmeans = showmeans, meanline = meanline,
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
       style = { color = color, label = opts.label, alpha = 1 },
@@ -3687,6 +3735,14 @@ function Figure:violinplot(values, opts)
   local showquartiles = opts.showquartiles
   if showquartiles == nil then showquartiles = true end
   util.check_boolean(showquartiles, "violinplot showquartiles")
+  local showmeans = opts.showmeans == true
+  if opts.showmeans ~= nil then
+    util.check_boolean(opts.showmeans, "violinplot showmeans")
+  end
+  local meanline = opts.meanline == true
+  if opts.meanline ~= nil then
+    util.check_boolean(opts.meanline, "violinplot meanline")
+  end
 
   local positions = {}
   if opts.positions ~= nil then
@@ -3769,11 +3825,11 @@ function Figure:violinplot(values, opts)
       minimum, maximum = minimum - pad, maximum + pad
     end
     local span = maximum - minimum
+    local mean = 0
+    for _, value in ipairs(sorted) do mean = mean + value end
+    mean = mean / #sorted
     local bandwidth = explicit_bandwidth
     if bandwidth == nil then
-      local mean = 0
-      for _, value in ipairs(sorted) do mean = mean + value end
-      mean = mean / #sorted
       local variance = 0
       if #sorted > 1 then
         for _, value in ipairs(sorted) do
@@ -3851,12 +3907,15 @@ function Figure:violinplot(values, opts)
       body_y = body_y,
       minimum = minimum,
       maximum = maximum,
+      mean = mean,
       q1 = quantile(0.25),
       median = quantile(0.5),
       q3 = quantile(0.75),
       showextrema = showextrema,
       showmedians = showmedians,
       showquartiles = showquartiles,
+      showmeans = showmeans,
+      meanline = meanline,
       style = style,
     }
     ticks[#ticks + 1] = {

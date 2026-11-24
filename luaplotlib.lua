@@ -10,7 +10,7 @@ local Axes3D = require("luaplotlib.axes3d")
 
 local M = {
   _NAME = "luaplotlib",
-  _VERSION = "4.25.0",
+  _VERSION = "4.26.0",
   Figure = Figure,
   SubplotFigure = SubplotFigure,
   scene = Scene,

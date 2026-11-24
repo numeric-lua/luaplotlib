@@ -53,6 +53,7 @@ fig:violinplot(samples, {
   showextrema = true,
   showmedians = true,
   showquartiles = true,
+  showmeans = true,
 })
 fig:title("luaplotlib: violin distributions")
 fig:ylabel("measured value")

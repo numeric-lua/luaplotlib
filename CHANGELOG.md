@@ -1,3 +1,27 @@
+## 4.26.0
+
+- `fig:eventplot` accepts `colors`, one stroke color per row. Row colors are
+  used by SVG marks, the first color seeds the legend swatch, and
+  `to_scene()` exports the optional `colors` array;
+- `fig:boxplot` adds `showmeans` and `meanline`. `showmeans` draws a
+  `box-mean-marker` at the sample mean; `meanline` replaces it with a dashed
+  `box-mean-line` across the box. Groups export `data-mean`,
+  `data-showmeans`, and `data-meanline`, and scenes carry the same values;
+- `fig:violinplot` adds the same `showmeans`/`meanline` controls with
+  `violin-mean-marker` / `violin-mean-line` marks and mean metadata in SVG and
+  scene output;
+- `fig:bar` and `fig:barh` accept `linewidth` for the bar outline stroke. The
+  default remains one pixel, all series in a call share the requested width,
+  and the resolved width is exported through the scene style;
+- `fig:imshow` accepts `alpha` in [0, 1]. Cell fills become translucent, the
+  heatmap group exposes `data-alpha`, and `to_scene()` carries `style.alpha`;
+  the colorbar remains fully opaque. New example `bar_linewidth.lua` and
+  updated eventplot, boxplot, violinplot, and imshow examples cover all five
+  features. README, API docs, Makefile, and `scripts/visual-qa.sh` validate the
+  new metadata. The dependency-free suite grows from 356 to 373 tests. Existing
+  Cartesian APIs remain compatible, polar rendering is unchanged, and there
+  are no new runtime dependencies.
+
 ## 4.25.0
 
 - `fig:minorticks` accepts `subdivisions` (2–10, default 5) to control how many

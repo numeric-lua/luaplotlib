@@ -237,6 +237,11 @@ local test_files = {
   "test_hist_styles.lua",
   "test_boxplot_orientation.lua",
   "test_imshow_colorbar.lua",
+  "test_eventplot_colors.lua",
+  "test_boxplot_means.lua",
+  "test_violin_means.lua",
+  "test_bar_linewidth.lua",
+  "test_imshow_alpha.lua",
   "test_export.lua",
 }
 

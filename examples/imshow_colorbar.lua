@@ -38,6 +38,7 @@ fig:imshow(matrix, {
   colorbar = true,
   colorbar_label = "response",
   colorbar_tick_values = { 0, 0.25, 0.5, 0.75, 1 },
+  alpha = 0.8,
 })
 fig:title("Image with explicit colorbar ticks")
 fig:xlabel("column")

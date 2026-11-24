@@ -56,6 +56,7 @@ luajit examples/hexbin.lua
 luajit examples/field_coordinates.lua
 luajit examples/aspect.lua
 luajit examples/bars.lua
+luajit examples/bar_linewidth.lua
 luajit examples/heatmap.lua
 luajit examples/minor_subdivisions.lua
 luajit examples/eventplot_layout.lua
@@ -207,6 +208,24 @@ horizontal, and the scalar or per-row `lineoffsets`/`linelengths` control lane
 placement. Horizontal boxplots put category labels on y. Image colorbars now
 mirror the other heat-style colorbars: a title, uniform `colorbar_ticks`, or
 explicit `colorbar_tick_values` (mutually exclusive).
+
+Distribution means, per-row event colors, bar outlines, and image opacity are
+also additive:
+
+```lua
+fig:eventplot(rows, { colors = { "#2ca02c", "#d62728", "#9467bd" } })
+fig:boxplot(samples, { showmeans = true })            -- mean marker
+fig:boxplot(samples, { showmeans = true, meanline = true })
+fig:violinplot(samples, { showmeans = true })         -- or meanline = true
+fig:bar(roles, scores, { linewidth = 3 })             -- also barh
+fig:imshow(matrix, { alpha = 0.8 })
+```
+
+`colors` supplies one event color per lane. `showmeans` adds a mean marker,
+and `meanline` replaces it with a dashed line across the box or violin;
+`to_scene()` exports the mean and both flags. `linewidth` sets the bar outline
+stroke, and image `alpha` fades every heatmap cell while leaving the colorbar
+fully opaque.
 
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
@@ -427,12 +446,14 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   outlines, plus rectangular `hist2d` counts/densities with explicit grids,
   value limits, and colorbars
 - Vertical bars with numeric positions or categorical labels, including
-  multi-series grouped and stacked bars and symmetric/asymmetric error bars
-- Vertical or horizontal box-and-whisker plots
+  multi-series grouped and stacked bars, configurable outline widths, and
+  symmetric/asymmetric error bars
+- Vertical or horizontal box-and-whisker plots with optional mean markers or
+  mean lines
 - Gaussian-kernel violin plots with configurable bandwidth, positions,
-  quartiles, medians, extrema, and per-sample colors
-- Vertical or horizontal event lanes with per-row offsets, lengths, and scene
-  export
+  quartiles, medians, extrema, optional mean marks, and per-sample colors
+- Vertical or horizontal event lanes with per-row offsets, lengths, colors, and
+  scene export
 - Polar line, scatter, bar, error-bar, quiver, heatmap, and contour plots with
   circular grid, theta/r ticks, configurable orientation and limits, rotated
   collision-aware contour labels, explicit colorbar ticks, measured-text
@@ -457,7 +478,7 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Hexagonal binning with minimum counts, value limits, explicit or uniform
   colorbar ticks, and renderer-agnostic cell/count export
 - Image `extent`/`origin` mapping, image colorbar titles and explicit or
-  uniform ticks, and explicit contour column/row coordinates
+  uniform ticks, cell alpha, and explicit contour column/row coordinates
 - Optional equal or numeric data-unit aspect ratios that center the plot box
 - Independent major/minor grid color, width, dash, and opacity
 - X/y tick-label rotation, including twin y axes
@@ -485,8 +506,9 @@ polar/colorbar/quiver metadata, verifies the Cartesian minor-tick,
 marker-decimation, asymmetric-error, rotated-label, `axline`, fractional-span,
 masked-fill, horizontal-histogram, styled-stem, grid-style, Cartesian-quiver,
 hexbin-count, image-extent/origin, contour-coordinate, minor-subdivision,
-horizontal-event, histogram-step, horizontal-box, image-colorbar, and
-equal-aspect metadata, and confirms that Cartesian examples stay Cartesian.
+horizontal-event, histogram-step, horizontal-box, image-colorbar, event-color,
+distribution-mean, bar-outline, image-alpha, and equal-aspect metadata, and
+confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -511,6 +533,7 @@ make examples
 # examples/output/violinplot.svg
 # examples/output/stack-baseline.svg
 # examples/output/bar-errors.svg
+# examples/output/bar-linewidth.svg
 # examples/output/heatmap-extent.svg
 # examples/output/contour-coords.svg
 # examples/output/aspect.svg
@@ -536,7 +559,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.25.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
+`4.26.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/hexbin/violin/pie/donut/error-bar/box/
 heatmap/contour/contourf plots, Cartesian quiver fields, image extents/origins,
 explicit
@@ -546,17 +569,20 @@ configurable orientation and grids, polar heatmap colorbars with explicit nice
 ticks, rotated collision-aware polar contour labels, polar annotations with
 canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
-minor ticks and minor grids, clipped
-`axline` reference lines, marker decimation, x/y tick-label rotation, 3-D
+per-row event colors, box/violin means, configurable bar outlines, image alpha,
+minor ticks and minor grids, clipped `axline` reference lines, marker
+decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference
 spans, masked fill bands, horizontal histograms, styled stems, independently
 styled minor grids, 3-D scene export, per-point scatter sizes/colors, numeric
 scatter color mapping with colorbars, rectangular 2-D histogram grids, KDE
-violins, horizontal boxplots, step/stepfilled histograms, horizontal event
-lanes, configurable stack baselines, bar error bars, histogram density,
-image colorbar titles and explicit ticks, multi-column legends, marker shapes,
-shaded spans, log helpers, optional PNG/PDF export, and scene export. See
+violins, horizontal boxplots, box/violin mean marks, step/stepfilled
+histograms, horizontal event lanes with per-row colors, configurable stack
+baselines, bar error bars and outline widths, histogram density, image
+colorbar titles, explicit ticks and cell alpha, multi-column legends, marker
+shapes, shaded spans, log helpers, optional PNG/PDF export, and scene export.
+See
 [docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations

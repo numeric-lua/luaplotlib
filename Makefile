@@ -25,6 +25,7 @@ examples:
 	@$(LUA) examples/violinplot.lua
 	@$(LUA) examples/stack_baseline.lua
 	@$(LUA) examples/bar_errors.lua
+	@$(LUA) examples/bar_linewidth.lua
 	@$(LUA) examples/field_coordinates.lua
 	@$(LUA) examples/aspect.lua
 	@$(LUA) examples/minor_subdivisions.lua

@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.25.0`. This document describes the public Lua API implemented
+Version: `4.26.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.25.0"`
+- `plt._VERSION` — currently `"4.26.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -426,7 +426,7 @@ figure that already has Cartesian series or annotations.
 ### `fig:barh(labels_or_y, values, opts)`
 
 Horizontal bars for a single numeric series. Category labels are placed on the
-y axis; `bar_colors` and `show_values` behave like `bar`.
+y axis; `bar_colors`, `show_values`, and `linewidth` behave like `bar`.
 
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
@@ -653,16 +653,18 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `lineoffsets` | number or array, one offset per row | row index |
 | `linelengths` | positive number or array, one length per row | `0.8` |
+| `colors` | array with one color per row | series `color` |
 | `color`, `label`, `linewidth`, `alpha` | normal series style | palette / `2` / `1` |
 
 In the default vertical orientation each value is an x coordinate and the mark
 is a vertical line centered on its row's offset. With `orientation =
 "horizontal"` each value is a y coordinate and the mark is a horizontal line
 centered on its row's x offset. `lineoffsets` place the lane centers and
-`linelengths` set each lane's span in data units. Offsets and lengths
-participate in automatic ranging, and a row's length may differ from its
-neighbors'. `to_scene()` exports `orientation`, `rows`, `lineoffsets`, and
-`linelengths`.
+`linelengths` set each lane's span in data units. `colors` gives one stroke
+color per row and cannot be combined with `color`. Offsets and
+lengths participate in automatic ranging, and a row's length may differ from
+its neighbors'. `to_scene()` exports `orientation`, `rows`, `lineoffsets`,
+`linelengths`, and `colors` when row colors were supplied.
 
 ### `fig:ecdf(values[, opts])`
 
@@ -752,6 +754,7 @@ the color range; `colorbar` defaults to true. Values must be finite.
 | `colorbar_label` | string | no colorbar title |
 | `colorbar_ticks` | integer in [2, 10] | `3` when a title/explicit mode uses the extended bar |
 | `colorbar_tick_values` | increasing numeric table within `vmin`/`vmax` | uniform ticks |
+| `alpha` | number in [0, 1] | `1` |
 | `extent` | `{ left, right, bottom, top }` | `{0, cols, 0, rows}` |
 | `origin` | `"upper"` or `"lower"` | `"upper"` |
 
@@ -769,7 +772,10 @@ of the compact legacy bar. It exposes `data-tick-source`, `data-ticks`, and
 per-tick `data-value`/`data-fraction` metadata plus `colorbar-title` and
 `colorbar-label` text. `colorbar_ticks` and `colorbar_tick_values` are mutually
 exclusive, and explicit values must lie within the resolved `vmin`/`vmax`.
-`to_scene()` exports `extent`, `origin`, and the colorbar label/tick settings.
+`alpha` sets the cell fill opacity; the heatmap group then carries
+`data-alpha`, every cell carries `fill-opacity`, and the colorbar remains fully
+opaque. `to_scene()` exports `extent`, `origin`, `style.alpha`, and the colorbar
+label/tick settings.
 
 ### `fig:boxplot(samples, opts)`
 
@@ -781,6 +787,8 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `labels` | one label per sample | `sample N` |
 | `width` | number in [0.01, 1] | `0.6` |
+| `showmeans` | boolean, draw the sample mean | `false` |
+| `meanline` | boolean, draw a dashed mean line instead of a marker | `false` |
 | `color`, `label` | series style | palette / no legend entry |
 
 Vertical boxes place categories on x and values on y. Horizontal boxes swap
@@ -789,8 +797,11 @@ that mapping, put the category labels on the y axis, and carry
 use the same 1.5×IQR rule: the lower whisker reaches the smallest sample value
 at or above the lower fence and the upper whisker reaches the largest value at
 or below the upper fence; values outside the fences become `box-outlier`
-circles. `to_scene()` exports `orientation`, and the scene root reports
-`category_axis = "x"` or `"y"`.
+circles. `showmeans = true` adds a `box-mean-marker` circle at the sample mean;
+combining it with `meanline = true` draws a dashed `box-mean-line` across the
+box instead. The group exposes `data-mean`, `data-showmeans`, and
+`data-meanline`. `to_scene()` exports `orientation`, `mean`, `showmeans`, and
+`meanline`, and the scene root reports `category_axis = "x"` or `"y"`.
 
 ### `fig:violinplot(samples, opts)`
 
@@ -807,6 +818,8 @@ each sample's extrema and normalized to the widest body.
 | `showextrema` | boolean | `true` |
 | `showmedians` | boolean | `true` |
 | `showquartiles` | boolean | `true` |
+| `showmeans` | boolean, draw the sample mean | `false` |
+| `meanline` | boolean, draw a dashed mean line instead of a marker | `false` |
 | `colors` | one color per sample | palette colors |
 | `color` | single color for every sample | palette colors |
 | `labels` | one tick/legend label per sample | `sample N` |
@@ -818,12 +831,14 @@ each sample's extrema and normalized to the widest body.
 Each violin is a separate series with class `series-violin`. Bodies are
 `violin-body` polygons; medians are `violin-median` lines, quartiles are
 `violin-quartile` dashed lines, the center is a `violin-center` line, and
-sample extrema are `violin-extrema` circles. The group exposes
+sample extrema are `violin-extrema` circles. With `showmeans = true`, each
+violin gains a `violin-mean-marker` circle at its mean; `meanline = true`
+draws a dashed `violin-mean-line` across the body instead. The group exposes
 `data-position`, `data-points`, `data-bandwidth`, `data-min`, `data-max`,
-`data-q1`, `data-median`, and `data-q3`. Sample labels become category ticks
-and are also used as legend labels. Scene export includes the sorted sample,
-normalized density array, polygon body coordinates, quartiles, and display
-flags.
+`data-mean`, `data-q1`, `data-median`, `data-q3`, `data-showmeans`, and
+`data-meanline`. Sample labels become category ticks and are also used as
+legend labels. Scene export includes the sorted sample, normalized density
+array, polygon body coordinates, quartiles, mean, and display flags.
 
 ### `fig:contour(values, opts)`
 
@@ -860,6 +875,7 @@ fig:bar({ "Q1", "Q2" }, {
 | Option | Type | Default |
 | --- | --- | --- |
 | `width` | number in [0.01, 1] | `0.8` |
+| `linewidth` | number ≥ 0, bar outline stroke | `1` |
 | `color` | color string | next palette color |
 | `colors` | table of color strings, one per series | palette colors |
 | `label` | string | no legend entry |
@@ -874,8 +890,10 @@ fig:bar({ "Q1", "Q2" }, {
 | `capsize` | number ≥ 0, SVG user units | `4` |
 
 `width` is a fraction of the smallest spacing between x positions (or 1 for a
-single bar / categorical position). In grouped mode that width is shared by all
-series in a group, so every group stays centered on its category position. In
+single bar / categorical position). `linewidth` controls the shared outline
+stroke width of every bar in the call without changing its fill or the
+automatic range. In grouped mode that width is shared by all series in a group,
+so every group stays centered on its category position. In
 stacked mode positive and negative values accumulate separately from zero.
 `stacked = true` and `grouped = true` are mutually exclusive. `label` applies to
 a single series; use `labels` (or descriptor labels) for multiple series. The
@@ -1210,8 +1228,10 @@ match these forms raise errors.
 - Groups with classes such as `figure`, `grid`, `grid-minor`, `series-layer`,
   `series-line`, `series-scatter`, `series-hist`, `series-bar`, `series-axline`,
   `series-fill`, `series-fillx`, `series-stem`, `series-quiver`,
-  `series-hexbin`, `series-eventplot`, `series-box`, `hist-step`,
-  `hist-step-filled`, `event`, `annotation-layer`, `annotation`,
+  `series-hexbin`, `series-eventplot`, `series-box`, `series-violin`,
+  `hist-step`, `hist-step-filled`, `event`, `box-mean-marker`,
+  `box-mean-line`, `violin-mean-marker`, `violin-mean-line`,
+  `annotation-layer`, `annotation`,
   `annotation-text`, `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`,
   `xlabel`, `ylabel`, `title`, and `legend`
 - Quiver groups add `quiver-arrow`, `quiver-shaft`, and `quiver-head`; hexbin
@@ -1245,8 +1265,11 @@ includes, but is not limited to:
 - invalid eventplot orientations, row offset/length arrays, or non-positive
   lengths
 - invalid histogram histtype names
-- invalid boxplot orientations
-- invalid image colorbar tick counts, labels, or out-of-range tick values
+- invalid boxplot orientations or non-boolean mean options
+- invalid violin mean options
+- eventplot color arrays whose length does not match the rows
+- negative bar or barh line widths
+- invalid image colorbar tick counts, labels, out-of-range tick values, or alpha
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1374,9 +1397,14 @@ Returns a renderer-agnostic scene table:
     { kind = "stem", x = {...}, y = {...}, base = 0.5, style = {...} },
     { kind = "eventplot", orientation = "horizontal",
       rows = { { 0.4, 1.1 }, { 0.8, 1.4 } },
-      lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 }, style = {...} },
+      lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 },
+      colors = { "#2ca02c", "#d62728" }, style = {...} },
     { kind = "box", position = 1, width = 0.6, orientation = "horizontal",
+      mean = 3, showmeans = true, meanline = false,
       q1 = 2, median = 3, q3 = 4, low = 1, high = 5, outliers = { 9 },
+      style = {...} },
+    { kind = "violin", position = 1, width = 0.5, mean = 3,
+      showmeans = true, meanline = false, q1 = 2, median = 3, q3 = 4,
       style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8 },
     -- Grouped bars keep category centers in x and add a per-series offset:
@@ -1409,8 +1437,8 @@ when enabled, `minor_grid_style`. `axhline`/`axvline` scenes carry their data
 coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `where`, `interpolate`, and resolved `segments`; histogram scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
-`lineoffsets`, and `linelengths`; box scenes carry `orientation`; and stem
-scenes carry `base`. Bar series always keep category centers in `x`. The scene
+`lineoffsets`, `linelengths`, and optional `colors`; box and violin scenes
+carry `mean`, `showmeans`, and `meanline`; and stem scenes carry `base`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked

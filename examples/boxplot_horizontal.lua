@@ -30,6 +30,7 @@ fig:boxplot({
   orientation = "horizontal",
   color = "#9467bd",
   width = 0.55,
+  showmeans = true,
 })
 fig:title("Horizontal box-and-whisker summary")
 fig:xlabel("measured value")
