@@ -1,3 +1,30 @@
+## 4.28.0
+
+- `fig:legend` adds `upper center`, `lower center`, `center left`,
+  `center right`, and `center` locations for Cartesian and polar figures. The
+  Cartesian legend emits a `legend-meta` child with `data-loc`, polar planning
+  keeps the existing label-avoidance scoring, and scenes report the resolved
+  location;
+- `fig:legend` accepts `framealpha`, `facecolor`, and `edgecolor` to style the
+  frame independently. Defaults remain white at 0.92 opacity with a `#bbbbbb`
+  edge; Cartesian scenes export `legend_style`, and polar scenes carry the same
+  fields in `polar.legend`;
+- `fig:errorbar` adds `errorevery`: every line vertex and marker stays visible,
+  while error bars are drawn at the first point and every Nth point after it.
+  Groups expose `data-errorevery`/`data-error-points`, automatic limits cover
+  the drawn extents plus all point positions, and scenes export the stride;
+- `fig:plot` adds `markerfacecolor`, `markeredgecolor`, and `markeredgewidth`
+  for filled marker shapes. The marker fill defaults to the series color, the
+  optional outline follows alpha, and the scene style exports all three fields;
+- `fig:ecdf` adds `complementary = true`, which plots `1 - F_n(x)` while
+  retaining the existing post-step geometry. ECDF groups expose
+  `data-ecdf`/`data-complementary`, and scenes export both flags. A new
+  `ecdf_complementary.lua` example and updated line/errorbar examples cover all
+  five features. README, API docs, Makefile, and `scripts/visual-qa.sh`
+  validate the new metadata. The dependency-free suite grows from 391 to 410
+  tests. Existing Cartesian APIs remain compatible, polar rendering is
+  unchanged, and there are no new runtime dependencies.
+
 ## 4.27.0
 
 - new `fig:broken_barh(xranges, yrange, opts)` draws horizontal Gantt-style

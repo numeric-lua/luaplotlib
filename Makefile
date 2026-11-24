@@ -13,6 +13,7 @@ examples:
 	@$(LUA) examples/line.lua
 	@$(LUA) examples/histogram.lua
 	@$(LUA) examples/errorbar.lua
+	@$(LUA) examples/ecdf_complementary.lua
 	@$(LUA) examples/annotations.lua
 	@$(LUA) examples/axline.lua
 	@$(LUA) examples/cartesian_controls.lua

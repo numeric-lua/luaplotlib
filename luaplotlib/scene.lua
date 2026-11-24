@@ -30,6 +30,9 @@ local function copy_style(style)
     marker = style.marker,
     markersize = style.markersize,
     markevery = style.markevery and copy_array(style.markevery) or nil,
+    markerfacecolor = style.markerfacecolor,
+    markeredgecolor = style.markeredgecolor,
+    markeredgewidth = style.markeredgewidth,
     radius = style.radius,
     width_fraction = style.width_fraction,
     capsize = style.capsize,
@@ -162,6 +165,19 @@ function M.from_figure(figure)
         alpha = minor.alpha,
       }
     end
+  end
+
+  if figure._legend_requested then
+    local opts = figure._legend_opts or {}
+    scene.legend_style = {
+      loc = opts.loc or "upper right",
+      frame = opts.frame ~= false,
+      framealpha = opts.framealpha or 0.92,
+      facecolor = opts.facecolor or "#ffffff",
+      edgecolor = opts.edgecolor or "#bbbbbb",
+      ncol = opts.ncol or 1,
+      title = opts.title,
+    }
   end
 
   if figure._pie ~= nil then
@@ -314,6 +330,7 @@ function M.from_figure(figure)
     elseif series.kind == "errorbar" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
+      copy.errorevery = series.errorevery or 1
       copy.yerr = copy_array(series.yerr_upper or series.yerr)
       copy.yerr_lower = copy_array(series.yerr_lower or series.yerr)
       copy.yerr_upper = copy_array(series.yerr_upper or series.yerr)
@@ -324,18 +341,26 @@ function M.from_figure(figure)
         copy.xerr_upper = copy_array(series.xerr_upper or series.xerr)
         if series.xerr_asymmetric then copy.xerr_asymmetric = true end
       end
+      local every = series.errorevery or 1
       for index = 1, #copy.x do
         local x, y = copy.x[index], copy.y[index]
-        local xerr_lower = copy.xerr_lower and copy.xerr_lower[index] or 0
-        local xerr_upper = copy.xerr_upper and copy.xerr_upper[index] or 0
-        local yerr_lower = copy.yerr_lower[index]
-        local yerr_upper = copy.yerr_upper[index]
-        local left, right = x - xerr_lower, x + xerr_upper
-        local lower, upper = y - yerr_lower, y + yerr_upper
-        if state.xmin == nil or left < state.xmin then state.xmin = left end
-        if state.xmax == nil or right > state.xmax then state.xmax = right end
-        if state.ymin == nil or lower < state.ymin then state.ymin = lower end
-        if state.ymax == nil or upper > state.ymax then state.ymax = upper end
+        if (index - 1) % every == 0 then
+          local xerr_lower = copy.xerr_lower and copy.xerr_lower[index] or 0
+          local xerr_upper = copy.xerr_upper and copy.xerr_upper[index] or 0
+          local yerr_lower = copy.yerr_lower[index]
+          local yerr_upper = copy.yerr_upper[index]
+          local left, right = x - xerr_lower, x + xerr_upper
+          local lower, upper = y - yerr_lower, y + yerr_upper
+          if state.xmin == nil or left < state.xmin then state.xmin = left end
+          if state.xmax == nil or right > state.xmax then state.xmax = right end
+          if state.ymin == nil or lower < state.ymin then state.ymin = lower end
+          if state.ymax == nil or upper > state.ymax then state.ymax = upper end
+        else
+          if state.xmin == nil or x < state.xmin then state.xmin = x end
+          if state.xmax == nil or x > state.xmax then state.xmax = x end
+          if state.ymin == nil or y < state.ymin then state.ymin = y end
+          if state.ymax == nil or y > state.ymax then state.ymax = y end
+        end
       end
     elseif series.kind == "axline" then
       copy.x1 = series.x1
@@ -468,6 +493,10 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       copy.where = series.where
+      if series.ecdf then
+        copy.ecdf = true
+        copy.complementary = series.complementary and true or false
+      end
       update_xy_range(state, copy)
     elseif series.kind == "stem" then
       copy.x = copy_array(series.x)

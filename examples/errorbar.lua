@@ -50,6 +50,7 @@ fig:errorbar(x, y, yerr, xerr, {
   ecolor = "#d62728",
   capsize = 6,
   markersize = 5,
+  errorevery = 2,
 })
 fig:title("luaplotlib: error bars")
 fig:xlabel("sample")

@@ -335,6 +335,7 @@ for svg in \
   examples/output/line.svg \
   examples/output/histogram.svg \
   examples/output/errorbar.svg \
+  examples/output/ecdf-complementary.svg \
   examples/output/annotations.svg \
   examples/output/axline.svg \
   examples/output/cartesian-controls.svg \
@@ -382,6 +383,18 @@ grep -q 'class="grid-minor"' "$LINE" ||
   fail "$LINE has no minor grid group"
 grep -q 'class="minor-tick-mark"' "$LINE" ||
   fail "$LINE has no minor tick marks"
+grep -q 'class="legend-meta" data-loc="upper center" data-framealpha="0.85"' \
+  "$LINE" || fail "$LINE should use a centered, translucent legend"
+grep -q 'fill="#f8fafc" fill-opacity="0.85" stroke="#94a3b8"' "$LINE" ||
+  fail "$LINE should style its legend frame"
+marker_line=$(grep -o '<circle class="marker"[^>]*/>' "$LINE" | head -1)
+[ -n "$marker_line" ] || fail "$LINE has no circle markers"
+printf '%s\n' "$marker_line" | grep -q 'fill="#ffffff"' ||
+  fail "$LINE markers should have a white face"
+printf '%s\n' "$marker_line" | grep -q 'stroke="#1f77b4"' ||
+  fail "$LINE markers should have a blue edge"
+printf '%s\n' "$marker_line" | grep -q 'stroke-width="1.2"' ||
+  fail "$LINE markers should have a 1.2-pixel edge"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg
@@ -486,6 +499,20 @@ grep -q 'data-yerr-mode="asymmetric"' "$ERRORBAR" ||
   fail "$ERRORBAR should use asymmetric y errors"
 grep -q 'data-xerr-mode="asymmetric"' "$ERRORBAR" ||
   fail "$ERRORBAR should use asymmetric x errors"
+grep -q 'data-errorevery="2" data-error-points="3"' "$ERRORBAR" ||
+  fail "$ERRORBAR should draw every second error bar"
+errorbar_lines=$(grep -o 'class="errorbar"' "$ERRORBAR" | wc -l | tr -d ' ')
+[ "$errorbar_lines" -eq 6 ] ||
+  fail "$ERRORBAR should draw six error-bar segments for three points"
+
+# Complementary ECDF steps count down and expose their mode.
+ECDF=examples/output/ecdf-complementary.svg
+grep -q 'class="series series-step" data-ecdf="true" data-complementary="true"' \
+  "$ECDF" || fail "$ECDF is not a complementary ECDF"
+grep -q 'class="series series-step"' "$ECDF" ||
+  fail "$ECDF has no step series"
+grep -q 'class="legend"' "$ECDF" ||
+  fail "$ECDF has no legend"
 
 # axline must be clipped, omit polar output, and rotate y tick labels.
 AXLINE=examples/output/axline.svg
@@ -843,7 +870,7 @@ done
 # Rasterize the Cartesian feature examples too, so a reviewer can inspect
 # marker density, minor grids, asymmetric caps, vector glyphs, hexagons,
 # extent/origin placement, explicit contour coordinates, and equal aspect.
-for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
+for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
   "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
   "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BROKEN_BARH" \
   "$PIE_EXPLODE" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" "$ASPECT" \

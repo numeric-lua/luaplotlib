@@ -48,6 +48,9 @@ fig:plot(x, sin_x, {
   marker = "circle",
   markersize = 4,
   markevery = 8,
+  markerfacecolor = "#ffffff",
+  markeredgecolor = "#1f77b4",
+  markeredgewidth = 1.2,
 })
 fig:plot(x, cos_x, {
   label = "cos(x)",
@@ -62,7 +65,12 @@ fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
 fig:minorticks(true)
 fig:grid(true, { minor = true })
-fig:legend()
+fig:legend({
+  loc = "upper center",
+  framealpha = 0.85,
+  facecolor = "#f8fafc",
+  edgecolor = "#94a3b8",
+})
 
 local path = outdir .. "/line.svg"
 fig:savefig(path)

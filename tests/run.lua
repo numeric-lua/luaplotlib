@@ -247,6 +247,11 @@ local test_files = {
   "test_pie_explode.lua",
   "test_hist_linewidth.lua",
   "test_title_loc.lua",
+  "test_legend_layout.lua",
+  "test_legend_frame.lua",
+  "test_errorbar_errorevery.lua",
+  "test_marker_style.lua",
+  "test_ecdf_complementary.lua",
   "test_export.lua",
 }
 

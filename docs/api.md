@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.27.0`. This document describes the public Lua API implemented
+Version: `4.28.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.27.0"`
+- `plt._VERSION` — currently `"4.28.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -79,6 +79,9 @@ Draw a connected line series.
 | `marker` | `"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"cross"`, `"x"`, aliases, `true`, or `false` | `false` |
 | `markersize` | number > 0 | `4` |
 | `markevery` | positive integer stride or table of 1-based point indices | draw every marker |
+| `markerfacecolor` | color string | series color |
+| `markeredgecolor` | color string | no outline |
+| `markeredgewidth` | number ≥ 0 | `1` when an outline is present |
 | `alpha` | number in [0, 1] | `1` |
 
 `markevery` decimates markers without dropping line vertices. An integer draws
@@ -86,6 +89,10 @@ the first point and then every Nth point; a table lists the 1-based point
 indices to mark. Index tables are sorted and duplicate entries are ignored.
 The line group exposes `data-marker-count` and, when decimation is requested,
 `data-markevery="true"`. A single-point line still renders its point.
+`markerfacecolor` fills filled marker shapes (circle, square, triangle,
+diamond), while `markeredgecolor`/`markeredgewidth` add their outline. Cross and
+x markers are stroke-only and use the marker color for their strokes. Scenes
+export the three marker style fields through the series style.
 
 Unknown options, invalid colors, and malformed data raise errors.
 
@@ -274,6 +281,7 @@ circle around the data point. `capsize = 0` suppresses the end caps.
 | `capsize` | number ≥ 0 | `4` |
 | `elinewidth` | number ≥ 0 | `1` |
 | `ecolor` | color string | same as `color` |
+| `errorevery` | positive integer | `1` (every point) |
 
 The connecting line is drawn unless `linestyle = "none"`. Automatic radial
 limits include `abs(r) + rerr`, so error bars are never clipped by the default
@@ -486,6 +494,10 @@ track the upper side for compatibility, and `yerr_asymmetric`/
 `xerr_asymmetric` are set when the input was asymmetric. The four-argument form
 `errorbar(x, y, yerr, opts)` is accepted when the fourth argument is an options
 table; an asymmetric `xerr` table in that position is treated as error data.
+`errorevery = n` keeps every line vertex and marker but draws error bars only at
+the first point and every nth point after it. The group exposes
+`data-errorevery` and `data-error-points`, and scenes export `errorevery`;
+automatic limits cover the drawn error extents plus every point position.
 
 ### `fig:scatter(x, y, opts)`
 
@@ -690,7 +702,10 @@ its neighbors'. `to_scene()` exports `orientation`, `rows`, `lineoffsets`,
 ### `fig:ecdf(values[, opts])`
 
 Draw the empirical CDF as a post-step curve over the sorted values. Accepts the
-usual step styling options.
+usual step styling options plus `complementary = true`, which plots
+`1 - F_n(x)` (the exceedance curve) instead of `F_n(x)`. ECDF step groups expose
+`data-ecdf="true"` and, for complementary curves, `data-complementary="true"`;
+scenes export `ecdf` and `complementary` on the step series.
 
 ### `fig:fill_between(x, y1, y2[, opts])` / `fig:fill_betweenx(y, x1, x2[, opts])`
 
@@ -1196,16 +1211,24 @@ No options are required.
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `loc` | `"upper right"`, `"upper left"`, `"lower right"`, `"lower left"`, `"best"` | `"upper right"` |
+| `loc` | corners, edge centers, `"center"`, or `"best"` | `"upper right"` |
 | `frame` | boolean | `true` |
+| `framealpha` | number in [0, 1] | `0.92` |
+| `facecolor` | color string | `#ffffff` |
+| `edgecolor` | color string | `#bbbbbb` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
 
+The accepted locations are the four corners, `"upper center"`,
+`"lower center"`, `"center left"`, `"center right"`, `"center"`, and `"best"`.
+`framealpha`, `facecolor`, and `edgecolor` style the frame independently.
 Only series with a non-empty `label` appear. Swatches reflect the series type
 (line, point, bar, or error bar). Calling `legend()` with no labeled series
 produces no legend box. In polar figures `"best"` searches for the placement
 that covers the fewest labels and data points; Cartesian figures currently
-resolve `"best"` to the upper-right corner.
+resolve `"best"` to the upper-right corner. Cartesian scene roots export a
+`legend_style` object when a legend was requested, and polar scene legends carry
+the same frame fields.
 
 ### `fig:to_svg()`
 
@@ -1320,7 +1343,10 @@ includes, but is not limited to:
 - malformed broken_barh ranges or non-positive broken_barh widths/heights
 - pie explode values outside [0, 0.5] or non-boolean shadow options
 - invalid image colorbar tick counts, labels, out-of-range tick values, or alpha
-- unknown title alignment values
+- unknown title alignment or legend location values
+- negative marker edge widths or invalid marker face/edge colors
+- non-positive errorbar `errorevery` values
+- non-boolean ECDF complementary values
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1410,6 +1436,9 @@ Returns a renderer-agnostic scene table:
   minor_grid = false,
   xlim = { min, max }, ylim = { min, max },
   grid = false, legend = false,
+  legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
+                   facecolor = "#ffffff", edgecolor = "#bbbbbb",
+                   ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
   minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
@@ -1435,7 +1464,7 @@ Returns a renderer-agnostic scene table:
     { kind = "contour", rows = 3, cols = 3, level = 0.5,
       segments = { { x1, y1, x2, y2 }, ... },
       x = { 10, 20, 30 }, y = { 100, 200, 300 }, style = {...} },
-    { kind = "errorbar", x = {...}, y = {...},
+    { kind = "errorbar", x = {...}, y = {...}, errorevery = 1,
       yerr = {...}, yerr_lower = {...}, yerr_upper = {...},
       xerr = {...}, xerr_lower = {...}, xerr_upper = {...} },
     { kind = "axline", x1 = 0, y1 = 0, x2 = 1, y2 = 1, style = {...} },
@@ -1471,6 +1500,8 @@ Returns a renderer-agnostic scene table:
       stacked = true, bottom = {...}, top = {...}, stack = {...} },
     { kind = "hist", edges = {...}, counts = {...},
       orientation = "horizontal", histtype = "stepfilled" },
+    { kind = "step", x = {...}, y = {...}, where = "post",
+      ecdf = true, complementary = true, style = {...} },
   },
   annotations = {
     {
@@ -1495,8 +1526,11 @@ coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
 `lineoffsets`, `linelengths`, and optional `colors`/`labels`; broken-bar scenes
 carry their `ranges`, `y`, and `height`; box and violin scenes carry `mean`,
-`showmeans`, and `meanline`; and stem scenes carry `base`. Cartesian scene roots
-export `title_align`. Bar series always keep category centers in `x`. The scene
+`showmeans`, and `meanline`; stem scenes carry `base`; and ECDF step scenes
+carry `ecdf` plus `complementary`. Cartesian scene roots export `title_align`
+and, when requested, `legend_style`. Error-bar scenes always carry
+`errorevery`; marker-capable line styles may include `markerfacecolor`,
+`markeredgecolor`, and `markeredgewidth`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
@@ -1565,7 +1599,9 @@ schema, the Cartesian `series` array is empty, and geometry lives under
       -- ...
     },
     legend = {
-      loc = "best", frame = true, title = nil, ncol = 1,
+      loc = "best", frame = true, framealpha = 0.92,
+      facecolor = "#ffffff", edgecolor = "#bbbbbb",
+      title = nil, ncol = 1,
       entries = {
         { kind = "line", label = "line", color = "#1f77b4" },
         { kind = "errorbar", label = "errors", color = "#ff7f0e" },

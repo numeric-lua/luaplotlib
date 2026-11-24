@@ -46,6 +46,7 @@ export LUA_PATH="$PWD/?.lua;$PWD/?/init.lua;;"
 luajit examples/line.lua
 luajit examples/histogram.lua
 luajit examples/errorbar.lua
+luajit examples/ecdf_complementary.lua
 luajit examples/annotations.lua
 luajit examples/axline.lua
 luajit examples/cartesian_controls.lua
@@ -225,8 +226,9 @@ fig:imshow(matrix, { alpha = 0.8 })
 
 `colors` supplies one event color per lane. `showmeans` adds a mean marker,
 and `meanline` replaces it with a dashed line across the box or violin;
-`to_scene()` exports the mean and both flags. `linewidth` sets the bar outline stroke, and image `alpha` fades every
-heatmap cell while leaving the colorbar fully opaque.
+`to_scene()` exports the mean and both flags. `linewidth` sets the bar outline
+stroke, and image `alpha` fades every heatmap cell while leaving the colorbar
+fully opaque.
 
 Schedules, event labels, pie offsets, histogram outlines, and title alignment
 round out the Cartesian controls:
@@ -253,6 +255,33 @@ ranging and legend/scene export, and histogram `linewidth` resolves through the
 series style. `title` accepts `loc = "left"`, `"center"` (default), or
 `"right"` for Figures, SubplotFigures, pies, and polar figures; scenes export
 `title_align`.
+
+Legends, markers, error bars, and ECDF curves add the final control set:
+
+```lua
+fig:legend({
+  loc = "center right",     -- also upper/lower center, center left/right
+  framealpha = 0.75,
+  facecolor = "#f8fafc",
+  edgecolor = "#94a3b8",
+})
+
+fig:plot(x, y, {
+  marker = "circle",
+  markerfacecolor = "#ffffff",
+  markeredgecolor = "#1f77b4",
+  markeredgewidth = 1.2,
+})
+
+fig:errorbar(x, y, yerr, { errorevery = 3 })
+fig:ecdf(values, { complementary = true })
+```
+
+`center` and the four edge-centre legend locations work on Cartesian and polar
+figures, and the frame accepts opacity plus face/edge colors. Marker face and
+edge options apply to filled marker shapes. `errorevery` keeps every line
+vertex and marker but draws error bars only at the first point and every Nth
+point after it. `ecdf(..., { complementary = true })` plots `1 - F_n(x)`.
 
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
@@ -466,7 +495,7 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
   `fig:savefig(path)`
-- Line plots with colors, dashes, markers, labels, and alpha
+- Line plots with colors, dashes, marker face/edge styling, labels, and alpha
 - Scatter plots rendered as SVG circles, with per-point colors/sizes or numeric
   `c` values mapped through the heat palette and an optional colorbar
 - Histograms with configurable bins, ranges, `bar`/`step`/`stepfilled`
@@ -477,6 +506,7 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   symmetric/asymmetric error bars
 - Pie and donut charts with exploded slices, soft shadows, labels, and
   percentage annotations
+- Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional mean markers or
   mean lines
 - Gaussian-kernel violin plots with configurable bandwidth, positions,
@@ -492,12 +522,12 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Text annotations with optional leader arrows at Cartesian or polar data
   coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
-  and upper extents
+  and upper extents, optional `errorevery` decimation, and configurable caps
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
-- Explicit `xlim` / `ylim`, optional major/minor grid, titles, axis labels, and
-  legends
+- Explicit `xlim` / `ylim`, optional major/minor grid, aligned titles, axis
+  labels, and legends with nine locations plus frame alpha/colors
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands
@@ -538,8 +568,9 @@ masked-fill, horizontal-histogram, styled-stem, grid-style, Cartesian-quiver,
 hexbin-count, image-extent/origin, contour-coordinate, minor-subdivision,
 horizontal-event, histogram-step, horizontal-box, image-colorbar, event-color,
 event-label, distribution-mean, bar-outline, broken-bar, pie-explode,
-histogram-outline, title-align, image-alpha, and equal-aspect metadata, and
-confirms that Cartesian examples stay Cartesian.
+histogram-outline, title-align, legend-location, legend-frame, marker-style,
+errorbar-stride, ecdf-complementary, image-alpha, and equal-aspect metadata,
+and confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -552,6 +583,7 @@ make examples
 # examples/output/line.svg
 # examples/output/histogram.svg
 # examples/output/errorbar.svg
+# examples/output/ecdf-complementary.svg
 # examples/output/annotations.svg
 # examples/output/axline.svg
 # examples/output/cartesian-controls.svg
@@ -592,7 +624,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.27.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
+`4.28.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/hexbin/violin/pie/donut/error-bar/box/
 heatmap/contour/contourf plots, Cartesian quiver fields, image extents/origins,
 explicit
@@ -603,8 +635,10 @@ ticks, rotated collision-aware polar contour labels, polar annotations with
 canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
 per-row event colors, event lane labels, box/violin means, broken horizontal
-bars, pie explode/shadow, configurable bar/histogram outlines, image alpha,
-aligned titles, minor ticks and minor grids, clipped `axline` reference lines, marker
+bars, pie explode/shadow, configurable bar/histogram outlines, marker
+face/edge styling, error-bar decimation, complementary ECDFs, image alpha,
+aligned titles, expanded legend locations and frame styling, minor ticks and
+minor grids, clipped `axline` reference lines, marker
 decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference

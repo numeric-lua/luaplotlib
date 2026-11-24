@@ -212,18 +212,24 @@ local function data_extents(fig, xscale, yscale)
         end
       end
     elseif series.kind == "errorbar" then
+      local every = series.errorevery or 1
       for i = 1, #series.x do
         local x, y = series.x[i], series.y[i]
-        local xerr_lower = (series.xerr_lower or series.xerr) and
-          (series.xerr_lower or series.xerr)[i] or 0
-        local xerr_upper = (series.xerr_upper or series.xerr) and
-          (series.xerr_upper or series.xerr)[i] or 0
-        local yerr_lower = (series.yerr_lower or series.yerr)[i]
-        local yerr_upper = (series.yerr_upper or series.yerr)[i]
-        include_x(x - xerr_lower, series_index, i, "errorbar x")
-        include_x(x + xerr_upper, series_index, i, "errorbar x")
-        include_y(y - yerr_lower, series_index, i, "errorbar y")
-        include_y(y + yerr_upper, series_index, i, "errorbar y")
+        if (i - 1) % every == 0 then
+          local xerr_lower = (series.xerr_lower or series.xerr) and
+            (series.xerr_lower or series.xerr)[i] or 0
+          local xerr_upper = (series.xerr_upper or series.xerr) and
+            (series.xerr_upper or series.xerr)[i] or 0
+          local yerr_lower = (series.yerr_lower or series.yerr)[i]
+          local yerr_upper = (series.yerr_upper or series.yerr)[i]
+          include_x(x - xerr_lower, series_index, i, "errorbar x")
+          include_x(x + xerr_upper, series_index, i, "errorbar x")
+          include_y(y - yerr_lower, series_index, i, "errorbar y")
+          include_y(y + yerr_upper, series_index, i, "errorbar y")
+        else
+          include_x(x, series_index, i, "errorbar x")
+          include_y(y, series_index, i, "errorbar y")
+        end
       end
     elseif series.kind == "fill" or series.kind == "fillx" then
       local fillx = series.kind == "fillx"
@@ -588,24 +594,44 @@ local function render_legend(fig, geom, buf)
     col_width * ncol + (ncol - 1) * 8)
   local title_height = opts.title and 20 or 0
   local box_height = 12 + title_height + rows * 20
+  local loc = opts.loc or "upper right"
+  local center_x = geom.left + (geom.plot_width - box_width) / 2
+  local center_y = geom.top + (geom.plot_height - box_height) / 2
   local x, y
-  if opts.loc == "upper left" then
+  if loc == "upper left" then
     x, y = geom.left + 8, geom.top + 8
-  elseif opts.loc == "lower left" then
+  elseif loc == "upper center" then
+    x, y = center_x, geom.top + 8
+  elseif loc == "lower left" then
     x, y = geom.left + 8, geom.bottom - box_height - 8
-  elseif opts.loc == "lower right" then
+  elseif loc == "lower center" then
+    x, y = center_x, geom.bottom - box_height - 8
+  elseif loc == "lower right" then
     x, y = geom.right - box_width - 8, geom.bottom - box_height - 8
+  elseif loc == "center left" then
+    x, y = geom.left + 8, center_y
+  elseif loc == "center right" then
+    x, y = geom.right - box_width - 8, center_y
+  elseif loc == "center" then
+    x, y = center_x, center_y
   else
     x, y = geom.right - box_width - 8, geom.top + 8
   end
   x = clamp(x, geom.left + 4, math.max(geom.left + 4, geom.right - box_width - 4))
   y = clamp(y, geom.top + 4, math.max(geom.top + 4, geom.bottom - box_height - 4))
 
+  local framealpha = opts.framealpha or 0.92
+  local facecolor = opts.facecolor or "#ffffff"
+  local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
+  buf[#buf + 1] = string.format(
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s"/>',
+    util.escape_xml(loc), util.fmt(framealpha))
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
-      '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="#ffffff" fill-opacity="0.92" stroke="#bbbbbb" stroke-width="1"/>',
-      util.fmt(x), util.fmt(y), util.fmt(box_width), util.fmt(box_height))
+      '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
+      util.fmt(x), util.fmt(y), util.fmt(box_width), util.fmt(box_height),
+      facecolor, util.fmt(framealpha), edgecolor)
   end
   if opts.title then
     buf[#buf + 1] = string.format(
@@ -894,13 +920,25 @@ local function render_line(series, map_x, map_y, buf)
 
   if draw_marker then
     local marker_opacity = ""
+    local marker_outline = ""
     if style.alpha < 1 then
-      marker_opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
+      local alpha = util.fmt(style.alpha)
+      marker_opacity = string.format(' fill-opacity="%s"', alpha)
+      if style.markeredgecolor ~= nil then
+        marker_outline = marker_outline ..
+          string.format(' stroke-opacity="%s"', alpha)
+      end
+    end
+    local marker_fill = style.markerfacecolor or color
+    if style.markeredgecolor ~= nil then
+      marker_outline = string.format(' stroke="%s" stroke-width="%s"%s',
+        style.markeredgecolor, util.fmt(style.markeredgewidth or 1),
+        marker_outline)
     end
     for _, i in ipairs(marker_indices) do
       buf[#buf + 1] = markers.svg(style.marker, "marker",
-        map_x(series.x[i]), map_y(series.y[i]), style.markersize, color,
-        marker_opacity, "")
+        map_x(series.x[i]), map_y(series.y[i]), style.markersize,
+        marker_fill, marker_opacity, marker_outline)
     end
   end
 
@@ -1189,50 +1227,55 @@ local function render_errorbar(series, map_x, map_y, buf)
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
   end
-  local metadata = ""
+  local every = series.errorevery or 1
+  local drawn = math.floor((#series.x - 1) / every) + 1
+  local metadata = string.format(
+    ' data-errorevery="%d" data-error-points="%d"', every, drawn)
   if series.yerr_asymmetric then metadata = metadata .. ' data-yerr-mode="asymmetric"' end
   if series.xerr_asymmetric then metadata = metadata .. ' data-xerr-mode="asymmetric"' end
   buf[#buf + 1] = string.format('  <g class="series series-errorbar"%s%s>',
     label, metadata)
   for i = 1, #series.x do
-    local x = map_x(series.x[i])
-    local y = series.y[i]
-    local yerr_lower = (series.yerr_lower or series.yerr)[i]
-    local yerr_upper = (series.yerr_upper or series.yerr)[i]
-    local xerr_lower = (series.xerr_lower or series.xerr) and
-      (series.xerr_lower or series.xerr)[i] or 0
-    local xerr_upper = (series.xerr_upper or series.xerr) and
-      (series.xerr_upper or series.xerr)[i] or 0
-    local top = map_y(y + yerr_upper)
-    local bottom = map_y(y - yerr_lower)
-    buf[#buf + 1] = string.format(
-      '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-      util.fmt(x), util.fmt(top), util.fmt(x), util.fmt(bottom), color,
-      util.fmt(width))
-    buf[#buf + 1] = string.format(
-      '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-      util.fmt(x - cap), util.fmt(top), util.fmt(x + cap), util.fmt(top),
-      color, util.fmt(width))
-    buf[#buf + 1] = string.format(
-      '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-      util.fmt(x - cap), util.fmt(bottom), util.fmt(x + cap), util.fmt(bottom),
-      color, util.fmt(width))
-    if series.xerr then
-      local left = map_x(series.x[i] - xerr_lower)
-      local right = map_x(series.x[i] + xerr_upper)
-      local center = map_y(y)
+    if (i - 1) % every == 0 then
+      local x = map_x(series.x[i])
+      local y = series.y[i]
+      local yerr_lower = (series.yerr_lower or series.yerr)[i]
+      local yerr_upper = (series.yerr_upper or series.yerr)[i]
+      local xerr_lower = (series.xerr_lower or series.xerr) and
+        (series.xerr_lower or series.xerr)[i] or 0
+      local xerr_upper = (series.xerr_upper or series.xerr) and
+        (series.xerr_upper or series.xerr)[i] or 0
+      local top = map_y(y + yerr_upper)
+      local bottom = map_y(y - yerr_lower)
       buf[#buf + 1] = string.format(
         '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-        util.fmt(left), util.fmt(center), util.fmt(right), util.fmt(center),
+        util.fmt(x), util.fmt(top), util.fmt(x), util.fmt(bottom), color,
+        util.fmt(width))
+      buf[#buf + 1] = string.format(
+        '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+        util.fmt(x - cap), util.fmt(top), util.fmt(x + cap), util.fmt(top),
         color, util.fmt(width))
       buf[#buf + 1] = string.format(
         '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-        util.fmt(left), util.fmt(center - cap), util.fmt(left),
-        util.fmt(center + cap), color, util.fmt(width))
-      buf[#buf + 1] = string.format(
-        '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-        util.fmt(right), util.fmt(center - cap), util.fmt(right),
-        util.fmt(center + cap), color, util.fmt(width))
+        util.fmt(x - cap), util.fmt(bottom), util.fmt(x + cap),
+        util.fmt(bottom), color, util.fmt(width))
+      if series.xerr then
+        local left = map_x(series.x[i] - xerr_lower)
+        local right = map_x(series.x[i] + xerr_upper)
+        local center = map_y(y)
+        buf[#buf + 1] = string.format(
+          '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+          util.fmt(left), util.fmt(center), util.fmt(right), util.fmt(center),
+          color, util.fmt(width))
+        buf[#buf + 1] = string.format(
+          '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+          util.fmt(left), util.fmt(center - cap), util.fmt(left),
+          util.fmt(center + cap), color, util.fmt(width))
+        buf[#buf + 1] = string.format(
+          '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+          util.fmt(right), util.fmt(center - cap), util.fmt(right),
+          util.fmt(center + cap), color, util.fmt(width))
+      end
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -1509,10 +1552,18 @@ local function render_step(series, map_x, map_y, buf)
     xs[#xs + 1] = series.x[i]
     ys[#ys + 1] = series.y[i]
   end
-  buf[#buf + 1] = '  <g class="series series-step">'
+  local metadata = ""
+  if series.ecdf then
+    metadata = ' data-ecdf="true"'
+    if series.complementary then
+      metadata = metadata .. ' data-complementary="true"'
+    end
+  end
+  buf[#buf + 1] = string.format('  <g class="series series-step"%s>',
+    metadata)
   render_line({ x = xs, y = ys, style = series.style, kind = "line" },
     map_x, map_y, buf)
-  buf[#buf + 1] = '  </g>' 
+  buf[#buf + 1] = '  </g>'
 end
 
 local function render_stem(series, map_x, map_y, buf)

@@ -1,0 +1,33 @@
+local plt = require("luaplotlib")
+
+test("ecdf keeps its cumulative step by default", function()
+  local fig = plt.figure()
+  fig:ecdf({ 3, 1, 2 })
+  local series = fig:to_scene().series[1]
+  assert_equal(series.ecdf, true)
+  assert_equal(series.complementary, false)
+  assert_equal(series.x[1], 1)
+  assert_equal(series.x[3], 3)
+  assert_true(math.abs(series.y[1] - 1 / 3) < 1e-12)
+  assert_equal(series.y[3], 1)
+  assert_contains(fig:to_svg(), 'data-ecdf="true"')
+  assert_not_contains(fig:to_svg(), 'data-complementary="true"')
+end)
+
+test("complementary ecdf counts down from one", function()
+  local fig = plt.figure()
+  fig:ecdf({ 3, 1, 2 }, { complementary = true })
+  local series = fig:to_scene().series[1]
+  assert_equal(series.complementary, true)
+  assert_equal(series.y[1], 1)
+  assert_true(math.abs(series.y[2] - 2 / 3) < 1e-12)
+  assert_true(math.abs(series.y[3] - 1 / 3) < 1e-12)
+  assert_contains(fig:to_svg(), 'data-complementary="true"')
+end)
+
+test("ecdf complementary validates the boolean", function()
+  local fig = plt.figure()
+  assert_error("complementary must be a boolean", function()
+    fig:ecdf({ 1, 2 }, { complementary = "yes" })
+  end)
+end)

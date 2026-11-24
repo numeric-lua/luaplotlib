@@ -1,28 +1,26 @@
-# luaplotlib 4.27.0
+# luaplotlib 4.28.0
 
 This release adds five additive renderer/API features. Existing Cartesian APIs
 remain compatible, polar rendering is unchanged, and there are no new runtime
 dependencies.
 
-- **Broken horizontal bars.** New `fig:broken_barh(xranges, yrange, opts)`
-  draws Gantt-style `{start, width}` intervals at one `{y, height}` band, with
-  automatic ranging, legend support, SVG range metadata, and scene export.
-- **Event lane labels.** `fig:eventplot` accepts `labels`, one tick label per
-  lane. Horizontal lanes label x; vertical lanes label y, using the lane
-  offsets as category positions. Scenes export the labels and category axis.
-- **Exploded pies and shadows.** `fig:pie`/`fig:donut` accept `explode` (one
-  offset or one per slice, up to half the radius) and `shadow`. Shifted slices
-  keep their labels, leader lines, and percentage text; scene export carries
-  the shadow flag and per-slice offsets.
-- **Histogram outline widths.** `fig:hist` accepts `linewidth` for all three
-  outline styles (`bar`, `step`, and `stepfilled`), defaulting to one pixel.
-- **Title alignment.** `fig:title` accepts `loc = "left"`, `"center"`, or
-  `"right"` for Cartesian figures, pies, polar figures, and subplot grids.
-  Scenes export `title_align`.
+- **More legend locations.** Cartesian and polar legends now accept
+  `upper center`, `lower center`, `center left`, `center right`, and `center`
+  in addition to the four corners and `best`.
+- **Legend frame styling.** `fig:legend` accepts `framealpha`, `facecolor`, and
+  `edgecolor`, defaulting to the existing translucent white frame. Scene export
+  carries the resolved style.
+- **Error-bar decimation.** `fig:errorbar` accepts `errorevery`, keeping the
+  full line and marker series while drawing error bars at every Nth point.
+  Metadata and scene export report the stride.
+- **Marker face and edge styling.** `fig:plot` accepts `markerfacecolor`,
+  `markeredgecolor`, and `markeredgewidth` for filled marker shapes.
+- **Complementary ECDFs.** `fig:ecdf(..., { complementary = true })` plots
+  `1 - F_n(x)` with the same post-step geometry and exports the mode.
 
-Examples: new `examples/broken_barh.lua` and `examples/pie_explode.lua`, plus
-updated eventplot, histogram, and title demonstrations. `make examples` and
-`scripts/visual-qa.sh` exercise the new geometry and metadata, then rasterize
+Examples: new `examples/ecdf_complementary.lua`; the line and error-bar
+examples demonstrate styled markers/legend frames and decimated errors. `make
+examples` and `scripts/visual-qa.sh` exercise all five features, then rasterize
 the affected examples when `rsvg-convert` is available.
 
-Tests: `./scripts/test.sh` runs 391 dependency-free tests, all passing.
+Tests: `./scripts/test.sh` runs 410 dependency-free tests, all passing.

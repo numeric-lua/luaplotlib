@@ -2023,6 +2023,10 @@ local LOC_ANGLES = {
   ["upper left"] = 3 * math.pi / 4,
   ["lower left"] = 5 * math.pi / 4,
   ["lower right"] = 7 * math.pi / 4,
+  ["upper center"] = math.pi / 2,
+  ["center right"] = 0,
+  ["lower center"] = 3 * math.pi / 2,
+  ["center left"] = math.pi,
 }
 
 -- Estimate the boxes occupied by theta and radius tick labels.  The legend
@@ -2183,7 +2187,9 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
 
   local target_angle = LOC_ANGLES[opts.loc]
   local target_x, target_y
-  if opts.loc == "best" then
+  if opts.loc == "center" then
+    target_x, target_y = geom.cx, geom.cy
+  elseif opts.loc == "best" then
     target_x, target_y = geom.cx, geom.cy - geom.radius * 0.45
   else
     target_angle = target_angle or LOC_ANGLES["upper right"]
@@ -2356,14 +2362,18 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
-    util.fmt(plan.text_width or 0))
+    util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92))
+  local framealpha = opts.framealpha or 0.92
+  local facecolor = opts.facecolor or "#ffffff"
+  local edgecolor = opts.edgecolor or "#bbbbbb"
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
-      '   <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="#ffffff" fill-opacity="0.92" stroke="#bbbbbb" stroke-width="1"/>',
-      util.fmt(x), util.fmt(y), util.fmt(plan.width), util.fmt(plan.height))
+      '   <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
+      util.fmt(x), util.fmt(y), util.fmt(plan.width), util.fmt(plan.height),
+      facecolor, util.fmt(framealpha), edgecolor)
   end
   if opts.title then
     buf[#buf + 1] = string.format(
@@ -2659,6 +2669,9 @@ function M.to_scene(figure)
     local exported = {
       loc = opts.loc or "upper right",
       frame = opts.frame ~= false,
+      framealpha = opts.framealpha or 0.92,
+      facecolor = opts.facecolor or "#ffffff",
+      edgecolor = opts.edgecolor or "#bbbbbb",
       title = opts.title,
       ncol = opts.ncol or 1,
       entries = {},

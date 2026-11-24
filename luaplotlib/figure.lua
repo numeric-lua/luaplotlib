@@ -20,6 +20,9 @@ local PLOT_OPTIONS = {
   marker = true,
   markersize = true,
   markevery = true,
+  markerfacecolor = true,
+  markeredgecolor = true,
+  markeredgewidth = true,
   alpha = true,
 }
 
@@ -241,6 +244,16 @@ local STEP_OPTIONS = {
   alpha = true,
 }
 
+local ECDF_OPTIONS = {
+  color = true,
+  label = true,
+  linewidth = true,
+  linestyle = true,
+  where = true,
+  alpha = true,
+  complementary = true,
+}
+
 local STEM_OPTIONS = {
   color = true,
   label = true,
@@ -385,6 +398,7 @@ local ERRORBAR_OPTIONS = {
   capsize = true,
   elinewidth = true,
   ecolor = true,
+  errorevery = true,
 }
 
 local ANNOTATE_OPTIONS = {
@@ -441,6 +455,11 @@ local LEGEND_LOCATIONS = {
   ["upper left"] = true,
   ["lower right"] = true,
   ["lower left"] = true,
+  ["upper center"] = true,
+  ["lower center"] = true,
+  ["center left"] = true,
+  ["center right"] = true,
+  ["center"] = true,
   ["best"] = true,
 }
 
@@ -798,7 +817,10 @@ function Figure.new(opts)
     _facecolor = "#ffffff",
     _aria_label = nil,
     _legend_requested = false,
-    _legend_opts = { loc = "upper right", frame = true },
+    _legend_opts = {
+      loc = "upper right", frame = true, framealpha = 0.92,
+      facecolor = "#ffffff", edgecolor = "#bbbbbb",
+    },
     _category_ticks = nil,
     _category_axis = "x",
     _colorbar = false,
@@ -843,6 +865,18 @@ function Figure:plot(x, y, opts)
   style.marker = marker
   style.markersize = markersize
   style.markevery = checked_markevery(opts.markevery, #xv, "plot")
+  if opts.markerfacecolor ~= nil then
+    style.markerfacecolor = util.check_color(opts.markerfacecolor,
+      "plot markerfacecolor")
+  end
+  if opts.markeredgecolor ~= nil then
+    style.markeredgecolor = util.check_color(opts.markeredgecolor,
+      "plot markeredgecolor")
+  end
+  if opts.markeredgewidth ~= nil then
+    style.markeredgewidth = util.check_number(opts.markeredgewidth,
+      "plot markeredgewidth", 0)
+  end
 
   self._series[#self._series + 1] = {
     kind = "line",
@@ -2027,20 +2061,25 @@ function Figure:eventplot(positions, opts)
 end
 
 function Figure:ecdf(values, opts)
-  opts = util.check_options(opts, STEP_OPTIONS, "ecdf")
+  opts = util.check_options(opts, ECDF_OPTIONS, "ecdf")
   local sorted = data.sequence(values, "ecdf values")
   table.sort(sorted)
   local count = #sorted
   if count == 0 then fail("ecdf requires at least one value") end
+  local complementary = opts.complementary == true
+  if opts.complementary ~= nil then
+    util.check_boolean(opts.complementary, "ecdf complementary")
+  end
   local xs, ys = {}, {}
   for i = 1, count do
     xs[i] = sorted[i]
-    ys[i] = i / count
+    ys[i] = complementary and (count - i + 1) / count or i / count
   end
   local style = checked_style(self, opts, "ecdf")
   style.linewidth = opts.linewidth or 2
   self._series[#self._series + 1] = {
-    kind = "step", x = xs, y = ys, where = "post", style = style,
+    kind = "step", x = xs, y = ys, where = "post",
+    ecdf = true, complementary = complementary, style = style,
   }
   return self
 end
@@ -2996,7 +3035,10 @@ function Figure:twinx()
     _ylabel = nil,
     _ytick_format = nil,
     _legend_requested = false,
-    _legend_opts = { loc = "upper right", frame = true },
+    _legend_opts = {
+      loc = "upper right", frame = true, framealpha = 0.92,
+      facecolor = "#ffffff", edgecolor = "#bbbbbb",
+    },
   }, Figure)
   self._twin = twin
   return twin
@@ -4085,6 +4127,11 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   if opts.elinewidth ~= nil then
     elinewidth = util.check_number(opts.elinewidth, "errorbar elinewidth", 0)
   end
+  local errorevery = 1
+  if opts.errorevery ~= nil then
+    errorevery = util.check_integer(opts.errorevery,
+      "errorbar errorevery", 1)
+  end
 
   local style = checked_style(self, opts, "errorbar")
   style.linewidth = linewidth
@@ -4111,6 +4158,7 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
     xerr_lower = xerr_lower,
     xerr_upper = xerr_upper,
     xerr_asymmetric = xerr_asymmetric,
+    errorevery = errorevery,
     style = style,
   }
   return self
@@ -4509,13 +4557,16 @@ function Figure:legend(opts)
     opts = util.check_options(opts, {
       loc = true,
       frame = true,
+      framealpha = true,
+      facecolor = true,
+      edgecolor = true,
       ncol = true,
       title = true,
     }, "legend")
     if opts.loc ~= nil then
       util.check_string(opts.loc, "legend loc")
       if not LEGEND_LOCATIONS[opts.loc] then
-        fail("legend loc must be one of 'upper right', 'upper left', 'lower right', 'lower left', or 'best'")
+        fail("legend loc must be one of 'upper right', 'upper left', 'lower right', 'lower left', 'upper center', 'lower center', 'center left', 'center right', 'center', or 'best'")
       end
     end
     if opts.frame ~= nil then
@@ -4528,9 +4579,24 @@ function Figure:legend(opts)
     if opts.title ~= nil then
       util.check_string(opts.title, "legend title", true)
     end
+    local framealpha = self._legend_opts.framealpha or 0.92
+    if opts.framealpha ~= nil then
+      framealpha = util.check_alpha(opts.framealpha, "legend framealpha")
+    end
+    local facecolor = self._legend_opts.facecolor or "#ffffff"
+    if opts.facecolor ~= nil then
+      facecolor = util.check_color(opts.facecolor, "legend facecolor")
+    end
+    local edgecolor = self._legend_opts.edgecolor or "#bbbbbb"
+    if opts.edgecolor ~= nil then
+      edgecolor = util.check_color(opts.edgecolor, "legend edgecolor")
+    end
     self._legend_opts = {
       loc = opts.loc or self._legend_opts.loc,
       frame = opts.frame == nil and self._legend_opts.frame or opts.frame,
+      framealpha = framealpha,
+      facecolor = facecolor,
+      edgecolor = edgecolor,
       ncol = ncol,
       title = opts.title == nil and self._legend_opts.title or opts.title,
     }
