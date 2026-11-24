@@ -128,6 +128,8 @@ function M.from_figure(figure)
     ytick_rotation = figure._ytick_rotation or 0,
     minorticks = figure._minorticks and figure._minorticks.enabled or false,
     minor_tick_axis = figure._minorticks and figure._minorticks.axis or "both",
+    minor_subdivisions = figure._minorticks and
+      figure._minorticks.subdivisions or 5,
     minor_grid = figure._grid_opts and figure._grid_opts.minor == true or false,
     grid = figure._grid and true or false,
     legend = figure._legend_requested and true or false,
@@ -419,6 +421,44 @@ function M.from_figure(figure)
           if state.xmax == nil or right > state.xmax then state.xmax = right end
         end
       end
+    elseif series.kind == "eventplot" then
+      copy.orientation = series.orientation or "vertical"
+      copy.rows = {}
+      for row = 1, #series.rows do
+        copy.rows[row] = copy_array(series.rows[row])
+      end
+      copy.lineoffsets = copy_array(series.lineoffsets)
+      copy.linelengths = copy_array(series.linelengths)
+      local horizontal = copy.orientation == "horizontal"
+      for row = 1, #copy.rows do
+        local offset = copy.lineoffsets[row]
+        local half = copy.linelengths[row] / 2
+        for index = 1, #copy.rows[row] do
+          local value = copy.rows[row][index]
+          if horizontal then
+            if state.ymin == nil or value < state.ymin then state.ymin = value end
+            if state.ymax == nil or value > state.ymax then state.ymax = value end
+          else
+            if state.xmin == nil or value < state.xmin then state.xmin = value end
+            if state.xmax == nil or value > state.xmax then state.xmax = value end
+          end
+        end
+        if horizontal then
+          if state.xmin == nil or offset - half < state.xmin then
+            state.xmin = offset - half
+          end
+          if state.xmax == nil or offset + half > state.xmax then
+            state.xmax = offset + half
+          end
+        else
+          if state.ymin == nil or offset - half < state.ymin then
+            state.ymin = offset - half
+          end
+          if state.ymax == nil or offset + half > state.ymax then
+            state.ymax = offset + half
+          end
+        end
+      end
     elseif series.kind == "step" then
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
@@ -444,6 +484,11 @@ function M.from_figure(figure)
       copy.vmax = series.vmax
       copy.origin = series.origin or "upper"
       copy.colorbar = figure._colorbar and true or false
+      copy.colorbar_label = series.colorbar_label
+      copy.colorbar_ticks = series.colorbar_ticks
+      if series.colorbar_tick_values ~= nil then
+        copy.colorbar_tick_values = copy_array(series.colorbar_tick_values)
+      end
       local left, right, bottom, top = 0, series.cols, 0, series.rows
       if series.extent ~= nil then
         left, right = series.extent[1], series.extent[2]
@@ -500,21 +545,34 @@ function M.from_figure(figure)
     elseif series.kind == "box" then
       copy.position = series.position
       copy.width = series.width
+      copy.orientation = series.orientation or "vertical"
       copy.q1 = series.q1
       copy.median = series.median
       copy.q3 = series.q3
       copy.low = series.low
       copy.high = series.high
       copy.outliers = copy_array(series.outliers)
-      local left, right = series.position - series.width / 2,
+      local low_edge, high_edge = series.position - series.width / 2,
         series.position + series.width / 2
-      if state.xmin == nil or left < state.xmin then state.xmin = left end
-      if state.xmax == nil or right > state.xmax then state.xmax = right end
-      if state.ymin == nil or series.low < state.ymin then state.ymin = series.low end
-      if state.ymax == nil or series.high > state.ymax then state.ymax = series.high end
-      for _, value in ipairs(copy.outliers) do
-        if value < state.ymin then state.ymin = value end
-        if value > state.ymax then state.ymax = value end
+      local horizontal = copy.orientation == "horizontal"
+      if horizontal then
+        if state.ymin == nil or low_edge < state.ymin then state.ymin = low_edge end
+        if state.ymax == nil or high_edge > state.ymax then state.ymax = high_edge end
+        if state.xmin == nil or series.low < state.xmin then state.xmin = series.low end
+        if state.xmax == nil or series.high > state.xmax then state.xmax = series.high end
+        for _, value in ipairs(copy.outliers) do
+          if value < state.xmin then state.xmin = value end
+          if value > state.xmax then state.xmax = value end
+        end
+      else
+        if state.xmin == nil or low_edge < state.xmin then state.xmin = low_edge end
+        if state.xmax == nil or high_edge > state.xmax then state.xmax = high_edge end
+        if state.ymin == nil or series.low < state.ymin then state.ymin = series.low end
+        if state.ymax == nil or series.high > state.ymax then state.ymax = series.high end
+        for _, value in ipairs(copy.outliers) do
+          if value < state.ymin then state.ymin = value end
+          if value > state.ymax then state.ymax = value end
+        end
       end
     elseif series.kind == "contour" then
       copy.segments = {}
@@ -624,6 +682,7 @@ function M.from_figure(figure)
       copy.edges = copy_array(series.edges)
       copy.counts = copy_array(series.counts)
       copy.orientation = series.orientation or "vertical"
+      copy.histtype = series.histtype or "bar"
       if copy.orientation == "horizontal" then
         if scene.xscale ~= "log" then
           if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
@@ -752,6 +811,7 @@ function M.from_figure(figure)
     end
   end
 
+  scene.category_axis = figure._category_axis or "x"
   if figure._category_ticks then
     scene.category_ticks = {}
     for index, tick in ipairs(figure._category_ticks) do

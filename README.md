@@ -57,6 +57,11 @@ luajit examples/field_coordinates.lua
 luajit examples/aspect.lua
 luajit examples/bars.lua
 luajit examples/heatmap.lua
+luajit examples/minor_subdivisions.lua
+luajit examples/eventplot_layout.lua
+luajit examples/hist_styles.lua
+luajit examples/boxplot_horizontal.lua
+luajit examples/imshow_colorbar.lua
 luajit examples/subplots.lua
 luajit examples/polar.lua
 luajit examples/polar_bars.lua
@@ -139,10 +144,11 @@ fig:axline(0, 0, 1, 1, { label = "y = x", linestyle = "dashed" })
 
 `markevery` accepts a positive integer stride or a table of 1-based point
 indices; it decimates markers while keeping every line vertex. Minor ticks
-subdivide linear major intervals into five parts and use the 2–9 mantissas on
-log axes, and `fig:grid(true, { minor = true })` adds their fainter grid. An
-`axline` is clipped to the plot rectangle and participates in automatic ranging
-only through its two defining points.
+subdivide linear major intervals into five parts by default (2–10 with
+`minorticks(..., { subdivisions = n })`) and use the 2–9 mantissas on log axes,
+and `fig:grid(true, { minor = true })` adds their fainter grid. An `axline` is
+clipped to the plot rectangle and participates in automatic ranging only
+through its two defining points.
 
 Cartesian controls are additive and keep the existing defaults:
 
@@ -172,6 +178,35 @@ A `where` mask must be a table with one boolean per band sample. With
 `interpolate = true`, each visible run gains a midpoint where it meets a hidden
 sample. Reference spans, fill runs, horizontal bins, and stem bases participate
 in automatic ranging as expected.
+
+Axis, event, histogram, box, and image controls remain additive:
+
+```lua
+-- Subdivide each linear major interval into four minor parts.
+fig:minorticks(true, { subdivisions = 4 })
+
+-- Flatten event rows into horizontal lanes with per-row offsets and lengths.
+fig:eventplot({ { 0.4, 1.1, 1.8 }, { 0.8, 1.4, 2.1 } }, {
+  orientation = "horizontal",
+  lineoffsets = { 1, 4 },
+  linelengths = { 0.7, 1.0 },
+})
+
+-- Outline or fill the same histogram bins.
+fig:hist(values, { histtype = "step" })       -- "bar" (default), "stepfilled"
+fig:boxplot(samples, { orientation = "horizontal", labels = names })
+fig:imshow(matrix, {
+  colorbar_label = "value",
+  colorbar_tick_values = { 0, 0.25, 0.5, 0.75, 1 },
+})
+```
+
+`subdivisions` applies to linear minor tick marks and minor grid lines; log
+axes keep their 2–9 mantissa ticks. Eventplot values are vertical (default) or
+horizontal, and the scalar or per-row `lineoffsets`/`linelengths` control lane
+placement. Horizontal boxplots put category labels on y. Image colorbars now
+mirror the other heat-style colorbars: a title, uniform `colorbar_ticks`, or
+explicit `colorbar_tick_values` (mutually exclusive).
 
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
@@ -388,12 +423,16 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Line plots with colors, dashes, markers, labels, and alpha
 - Scatter plots rendered as SVG circles, with per-point colors/sizes or numeric
   `c` values mapped through the heat palette and an optional colorbar
-- Histograms with configurable bins and ranges, plus rectangular `hist2d`
-  counts/densities with explicit grids, value limits, and colorbars
+- Histograms with configurable bins, ranges, and `bar`/`step`/`stepfilled`
+  outlines, plus rectangular `hist2d` counts/densities with explicit grids,
+  value limits, and colorbars
 - Vertical bars with numeric positions or categorical labels, including
   multi-series grouped and stacked bars and symmetric/asymmetric error bars
+- Vertical or horizontal box-and-whisker plots
 - Gaussian-kernel violin plots with configurable bandwidth, positions,
   quartiles, medians, extrema, and per-sample colors
+- Vertical or horizontal event lanes with per-row offsets, lengths, and scene
+  export
 - Polar line, scatter, bar, error-bar, quiver, heatmap, and contour plots with
   circular grid, theta/r ticks, configurable orientation and limits, rotated
   collision-aware contour labels, explicit colorbar ticks, measured-text
@@ -417,7 +456,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   normalization, deterministic arrow caps, and legend/scene metadata
 - Hexagonal binning with minimum counts, value limits, explicit or uniform
   colorbar ticks, and renderer-agnostic cell/count export
-- Image `extent`/`origin` mapping and explicit contour column/row coordinates
+- Image `extent`/`origin` mapping, image colorbar titles and explicit or
+  uniform ticks, and explicit contour column/row coordinates
 - Optional equal or numeric data-unit aspect ratios that center the plot box
 - Independent major/minor grid color, width, dash, and opacity
 - X/y tick-label rotation, including twin y axes
@@ -444,8 +484,10 @@ For an optional visual check, `scripts/visual-qa.sh` runs every example, checks
 polar/colorbar/quiver metadata, verifies the Cartesian minor-tick,
 marker-decimation, asymmetric-error, rotated-label, `axline`, fractional-span,
 masked-fill, horizontal-histogram, styled-stem, grid-style, Cartesian-quiver,
-hexbin-count, image-extent/origin, contour-coordinate, and equal-aspect
-metadata, and confirms that Cartesian examples stay Cartesian. When
+hexbin-count, image-extent/origin, contour-coordinate, minor-subdivision,
+horizontal-event, histogram-step, horizontal-box, image-colorbar, and
+equal-aspect metadata, and confirms that Cartesian examples stay Cartesian.
+When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
 ignored `examples/output/` directory.
@@ -472,6 +514,11 @@ make examples
 # examples/output/heatmap-extent.svg
 # examples/output/contour-coords.svg
 # examples/output/aspect.svg
+# examples/output/minor-subdivisions.svg
+# examples/output/eventplot-layout.svg
+# examples/output/hist-styles.svg
+# examples/output/boxplot-horizontal.svg
+# examples/output/imshow-colorbar.svg
 # examples/output/bars-grouped.svg
 # examples/output/bars-stacked.svg
 # examples/output/polar.svg
@@ -489,7 +536,7 @@ Generated output and scratch files are ignored. There are no committed SVGs.
 
 ## Status
 
-`4.24.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
+`4.25.0`. The SVG/HTML backend supports line/scatter/histogram/hist2d/bar/barh/
 fill/step/stem/stack/fillx/pcolormesh/hexbin/violin/pie/donut/error-bar/box/
 heatmap/contour/contourf plots, Cartesian quiver fields, image extents/origins,
 explicit
@@ -498,16 +545,18 @@ line/scatter/bar/error-bar/quiver/streamplot/heatmap/contour plots with
 configurable orientation and grids, polar heatmap colorbars with explicit nice
 ticks, rotated collision-aware polar contour labels, polar annotations with
 canvas clamping, measured-text polar legends, annotations, asymmetric error
-bars, linear/log/date axes, twin x/y axes, minor ticks and minor grids, clipped
+bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
+minor ticks and minor grids, clipped
 `axline` reference lines, marker decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference
 spans, masked fill bands, horizontal histograms, styled stems, independently
 styled minor grids, 3-D scene export, per-point scatter sizes/colors, numeric
 scatter color mapping with colorbars, rectangular 2-D histogram grids, KDE
-violins, configurable stack baselines, bar error bars, histogram density,
-multi-column legends, marker shapes, shaded spans, log helpers, optional
-PNG/PDF export, and scene export. See
+violins, horizontal boxplots, step/stepfilled histograms, horizontal event
+lanes, configurable stack baselines, bar error bars, histogram density,
+image colorbar titles and explicit ticks, multi-column legends, marker shapes,
+shaded spans, log helpers, optional PNG/PDF export, and scene export. See
 [docs/stability.md](docs/stability.md) for the API policy.
 
 ## Limitations
@@ -553,8 +602,8 @@ PNG/PDF export, and scene export. See
   axes beyond its two defining points, and logarithmic axes draw it straight in
   transformed space. `axhline`/`axvline` fractional spans only change their
   screen extent; their data coordinate still defines automatic ranging. Minor
-  ticks use a fixed five-way linear subdivision and skip logarithmic spans wider
-  than 12 decades.
+  ticks use 2–10 linear subdivisions (five by default) and skip logarithmic
+  spans wider than 12 decades.
 - **Fill masks are boolean tables.** `where` does not accept a callback or a
   numeric alpha mask, and interpolation uses the midpoint between adjacent
   samples. Horizontal histograms still use the same bin/density/cumulative

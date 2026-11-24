@@ -1,3 +1,36 @@
+## 4.25.0
+
+- `fig:minorticks` accepts `subdivisions` (2–10, default 5) to control how many
+  equal parts each linear major interval is split into. Minor grid lines use the
+  same count, logarithmic axes keep their 2–9 mantissas, and SVG roots/scenes
+  expose `data-minor-subdivisions` / `minor_subdivisions`;
+- `fig:eventplot` adds `orientation = "vertical" | "horizontal"`, scalar or
+  per-row `lineoffsets`, and scalar or per-row `linelengths`. Horizontal lanes
+  use event values on y and offsets on x, both orientations participate in
+  automatic ranging, and eventplot now exports `rows`, `orientation`,
+  `lineoffsets`, and `linelengths` through `to_scene()`;
+- `fig:hist` adds `histtype = "bar" | "step" | "stepfilled"`. `"step"` draws one
+  stepped outline through every edge and `"stepfilled"` draws the same staircase
+  as a filled polygon; both honor vertical/horizontal orientation, density,
+  cumulative counts, alpha, and scene export while `"bar"` keeps the existing
+  rectangles;
+- `fig:boxplot` adds `orientation = "vertical" | "horizontal"`. Horizontal boxes
+  put category labels on y, expose `data-orientation` on `series-box` groups,
+  export orientation through the scene, and use a corrected 1.5×IQR lower
+  whisker that reaches the lowest inlier instead of stopping at Q1;
+- `fig:imshow` accepts `colorbar_label`, uniform `colorbar_ticks`, and explicit
+  `colorbar_tick_values` within `vmin`/`vmax`. When any is supplied, the image
+  switches to the shared ticked colorbar with `data-value`/`data-fraction`
+  metadata, a title, and scene fields; the legacy compact bar remains the
+  default. New examples `minor_subdivisions.lua`, `eventplot_layout.lua`,
+  `hist_styles.lua`, `boxplot_horizontal.lua`, and `imshow_colorbar.lua` cover
+  all five features. README, API docs, Makefile, and `scripts/visual-qa.sh`
+  validate the new metadata. The dependency-free suite grows from 335 to 356
+  tests. Existing Cartesian APIs remain compatible, polar rendering is
+  unchanged, and there are no new runtime dependencies; the boxplot lower
+  whisker correction is the only intentional visual change to an existing
+  chart.
+
 # Changelog
 
 ## 4.24.0

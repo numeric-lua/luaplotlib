@@ -221,10 +221,11 @@ local function sorted_major_values(major, lo, hi)
 end
 
 -- Return minor tick positions between the supplied major tick values. Linear
--- axes are subdivided into five equal parts per major interval; logarithmic
--- axes use the 2..9 mantissas of each decade. Values that duplicate a major
--- tick are omitted so major labels and major grid lines remain unambiguous.
-function M.generate_minor(lo, hi, major, scale)
+-- axes are subdivided into `subdivisions` equal parts per major interval
+-- (five by default); logarithmic axes use the 2..9 mantissas of each decade.
+-- Values that duplicate a major tick are omitted so major labels and major
+-- grid lines remain unambiguous.
+function M.generate_minor(lo, hi, major, scale, subdivisions)
   if type(lo) ~= "number" or type(hi) ~= "number" or lo ~= lo or hi ~= hi or
       lo == math.huge or hi == -math.huge or hi <= lo then
     return {}
@@ -234,6 +235,7 @@ function M.generate_minor(lo, hi, major, scale)
     return {}
   end
 
+  subdivisions = subdivisions or 5
   local values = {}
   local function append(value, tolerance)
     if value < lo - tolerance or value > hi + tolerance then
@@ -282,12 +284,12 @@ function M.generate_minor(lo, hi, major, scale)
     for index = 1, #majors - 1 do
       local span = majors[index + 1] - majors[index]
       if span > 0 then
-        for part = 1, 4 do
-          append(majors[index] + span * part / 5, tolerance)
+        for part = 1, subdivisions - 1 do
+          append(majors[index] + span * part / subdivisions, tolerance)
         end
       end
     end
-    local delta = minimum_step / 5
+    local delta = minimum_step / subdivisions
     local value = majors[1] - delta
     local guard = 0
     while value >= lo - tolerance and guard < 1000 do

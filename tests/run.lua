@@ -232,6 +232,11 @@ local test_files = {
   "test_bar_errors.lua",
   "test_field_coordinates.lua",
   "test_aspect.lua",
+  "test_minor_subdivisions.lua",
+  "test_eventplot_layout.lua",
+  "test_hist_styles.lua",
+  "test_boxplot_orientation.lua",
+  "test_imshow_colorbar.lua",
   "test_export.lua",
 }
 

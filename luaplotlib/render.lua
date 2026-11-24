@@ -241,13 +241,26 @@ local function data_extents(fig, xscale, yscale)
         end
       end
     elseif series.kind == "eventplot" then
+      local horizontal = series.orientation == "horizontal"
       for row = 1, #series.rows do
+        local offset = series.lineoffsets[row]
+        local half = series.linelengths[row] / 2
         for i = 1, #series.rows[row] do
-          include_x(series.rows[row][i], series_index, i, "eventplot x")
+          local value = series.rows[row][i]
+          if horizontal then
+            include_y(value, series_index, i, "eventplot value")
+          else
+            include_x(value, series_index, i, "eventplot value")
+          end
+        end
+        if horizontal then
+          include_x(offset - half, series_index, 1, "eventplot extent")
+          include_x(offset + half, series_index, 1, "eventplot extent")
+        else
+          include_y(offset - half, series_index, 1, "eventplot extent")
+          include_y(offset + half, series_index, 1, "eventplot extent")
         end
       end
-      include_y(0, series_index, 1, "eventplot baseline")
-      include_y(math.max(1, #series.rows), series_index, 1, "eventplot top")
     elseif series.kind == "step" then
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "step x")
@@ -289,12 +302,25 @@ local function data_extents(fig, xscale, yscale)
       include_y(series.minimum, series_index, 1, "violin minimum")
       include_y(series.maximum, series_index, 1, "violin maximum")
     elseif series.kind == "box" then
-      include_x(series.position - series.width / 2, series_index, 1, "box")
-      include_x(series.position + series.width / 2, series_index, 1, "box")
-      include_y(series.low, series_index, 1, "box whisker")
-      include_y(series.high, series_index, 1, "box whisker")
-      for _, value in ipairs(series.outliers) do
-        include_y(value, series_index, 1, "box outlier")
+      local horizontal = series.orientation == "horizontal"
+      local low_edge = series.position - series.width / 2
+      local high_edge = series.position + series.width / 2
+      if horizontal then
+        include_y(low_edge, series_index, 1, "box")
+        include_y(high_edge, series_index, 1, "box")
+        include_x(series.low, series_index, 1, "box whisker")
+        include_x(series.high, series_index, 1, "box whisker")
+        for _, value in ipairs(series.outliers) do
+          include_x(value, series_index, 1, "box outlier")
+        end
+      else
+        include_x(low_edge, series_index, 1, "box")
+        include_x(high_edge, series_index, 1, "box")
+        include_y(series.low, series_index, 1, "box whisker")
+        include_y(series.high, series_index, 1, "box whisker")
+        for _, value in ipairs(series.outliers) do
+          include_y(value, series_index, 1, "box outlier")
+        end
       end
     elseif series.kind == "bar" then
       local half = series.width / 2
@@ -469,14 +495,18 @@ local function tick_count(plot_width, plot_height)
   return x_target, y_target
 end
 
-local function find_category_ticks(fig, xmin, xmax)
+local function find_category_ticks(fig, minimum, maximum, axis)
   if not fig._category_ticks then
     return nil
   end
+  if (fig._category_axis or "x") ~= axis then
+    return nil
+  end
   local result = {}
-  local tolerance = (xmax - xmin) * 1e-9
+  local tolerance = (maximum - minimum) * 1e-9
   for _, category in ipairs(fig._category_ticks) do
-    if category.position >= xmin - tolerance and category.position <= xmax + tolerance then
+    if category.position >= minimum - tolerance and
+        category.position <= maximum + tolerance then
       result[#result + 1] = category
     end
   end
@@ -1193,6 +1223,31 @@ local function render_errorbar(series, map_x, map_y, buf)
   render_line(series, map_x, map_y, buf)
 end
 
+local function hist_step_points(series, map_x, map_y, baseline, horizontal)
+  local points = {}
+  local function add(x, y)
+    points[#points + 1] = util.fmt(x) .. "," .. util.fmt(y)
+  end
+  if horizontal then
+    add(baseline, map_y(series.edges[1]))
+    for index = 1, #series.counts do
+      local x = map_x(series.counts[index])
+      add(x, map_y(series.edges[index]))
+      add(x, map_y(series.edges[index + 1]))
+    end
+    add(baseline, map_y(series.edges[#series.edges]))
+  else
+    add(map_x(series.edges[1]), baseline)
+    for index = 1, #series.counts do
+      local y = map_y(series.counts[index])
+      add(map_x(series.edges[index]), y)
+      add(map_x(series.edges[index + 1]), y)
+    end
+    add(map_x(series.edges[#series.edges]), baseline)
+  end
+  return table.concat(points, " ")
+end
+
 local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
   local style = series.style
   local opacity = ""
@@ -1200,38 +1255,61 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
     local a = util.fmt(style.alpha)
     opacity = string.format(' fill-opacity="%s" stroke-opacity="%s"', a, a)
   end
-  local edge = style.edgecolor or "#ffffff"
   local label = ""
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
   end
   local horizontal = series.orientation == "horizontal"
-  local orientation = horizontal and ' data-orientation="horizontal"' or ""
+  local orientation = horizontal and "horizontal" or "vertical"
+  local histtype = series.histtype or "bar"
+  local edge = style.edgecolor or "#ffffff"
 
-  buf[#buf + 1] = string.format('  <g class="series series-hist"%s%s>',
-    label, orientation)
-  for i = 1, #series.counts do
-    local count = series.counts[i]
-    if count > 0 then
-      if horizontal then
-        local y1 = map_y(series.edges[i])
-        local y2 = map_y(series.edges[i + 1])
-        local value_x = map_x(count)
-        local left = math.min(x_baseline, value_x)
-        local top = math.min(y1, y2)
-        buf[#buf + 1] = string.format(
-          '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
-          util.fmt(left), util.fmt(top),
-          util.fmt(math.abs(value_x - x_baseline)),
-          util.fmt(math.abs(y2 - y1)), style.color, edge, opacity)
-      else
-        local x1 = map_x(series.edges[i])
-        local x2 = map_x(series.edges[i + 1])
-        local top = map_y(count)
-        buf[#buf + 1] = string.format(
-          '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
-          util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
-          util.fmt(y_baseline - top), style.color, edge, opacity)
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-hist"%s data-orientation="%s" data-histtype="%s">',
+    label, orientation, histtype)
+  if histtype == "step" or histtype == "stepfilled" then
+    local points = hist_step_points(series, map_x, map_y,
+      horizontal and x_baseline or y_baseline, horizontal)
+    if histtype == "step" then
+      local stroke_opacity = ""
+      if style.alpha < 1 then
+        stroke_opacity = string.format(' stroke-opacity="%s"',
+          util.fmt(style.alpha))
+      end
+      buf[#buf + 1] = string.format(
+        '   <polyline class="hist-step" points="%s" fill="none" stroke="%s" stroke-width="1.5"%s/>',
+        points, style.color, stroke_opacity)
+    else
+      local fill = style.color
+      local stroke = style.edgecolor or style.color
+      buf[#buf + 1] = string.format(
+        '   <polygon class="hist-step-filled" points="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+        points, fill, stroke, opacity)
+    end
+  else
+    for i = 1, #series.counts do
+      local count = series.counts[i]
+      if count > 0 then
+        if horizontal then
+          local y1 = map_y(series.edges[i])
+          local y2 = map_y(series.edges[i + 1])
+          local value_x = map_x(count)
+          local left = math.min(x_baseline, value_x)
+          local top = math.min(y1, y2)
+          buf[#buf + 1] = string.format(
+            '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+            util.fmt(left), util.fmt(top),
+            util.fmt(math.abs(value_x - x_baseline)),
+            util.fmt(math.abs(y2 - y1)), style.color, edge, opacity)
+        else
+          local x1 = map_x(series.edges[i])
+          local x2 = map_x(series.edges[i + 1])
+          local top = map_y(count)
+          buf[#buf + 1] = string.format(
+            '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+            util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
+            util.fmt(y_baseline - top), style.color, edge, opacity)
+        end
       end
     end
   end
@@ -1503,44 +1581,96 @@ end
 
 local function render_box(series, map_x, map_y, buf)
   local color = series.style.color
+  local horizontal = series.orientation == "horizontal"
   local half = series.width / 2
-  local left = series.position - half
-  local right = series.position + half
-  local x = map_x(series.position)
-  local top = map_y(series.q3)
-  local bottom = map_y(series.q1)
-  buf[#buf + 1] = string.format(
-    '  <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
-    util.fmt(map_x(left)), util.fmt(top),
-    util.fmt(math.abs(map_x(right) - map_x(left))),
-    util.fmt(math.abs(bottom - top)), color, color)
-  buf[#buf + 1] = string.format(
-    '  <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-    util.fmt(map_x(left)), util.fmt(map_y(series.median)),
-    util.fmt(map_x(right)), util.fmt(map_y(series.median)), color)
-  buf[#buf + 1] = string.format(
-    '  <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
-    util.fmt(x), util.fmt(map_y(series.q3)), util.fmt(x),
-    util.fmt(map_y(series.high)), color)
-  buf[#buf + 1] = string.format(
-    '  <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
-    util.fmt(x), util.fmt(map_y(series.q1)), util.fmt(x),
-    util.fmt(map_y(series.low)), color)
-  buf[#buf + 1] = string.format(
-    '  <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-    util.fmt(map_x(left + 0.1)), util.fmt(map_y(series.high)),
-    util.fmt(map_x(right - 0.1)), util.fmt(map_y(series.high)), color)
-  buf[#buf + 1] = string.format(
-    '  <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-    util.fmt(map_x(left + 0.1)), util.fmt(map_y(series.low)),
-    util.fmt(map_x(right - 0.1)), util.fmt(map_y(series.low)), color)
-  for _, value in ipairs(series.outliers) do
-    buf[#buf + 1] = string.format(
-      '  <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
-      util.fmt(x), util.fmt(map_y(value)), color)
-  end
-end
+  local low_position = series.position - half
+  local high_position = series.position + half
+  local position_a = horizontal and map_y(low_position) or map_x(low_position)
+  local position_b = horizontal and map_y(high_position) or map_x(high_position)
+  local q1_screen = horizontal and map_x(series.q1) or map_y(series.q1)
+  local q3_screen = horizontal and map_x(series.q3) or map_y(series.q3)
+  local center = horizontal and map_y(series.position) or map_x(series.position)
+  local low_screen = horizontal and map_x(series.low) or map_y(series.low)
+  local high_screen = horizontal and map_x(series.high) or map_y(series.high)
+  local median_screen = horizontal and map_x(series.median) or
+    map_y(series.median)
+  local cap_a = horizontal and map_y(series.position - half + 0.1) or
+    map_x(series.position - half + 0.1)
+  local cap_b = horizontal and map_y(series.position + half - 0.1) or
+    map_x(series.position + half - 0.1)
 
+  local rect_left = math.min(horizontal and q1_screen or position_a,
+    horizontal and q3_screen or position_b)
+  local rect_top = math.min(horizontal and position_a or q1_screen,
+    horizontal and position_b or q3_screen)
+  local rect_width = math.abs(horizontal and (q3_screen - q1_screen) or
+    (position_b - position_a))
+  local rect_height = math.abs(horizontal and (position_b - position_a) or
+    (q3_screen - q1_screen))
+
+  buf[#buf + 1] = string.format(
+    '  <g class="series series-box" data-position="%s" data-orientation="%s">',
+    util.fmt(series.position), horizontal and "horizontal" or "vertical")
+  buf[#buf + 1] = string.format(
+    '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+    util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
+    util.fmt(rect_height), color, color)
+  if horizontal then
+    buf[#buf + 1] = string.format(
+      '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(median_screen), util.fmt(math.min(position_a, position_b)),
+      util.fmt(median_screen), util.fmt(math.max(position_a, position_b)), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+      util.fmt(q3_screen), util.fmt(center), util.fmt(high_screen),
+      util.fmt(center), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+      util.fmt(low_screen), util.fmt(center), util.fmt(q1_screen),
+      util.fmt(center), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(high_screen), util.fmt(cap_a), util.fmt(high_screen),
+      util.fmt(cap_b), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(low_screen), util.fmt(cap_a), util.fmt(low_screen),
+      util.fmt(cap_b), color)
+  else
+    buf[#buf + 1] = string.format(
+      '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(math.min(position_a, position_b)), util.fmt(median_screen),
+      util.fmt(math.max(position_a, position_b)), util.fmt(median_screen), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+      util.fmt(center), util.fmt(q3_screen), util.fmt(center),
+      util.fmt(high_screen), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+      util.fmt(center), util.fmt(low_screen), util.fmt(center),
+      util.fmt(q1_screen), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(cap_a), util.fmt(high_screen), util.fmt(cap_b),
+      util.fmt(high_screen), color)
+    buf[#buf + 1] = string.format(
+      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+      util.fmt(cap_a), util.fmt(low_screen), util.fmt(cap_b),
+      util.fmt(low_screen), color)
+  end
+  for _, value in ipairs(series.outliers) do
+    if horizontal then
+      buf[#buf + 1] = string.format(
+        '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(map_x(value)), util.fmt(center), color)
+    else
+      buf[#buf + 1] = string.format(
+        '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(center), util.fmt(map_y(value)), color)
+    end
+  end
+  buf[#buf + 1] = '  </g>'
+end
 local HATCH_PATTERNS = {
   ["/"] = { transform = "rotate(45)", body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
   ["\\"] = { transform = "rotate(-45)", body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
@@ -1921,7 +2051,7 @@ function M.to_svg(fig)
   local xticks = xaxis.ticks
   local yticks = yaxis.ticks
 
-  local categories = find_category_ticks(fig, xmin, xmax)
+  local categories = find_category_ticks(fig, xmin, xmax, "x")
   local function format_value(fig_value, formatter)
     if formatter ~= nil then
       local ok, text = pcall(formatter, fig_value)
@@ -1961,8 +2091,17 @@ function M.to_svg(fig)
       }
     end
   end
+  local y_categories = find_category_ticks(fig, yaxis.data_minimum,
+    yaxis.data_maximum, "y")
   local y_display = {}
-  if fig._yticks ~= nil then
+  if y_categories then
+    for _, category in ipairs(y_categories) do
+      y_display[#y_display + 1] = {
+        value = category.position,
+        label = category.label,
+      }
+    end
+  elseif fig._yticks ~= nil then
     for index, value in ipairs(fig._yticks.values) do
       y_display[#y_display + 1] = {
         value = value,
@@ -1978,8 +2117,10 @@ function M.to_svg(fig)
     end
   end
 
-  local minorticks = fig._minorticks or { enabled = false, axis = "both" }
+  local minorticks = fig._minorticks or
+    { enabled = false, axis = "both", subdivisions = 5 }
   local minor_axis = minorticks.axis or "both"
+  local minor_subdivisions = minorticks.subdivisions or 5
   local grid_minor = fig._grid and fig._grid_opts and
     fig._grid_opts.minor == true
   local x_minor, y_minor = {}, {}
@@ -1989,14 +2130,17 @@ function M.to_svg(fig)
       for _, tick in ipairs(x_display) do
         major_x[#major_x + 1] = tick.value
       end
-      x_minor = ticks.generate_minor(xmin, xmax, major_x, xscale)
+      x_minor = ticks.generate_minor(xmin, xmax, major_x, xscale,
+        minor_subdivisions)
     end
-    local major_y = {}
-    for _, tick in ipairs(y_display) do
-      major_y[#major_y + 1] = tick.value
+    if not y_categories then
+      local major_y = {}
+      for _, tick in ipairs(y_display) do
+        major_y[#major_y + 1] = tick.value
+      end
+      y_minor = ticks.generate_minor(yaxis.data_minimum, yaxis.data_maximum,
+        major_y, yscale, minor_subdivisions)
     end
-    y_minor = ticks.generate_minor(yaxis.data_minimum, yaxis.data_maximum,
-      major_y, yscale)
   end
 
   local twin_y_display = {}
@@ -2070,12 +2214,12 @@ function M.to_svg(fig)
   end
 
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s" data-minorticks="%s" data-minor-grid="%s"%s>',
+  printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s" data-minorticks="%s" data-minor-subdivisions="%d" data-minor-grid="%s"%s>',
     util.fmt(fig.width), util.fmt(fig.height),
     util.fmt(fig.width), util.fmt(fig.height),
     util.escape_xml(fig._aria_label or fig._title or "luaplotlib figure"),
     util.fmt(fig.dpi), util.escape_xml(xscale), util.escape_xml(yscale),
-    minorticks.enabled and minor_axis or "none",
+    minorticks.enabled and minor_axis or "none", minor_subdivisions,
     grid_minor and "true" or "false", aspect_metadata)
   add(' <title>' .. util.escape_xml(fig._title or "luaplotlib figure") .. '</title>')
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
@@ -2181,16 +2325,37 @@ function M.to_svg(fig)
       if style.alpha < 1 then
         opacity = string.format(' stroke-opacity="%s"', util.fmt(style.alpha))
       end
-      buf[#buf + 1] = '  <g class="series series-eventplot">'
+      local horizontal = series.orientation == "horizontal"
+      local label = ""
+      if style.label ~= nil then
+        label = string.format(' data-label="%s"', attribute(style.label))
+      end
+      buf[#buf + 1] = string.format(
+        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d"%s>',
+        horizontal and "horizontal" or "vertical", #series.rows, label)
       for row, events in ipairs(series.rows) do
+        local offset = series.lineoffsets[row]
+        local half = series.linelengths[row] / 2
         for _, value in ipairs(events) do
-          local x = map_x(value)
-          local y1 = map_y(row - 0.4)
-          local y2 = map_y(row + 0.4)
-          buf[#buf + 1] = string.format(
-            '   <line class="event" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
-            util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
-            style.color, util.fmt(style.linewidth), opacity)
+          local line
+          if horizontal then
+            local y = map_y(value)
+            local x1, x2 = map_x(offset - half), map_x(offset + half)
+            line = string.format(
+              '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
+              row, util.fmt(offset), util.fmt(series.linelengths[row]),
+              util.fmt(x1), util.fmt(y), util.fmt(x2), util.fmt(y),
+              style.color, util.fmt(style.linewidth), opacity)
+          else
+            local x = map_x(value)
+            local y1, y2 = map_y(offset - half), map_y(offset + half)
+            line = string.format(
+              '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
+              row, util.fmt(offset), util.fmt(series.linelengths[row]),
+              util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
+              style.color, util.fmt(style.linewidth), opacity)
+          end
+          buf[#buf + 1] = line
         end
       end
       buf[#buf + 1] = '  </g>'
@@ -2385,7 +2550,13 @@ function M.to_svg(fig)
 
   for _, series in ipairs(fig._series) do
     if series.kind == "image" and fig._colorbar then
-      render_colorbar(series, geom, buf)
+      if series.colorbar_ticks ~= nil or
+          series.colorbar_tick_values ~= nil or
+          (series.colorbar_label ~= nil and series.colorbar_label ~= "") then
+        render_value_colorbar(series, geom, buf, "colorbar imshow-colorbar")
+      else
+        render_colorbar(series, geom, buf)
+      end
     elseif series.kind == "hexbin" and series.colorbar then
       render_hexbin_colorbar(series, geom, buf)
     elseif series.kind == "hist2d" and series.colorbar then

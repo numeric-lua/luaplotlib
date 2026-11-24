@@ -350,6 +350,11 @@ for svg in \
   examples/output/heatmap-extent.svg \
   examples/output/contour-coords.svg \
   examples/output/aspect.svg \
+  examples/output/minor-subdivisions.svg \
+  examples/output/eventplot-layout.svg \
+  examples/output/hist-styles.svg \
+  examples/output/boxplot-horizontal.svg \
+  examples/output/imshow-colorbar.svg \
   examples/output/bars-grouped.svg \
   examples/output/bars-stacked.svg
 do
@@ -374,6 +379,75 @@ grep -q 'class="grid-minor"' "$LINE" ||
   fail "$LINE has no minor grid group"
 grep -q 'class="minor-tick-mark"' "$LINE" ||
   fail "$LINE has no minor tick marks"
+
+# Configurable minor ticks must subdivide each major interval into four parts.
+MINOR_SUB=examples/output/minor-subdivisions.svg
+grep -q 'data-minor-subdivisions="4"' "$MINOR_SUB" ||
+  fail "$MINOR_SUB does not use four minor subdivisions"
+grep -q 'data-minorticks="both"' "$MINOR_SUB" ||
+  fail "$MINOR_SUB should enable minor ticks"
+minor_marks=$(grep -o 'class="minor-tick-mark"' "$MINOR_SUB" | wc -l |
+  tr -d ' ')
+[ "$minor_marks" -gt 0 ] || fail "$MINOR_SUB has no minor tick marks"
+
+# Horizontal event lanes must expose offsets/lengths and draw horizontal lines.
+EVENT=examples/output/eventplot-layout.svg
+grep -q 'class="series series-eventplot" data-orientation="horizontal"' \
+  "$EVENT" || fail "$EVENT has no horizontal event series"
+event_lines=$(grep -o 'class="event"' "$EVENT" | wc -l | tr -d ' ')
+[ "$event_lines" -eq 12 ] ||
+  fail "$EVENT should draw twelve event marks"
+for offset in 1 4 7; do
+  grep -q "data-offset=\"$offset\"" "$EVENT" ||
+    fail "$EVENT is missing lane offset $offset"
+done
+grep -o '<line class="event"[^>]*/>' "$EVENT" | awk '
+  {
+    if (!match($0, /y1="[^"]*"/)) exit 1
+    y1 = substr($0, RSTART + 4, RLENGTH - 5) + 0
+    if (!match($0, /y2="[^"]*"/)) exit 1
+    y2 = substr($0, RSTART + 4, RLENGTH - 5) + 0
+    if (y1 != y2) exit 1
+  }
+' || fail "$EVENT contains a non-horizontal event mark"
+
+# Histogram step styles must render the outline and filled staircase variants.
+HIST_STYLES=examples/output/hist-styles.svg
+grep -q 'data-histtype="stepfilled"' "$HIST_STYLES" ||
+  fail "$HIST_STYLES has no stepfilled histogram"
+grep -q 'data-histtype="step"' "$HIST_STYLES" ||
+  fail "$HIST_STYLES has no step histogram"
+hist_steps=$(grep -o 'class="hist-step"' "$HIST_STYLES" | wc -l | tr -d ' ')
+hist_filled=$(grep -o 'class="hist-step-filled"' "$HIST_STYLES" |
+  wc -l | tr -d ' ')
+[ "$hist_steps" -eq 1 ] && [ "$hist_filled" -eq 1 ] ||
+  fail "$HIST_STYLES should draw one outline and one filled staircase"
+
+# Horizontal boxplots keep their category labels on the y axis.
+BOX_H=examples/output/boxplot-horizontal.svg
+box_groups=$(grep -o 'class="series series-box"[^>]*data-orientation="horizontal"' \
+  "$BOX_H" | wc -l | tr -d ' ')
+[ "$box_groups" -eq 3 ] ||
+  fail "$BOX_H should draw three horizontal box groups"
+for label in control treatment follow-up; do
+  grep -q ">$label<" "$BOX_H" ||
+    fail "$BOX_H is missing the $label category label"
+done
+
+# Image colorbars accept a title and explicit tick values.
+IMSHOW=examples/output/imshow-colorbar.svg
+grep -q 'class="colorbar imshow-colorbar"' "$IMSHOW" ||
+  fail "$IMSHOW has no extended image colorbar"
+grep -q 'data-tick-source="explicit"' "$IMSHOW" ||
+  fail "$IMSHOW should use explicit colorbar ticks"
+grep -q 'data-ticks="5"' "$IMSHOW" ||
+  fail "$IMSHOW should draw five colorbar ticks"
+imshow_labels=$(grep -o 'class="colorbar-label"' "$IMSHOW" | wc -l |
+  tr -d ' ')
+[ "$imshow_labels" -eq 5 ] ||
+  fail "$IMSHOW has five ticks but $imshow_labels labels"
+grep -q 'class="colorbar-title"' "$IMSHOW" ||
+  fail "$IMSHOW has no colorbar title"
 
 # Asymmetric error bars must expose both modes.
 ERRORBAR=examples/output/errorbar.svg
@@ -698,7 +772,7 @@ done
 for svg in "$LINE" "$ERRORBAR" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
   "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
   "$STACK_BASELINE" "$BAR_ERRORS" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" \
-  "$ASPECT"; do
+  "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

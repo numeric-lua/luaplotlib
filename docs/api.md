@@ -1,6 +1,6 @@
 # luaplotlib API
 
-Version: `4.24.0`. This document describes the public Lua API implemented
+Version: `4.25.0`. This document describes the public Lua API implemented
 by `luaplotlib.lua` and the modules under `luaplotlib/`.
 
 ```lua
@@ -13,7 +13,7 @@ The module exposes:
 - `plt.subplots(rows, cols, opts)` → `SubplotFigure, axes`
 - `plt.polar(theta, r, opts)` → `Figure`
 - `plt.Figure` — the Figure class table
-- `plt._VERSION` — currently `"4.24.0"`
+- `plt._VERSION` — currently `"4.25.0"`
 
 Requiring `luaplotlib` does not load luatorch, numlua, C libraries, or a GUI.
 
@@ -550,6 +550,7 @@ Draw a histogram as adjacent filled rectangles.
 | `bins` | integer in [1, 1000] | `10` |
 | `range` | `{ min, max }` with `min < max` | data min/max |
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
+| `histtype` | `"bar"`, `"step"`, or `"stepfilled"` | `"bar"` |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
 | `alpha` | number in [0, 1] | `1` |
@@ -563,6 +564,14 @@ the same bin edges and counts but draws each bin along x from the zero count
 baseline, with the data value on y. Horizontal groups carry
 `data-orientation="horizontal"`, and the scene exports `orientation` with the
 axis ranges swapped accordingly.
+
+`histtype = "bar"` is the existing adjacent-rectangle rendering. `"step"`
+draws a single stepped outline (`hist-step`) through every bin edge, including
+empty bins, and closes to the zero baseline at both ends. `"stepfilled"` draws
+the same staircase as one filled polygon (`hist-step-filled`) using `color` as
+its fill and `edgecolor` (or the series color) as its stroke. Both outlines
+respect `orientation`, `density`, `cumulative`, `alpha`, and the automatic
+count range; `to_scene()` exports `histtype` alongside the edges/counts.
 
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
@@ -636,9 +645,24 @@ settings.
 
 ### `fig:eventplot(positions[, opts])`
 
-Draw vertical event ticks. `positions` is one list of x values or a list of rows;
-each row becomes a horizontal lane. Options: `color`, `label`, `linewidth`,
-`alpha`.
+Draw event ticks. `positions` is one list of values or a list of rows; each row
+becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
+| `lineoffsets` | number or array, one offset per row | row index |
+| `linelengths` | positive number or array, one length per row | `0.8` |
+| `color`, `label`, `linewidth`, `alpha` | normal series style | palette / `2` / `1` |
+
+In the default vertical orientation each value is an x coordinate and the mark
+is a vertical line centered on its row's offset. With `orientation =
+"horizontal"` each value is a y coordinate and the mark is a horizontal line
+centered on its row's x offset. `lineoffsets` place the lane centers and
+`linelengths` set each lane's span in data units. Offsets and lengths
+participate in automatic ranging, and a row's length may differ from its
+neighbors'. `to_scene()` exports `orientation`, `rows`, `lineoffsets`, and
+`linelengths`.
 
 ### `fig:ecdf(values[, opts])`
 
@@ -721,18 +745,52 @@ Renders a rectangular matrix as a heatmap. Accepts a plain 2-D table or a
 the color range; `colorbar` defaults to true. Values must be finite.
 `pcolormesh` and `pcolor` are aliases.
 
+| Option | Type | Default |
+| --- | --- | --- |
+| `vmin` / `vmax` | finite number | matrix minimum / maximum |
+| `colorbar` | boolean | `true` |
+| `colorbar_label` | string | no colorbar title |
+| `colorbar_ticks` | integer in [2, 10] | `3` when a title/explicit mode uses the extended bar |
+| `colorbar_tick_values` | increasing numeric table within `vmin`/`vmax` | uniform ticks |
+| `extent` | `{ left, right, bottom, top }` | `{0, cols, 0, rows}` |
+| `origin` | `"upper"` or `"lower"` | `"upper"` |
+
 `opts.extent = { left, right, bottom, top }` maps the matrix onto explicit data
 coordinates instead of the default index rectangle `{0, cols, 0, rows}`. The
 rectangle must be ordered. `opts.origin` is `"upper"` (default, row 1 at the
 top) or `"lower"` (row 1 at the bottom). The extent participates in automatic
 ranging. Explicit extent/origin output adds `data-origin` and `data-extent` to
 the heatmap group plus `data-row`/`data-col` on each cell; default output keeps
-the legacy markup. `to_scene()` exports `extent` and `origin`.
+the legacy markup.
+
+When `colorbar_label`, `colorbar_ticks`, or `colorbar_tick_values` is supplied,
+the image uses the shared ticked colorbar (`colorbar imshow-colorbar`) instead
+of the compact legacy bar. It exposes `data-tick-source`, `data-ticks`, and
+per-tick `data-value`/`data-fraction` metadata plus `colorbar-title` and
+`colorbar-label` text. `colorbar_ticks` and `colorbar_tick_values` are mutually
+exclusive, and explicit values must lie within the resolved `vmin`/`vmax`.
+`to_scene()` exports `extent`, `origin`, and the colorbar label/tick settings.
 
 ### `fig:boxplot(samples, opts)`
 
 Draws box-and-whisker plots for one or more numeric samples. `opts.labels`
 names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
+
+| Option | Type | Default |
+| --- | --- | --- |
+| `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
+| `labels` | one label per sample | `sample N` |
+| `width` | number in [0.01, 1] | `0.6` |
+| `color`, `label` | series style | palette / no legend entry |
+
+Vertical boxes place categories on x and values on y. Horizontal boxes swap
+that mapping, put the category labels on the y axis, and carry
+`data-orientation="horizontal"` on each `series-box` group. Both orientations
+use the same 1.5×IQR rule: the lower whisker reaches the smallest sample value
+at or above the lower fence and the upper whisker reaches the largest value at
+or below the upper fence; values outside the fences become `box-outlier`
+circles. `to_scene()` exports `orientation`, and the scene root reports
+`category_axis = "x"` or `"y"`.
 
 ### `fig:violinplot(samples, opts)`
 
@@ -1052,12 +1110,14 @@ fig:minorticks(true, { axis = "y" })
 ```
 
 Minor tick marks are off by default. On linear axes each major interval is
-divided into five parts; on logarithmic axes the 2–9 mantissas of each decade
-are used. Values that coincide with a major tick are omitted. `opts.axis` can
-be `"x"`, `"y"`, or `"both"` and is independent from the minor grid setting.
-Minor marks use the `minor-tick-mark` class, and the SVG root and scene expose
-the active axis (`data-minorticks` / `minor_tick_axis`). Minor marks are
-skipped for categorical x axes.
+divided into five parts by default; `opts.subdivisions` accepts an integer in
+[2, 10] to choose a different count. On logarithmic axes the 2–9 mantissas of
+each decade are always used, regardless of `subdivisions`. Values that coincide
+with a major tick are omitted. `opts.axis` can be `"x"`, `"y"`, or `"both"` and
+is independent from the minor grid setting. Minor marks and minor grid lines
+use the same subdivision count. The SVG root exposes `data-minor-subdivisions`
+and the scene reports `minor_subdivisions`; marks use the `minor-tick-mark`
+class. Minor marks are skipped for categorical axes.
 
 ### Legend
 
@@ -1141,7 +1201,8 @@ match these forms raise errors.
 
 - XML declaration and `xmlns="http://www.w3.org/2000/svg"`
 - Root `width`, `height`, and `viewBox`, plus `data-dpi`, `data-xscale`,
-  `data-yscale`, `data-minorticks`, and `data-minor-grid` metadata. Aspect-
+  `data-yscale`, `data-minorticks`, `data-minor-subdivisions`, and
+  `data-minor-grid` metadata. Aspect-
   constrained figures also add `data-aspect`, `data-plot-width`, and
   `data-plot-height`
 - White background rectangle
@@ -1149,9 +1210,10 @@ match these forms raise errors.
 - Groups with classes such as `figure`, `grid`, `grid-minor`, `series-layer`,
   `series-line`, `series-scatter`, `series-hist`, `series-bar`, `series-axline`,
   `series-fill`, `series-fillx`, `series-stem`, `series-quiver`,
-  `series-hexbin`, `annotation-layer`, `annotation`, `annotation-text`,
-  `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`, `xlabel`, `ylabel`,
-  `title`, and `legend`
+  `series-hexbin`, `series-eventplot`, `series-box`, `hist-step`,
+  `hist-step-filled`, `event`, `annotation-layer`, `annotation`,
+  `annotation-text`, `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`,
+  `xlabel`, `ylabel`, `title`, and `legend`
 - Quiver groups add `quiver-arrow`, `quiver-shaft`, and `quiver-head`; hexbin
   groups add `hexbin-cell` and, when enabled, a `hexbin-colorbar` group
 - No scripts, embedded images, or external references/hrefs
@@ -1180,6 +1242,11 @@ includes, but is not limited to:
 - non-positive aspect ratios that leave no drawable plot box
 - invalid quiver pivots, scales, arrow caps, or vector lengths
 - invalid hexbin grids, minimum counts, value ranges, or colorbar ticks
+- invalid eventplot orientations, row offset/length arrays, or non-positive
+  lengths
+- invalid histogram histtype names
+- invalid boxplot orientations
+- invalid image colorbar tick counts, labels, or out-of-range tick values
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1264,14 +1331,15 @@ Returns a renderer-agnostic scene table:
   title = "...", xlabel = "...", ylabel = "...",
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
-  minorticks = false, minor_tick_axis = "both", minor_grid = false,
+  minorticks = false, minor_tick_axis = "both", minor_subdivisions = 5,
+  minor_grid = false,
   xlim = { min, max }, ylim = { min, max },
   grid = false, legend = false,
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
   minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
                        linestyle = "solid", alpha = 0.6 },
-  category_ticks = nil,
+  category_axis = "x", category_ticks = nil,
   series = {
     { kind = "line", x = {...}, y = {...}, style = {...} },
     { kind = "scatter", x = {...}, y = {...}, style = {...} },
@@ -1287,7 +1355,8 @@ Returns a renderer-agnostic scene table:
       style = {...} },
     { kind = "image", rows = 2, cols = 3, values = {...}, vmin = 1,
       vmax = 6, extent = { 10, 40, 100, 300 }, origin = "lower",
-      colorbar = true, style = {...} },
+      colorbar = true, colorbar_label = "value",
+      colorbar_tick_values = { 1, 3, 5 }, style = {...} },
     { kind = "contour", rows = 3, cols = 3, level = 0.5,
       segments = { { x1, y1, x2, y2 }, ... },
       x = { 10, 20, 30 }, y = { 100, 200, 300 }, style = {...} },
@@ -1303,6 +1372,12 @@ Returns a renderer-agnostic scene table:
       style = {...} },
     { kind = "fillx", y = {...}, x1 = {...}, x2 = {...}, style = {...} },
     { kind = "stem", x = {...}, y = {...}, base = 0.5, style = {...} },
+    { kind = "eventplot", orientation = "horizontal",
+      rows = { { 0.4, 1.1 }, { 0.8, 1.4 } },
+      lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 }, style = {...} },
+    { kind = "box", position = 1, width = 0.6, orientation = "horizontal",
+      q1 = 2, median = 3, q3 = 4, low = 1, high = 5, outliers = { 9 },
+      style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8 },
     -- Grouped bars keep category centers in x and add a per-series offset:
     { kind = "bar", x = {...}, y = {...}, width = 0.4, mode = "grouped",
@@ -1311,7 +1386,7 @@ Returns a renderer-agnostic scene table:
     { kind = "bar", x = {...}, y = {...}, width = 0.8, mode = "stacked",
       stacked = true, bottom = {...}, top = {...}, stack = {...} },
     { kind = "hist", edges = {...}, counts = {...},
-      orientation = "horizontal" },
+      orientation = "horizontal", histtype = "stepfilled" },
   },
   annotations = {
     {
@@ -1333,8 +1408,11 @@ affect the exported limits. Cartesian root scenes also export `grid_style` and,
 when enabled, `minor_grid_style`. `axhline`/`axvline` scenes carry their data
 coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `where`, `interpolate`, and resolved `segments`; histogram scenes carry
-`orientation`; and stem scenes carry `base`. Bar series always keep category
-centers in `x`.
+`orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
+`lineoffsets`, and `linelengths`; box scenes carry `orientation`; and stem
+scenes carry `base`. Bar series always keep category centers in `x`. The scene
+root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
+the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
 series expose the per-bar `bottom`, `top`, and `stack` arrays so a backend does
 not have to infer the layout from the rendered SVG. Error-bar scenes always
@@ -1342,15 +1420,16 @@ carry `yerr_lower`/`yerr_upper` and, when horizontal errors are present,
 `xerr_lower`/`xerr_upper`; `yerr`/`xerr` mirror the upper side for older
 backends. `axline` scenes carry the four defining anchors and do not include
 the clipped extensions. Line styles carry the normalized `markevery` index
-list when marker decimation is active. Minor tick and minor grid settings are
-reported at the scene root.
+list when marker decimation is active. Minor tick, subdivision, and minor grid
+settings are reported at the scene root.
 
 Quiver scenes export the component arrays plus the resolved scale mode,
 `scale_unit = "screen_multiplier"`, `auto_length = 18`, pivot, arrow cap,
 normalization flag, decimation stride, and drawn count. Hexbin scenes export the
 input points, filtered cell records, counts, regular-cell width/radius, value
 limits, and colorbar settings. Image scenes add `extent` and `origin` when the
-image uses explicit field coordinates. Contour scenes export `x`/`y` coordinate
+image uses explicit field coordinates, plus `colorbar_label`, `colorbar_ticks`,
+and `colorbar_tick_values` when the extended colorbar is active. Contour scenes export `x`/`y` coordinate
 arrays when the figure supplied them and keep the per-level `segments`. Aspect
 constraints appear at the root as `aspect`, `aspect_mode`, and
 `aspect_adjustable = "box"`.

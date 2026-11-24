@@ -182,6 +182,7 @@ local HIST_OPTIONS = {
   density = true,
   cumulative = true,
   orientation = true,
+  histtype = true,
 }
 
 local HIST2D_OPTIONS = {
@@ -296,6 +297,18 @@ local BARH_OPTIONS = {
   show_values = true,
 }
 
+local IMAGE_OPTIONS = {
+  vmin = true,
+  vmax = true,
+  colorbar = true,
+  colorbar_label = true,
+  colorbar_ticks = true,
+  colorbar_tick_values = true,
+  label = true,
+  extent = true,
+  origin = true,
+}
+
 local CONTOUR_OPTIONS = {
   levels = true,
   color = true,
@@ -340,6 +353,7 @@ local BOX_OPTIONS = {
   label = true,
   labels = true,
   width = true,
+  orientation = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -755,12 +769,13 @@ function Figure.new(opts)
       color = "#d9d9d9", linewidth = 1, linestyle = "solid", alpha = 1,
       minor = false,
     },
-    _minorticks = { enabled = false, axis = "both" },
+    _minorticks = { enabled = false, axis = "both", subdivisions = 5 },
     _facecolor = "#ffffff",
     _aria_label = nil,
     _legend_requested = false,
     _legend_opts = { loc = "upper right", frame = true },
     _category_ticks = nil,
+    _category_axis = "x",
     _colorbar = false,
     _aspect = nil,
     _xtick_rotation = 0,
@@ -1893,7 +1908,32 @@ end
 
 local EVENT_OPTIONS = {
   color = true, label = true, linewidth = true, alpha = true,
+  orientation = true, lineoffsets = true, linelengths = true,
 }
+
+-- Normalize one eventplot layout value into one entry per event row. A scalar
+-- is repeated for every row; a table must already have one entry per row.
+local function event_layout(value, count, name, default, minimum)
+  local result = {}
+  if value == nil then
+    for index = 1, count do result[index] = default(index) end
+  elseif type(value) == "number" then
+    local checked = util.check_number(value, "eventplot " .. name, minimum)
+    for index = 1, count do result[index] = checked end
+  elseif type(value) == "table" then
+    if #value ~= count then
+      fail(string.format("eventplot %s must have one entry per row (%d ~= %d)",
+        name, #value, count))
+    end
+    for index = 1, count do
+      result[index] = util.check_number(value[index],
+        string.format("eventplot %s[%d]", name, index), minimum)
+    end
+  else
+    fail("eventplot " .. name .. " must be a number or a table")
+  end
+  return result
+end
 
 function Figure:eventplot(positions, opts)
   opts = util.check_options(opts, EVENT_OPTIONS, "eventplot")
@@ -1909,13 +1949,22 @@ function Figure:eventplot(positions, opts)
   else
     rows[1] = data.sequence(positions, "eventplot positions")
   end
+  local orientation = opts.orientation or "vertical"
+  if orientation ~= "vertical" and orientation ~= "horizontal" then
+    fail("eventplot orientation must be 'vertical' or 'horizontal'")
+  end
+  local lineoffsets = event_layout(opts.lineoffsets, #rows, "lineoffsets",
+    function(index) return index end)
+  local linelengths = event_layout(opts.linelengths, #rows, "linelengths",
+    function() return 0.8 end, 0.000001)
   local linewidth = opts.linewidth
   if linewidth == nil then linewidth = 2 end
   linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
   local style = checked_style(self, opts, "eventplot")
   style.linewidth = linewidth
   self._series[#self._series + 1] = {
-    kind = "eventplot", rows = rows, style = style,
+    kind = "eventplot", rows = rows, orientation = orientation,
+    lineoffsets = lineoffsets, linelengths = linelengths, style = style,
   }
   return self
 end
@@ -1987,6 +2036,10 @@ function Figure:hist(values, opts)
     end
     orientation = opts.orientation
   end
+  local histtype = opts.histtype or "bar"
+  if histtype ~= "bar" and histtype ~= "step" and histtype ~= "stepfilled" then
+    fail("hist histtype must be 'bar', 'step', or 'stepfilled'")
+  end
   local bin_width = (hi - lo) / bins
   local counts = {}
   for i = 1, bins do
@@ -2028,6 +2081,7 @@ function Figure:hist(values, opts)
     density = density,
     cumulative = cumulative,
     orientation = orientation,
+    histtype = histtype,
     style = style,
   }
   return self
@@ -2775,6 +2829,7 @@ function Figure:bar(labels_or_x, values, opts, ...)
 
   if kind == "categories" then
     self._category_ticks = {}
+    self._category_axis = "x"
     for i = 1, #xv do
       self._category_ticks[i] = { position = i, label = xv[i] }
     end
@@ -3350,10 +3405,7 @@ function Figure:barh(labels_or_y, values, opts)
 end
 
 function Figure:imshow(values, opts)
-  opts = util.check_options(opts, {
-    vmin = true, vmax = true, colorbar = true, label = true,
-    extent = true, origin = true,
-  }, "imshow")
+  opts = util.check_options(opts, IMAGE_OPTIONS, "imshow")
   local rows, cols, matrix = data.matrix(values, "imshow values")
   local minimum, maximum = math.huge, -math.huge
   for r = 1, rows do
@@ -3372,15 +3424,32 @@ function Figure:imshow(values, opts)
   if maximum <= minimum then
     maximum = minimum + 1
   end
-  local colorbar = opts.colorbar
-  if colorbar == nil then colorbar = true end
-  util.check_boolean(colorbar, "imshow colorbar")
+  local colorbar, colorbar_label, colorbar_ticks, colorbar_tick_values =
+    checked_colorbar_options(opts, "imshow", true)
+  if colorbar_tick_values ~= nil then
+    for index = 1, #colorbar_tick_values do
+      local value = colorbar_tick_values[index]
+      if value < minimum or value > maximum then
+        fail(string.format(
+          "imshow colorbar_tick_values[%d] must be within vmin and vmax",
+          index))
+      end
+      if index > 1 and value <= colorbar_tick_values[index - 1] then
+        fail(string.format(
+          "imshow colorbar_tick_values[%d] must be strictly increasing",
+          index))
+      end
+    end
+  end
   local extent = checked_extent(opts.extent, "imshow")
   local origin = checked_origin(opts.origin, "imshow")
   self._colorbar = colorbar
   self._series[#self._series + 1] = {
     kind = "image", values = matrix, rows = rows, cols = cols,
     vmin = minimum, vmax = maximum, extent = extent, origin = origin,
+    colorbar_label = colorbar_label,
+    colorbar_ticks = colorbar_ticks,
+    colorbar_tick_values = colorbar_tick_values,
     style = { color = "#000000", label = opts.label, alpha = 1 },
   }
   return self
@@ -3510,6 +3579,10 @@ function Figure:boxplot(values, opts)
   if opts.width ~= nil then
     width = util.check_number(opts.width, "boxplot width", 0.01, 1)
   end
+  local orientation = opts.orientation or "vertical"
+  if orientation ~= "vertical" and orientation ~= "horizontal" then
+    fail("boxplot orientation must be 'vertical' or 'horizontal'")
+  end
   local labels = opts.labels
   if labels ~= nil then
     if type(labels) ~= "table" or #labels ~= #samples then
@@ -3540,8 +3613,17 @@ function Figure:boxplot(values, opts)
     local low_limit, high_limit = q1 - 1.5 * iqr, q3 + 1.5 * iqr
     local whisker_low, whisker_high = q1, q3
     for _, value in ipairs(sorted) do
-      if value >= low_limit and value <= q1 then whisker_low = value end
-      if value <= high_limit and value >= q3 then whisker_high = value end
+      if value >= low_limit then
+        whisker_low = value
+        break
+      end
+    end
+    for index = #sorted, 1, -1 do
+      local value = sorted[index]
+      if value <= high_limit then
+        whisker_high = value
+        break
+      end
     end
     local outliers = {}
     for _, value in ipairs(sorted) do
@@ -3551,6 +3633,7 @@ function Figure:boxplot(values, opts)
     end
     self._series[#self._series + 1] = {
       kind = "box", position = index, width = width,
+      orientation = orientation,
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
       style = { color = color, label = opts.label, alpha = 1 },
@@ -3561,6 +3644,7 @@ function Figure:boxplot(values, opts)
     }
   end
   self._category_ticks = ticks
+  self._category_axis = orientation == "horizontal" and "y" or "x"
   return self
 end
 
@@ -3781,6 +3865,7 @@ function Figure:violinplot(values, opts)
     }
   end
   self._category_ticks = ticks
+  self._category_axis = "x"
   return self
 end
 
@@ -4207,7 +4292,8 @@ function Figure:grid(enabled, opts)
 end
 
 -- Toggle minor tick marks independently from minor grid lines. opts.axis
--- restricts the marks to "x", "y", or "both".
+-- restricts the marks to "x", "y", or "both"; opts.subdivisions controls how
+-- many equal parts each linear major interval is split into (2..10, default 5).
 function Figure:minorticks(enabled, opts)
   if type(enabled) == "table" and opts == nil then
     opts, enabled = enabled, true
@@ -4215,16 +4301,24 @@ function Figure:minorticks(enabled, opts)
   if enabled == nil then enabled = true end
   util.check_boolean(enabled, "minorticks")
   local axis = self._minorticks.axis
+  local subdivisions = self._minorticks.subdivisions or 5
   if opts ~= nil then
-    opts = util.check_options(opts, { axis = true }, "minorticks")
+    opts = util.check_options(opts,
+      { axis = true, subdivisions = true }, "minorticks")
     if opts.axis ~= nil then
       if opts.axis ~= "x" and opts.axis ~= "y" and opts.axis ~= "both" then
         fail("minorticks axis must be x, y, or both")
       end
       axis = opts.axis
     end
+    if opts.subdivisions ~= nil then
+      subdivisions = util.check_integer(opts.subdivisions,
+        "minorticks subdivisions", 2, 10)
+    end
   end
-  self._minorticks = { enabled = enabled, axis = axis }
+  self._minorticks = {
+    enabled = enabled, axis = axis, subdivisions = subdivisions,
+  }
   return self
 end
 

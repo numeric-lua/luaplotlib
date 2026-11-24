@@ -27,6 +27,11 @@ examples:
 	@$(LUA) examples/bar_errors.lua
 	@$(LUA) examples/field_coordinates.lua
 	@$(LUA) examples/aspect.lua
+	@$(LUA) examples/minor_subdivisions.lua
+	@$(LUA) examples/eventplot_layout.lua
+	@$(LUA) examples/hist_styles.lua
+	@$(LUA) examples/boxplot_horizontal.lua
+	@$(LUA) examples/imshow_colorbar.lua
 	@$(LUA) examples/bars.lua
 	@$(LUA) examples/polar.lua
 	@$(LUA) examples/polar_bars.lua
