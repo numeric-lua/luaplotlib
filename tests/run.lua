@@ -267,6 +267,11 @@ local test_files = {
   "test_quiver_angles.lua",
   "test_tick_style.lua",
   "test_hist_hatch.lua",
+  "test_violin_horizontal.lua",
+  "test_pie_rotatelabels.lua",
+  "test_fill_hatch.lua",
+  "test_span_hatch.lua",
+  "test_title_style.lua",
   "test_export.lua",
 }
 

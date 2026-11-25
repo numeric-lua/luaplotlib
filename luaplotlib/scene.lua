@@ -138,6 +138,8 @@ function M.from_figure(figure)
     dpi = figure.dpi,
     title = figure._title,
     title_align = figure._title_loc or "center",
+    title_fontsize = figure._title_fontsize or 18,
+    title_color = figure._title_color or "#222222",
     xlabel = figure._xlabel,
     ylabel = figure._ylabel,
     xlabel_pad = figure._xlabel_pad or 0,
@@ -205,6 +207,7 @@ function M.from_figure(figure)
       shadow = figure._pie.shadow and true or false,
       labeldistance = figure._pie.labeldistance or 1.08,
       pctdistance = figure._pie.pctdistance or 0.64,
+      rotatelabels = figure._pie.rotatelabels and true or false,
       slices = {},
     }
     for index, slice in ipairs(figure._pie.slices) do
@@ -609,6 +612,7 @@ function M.from_figure(figure)
     elseif series.kind == "violin" then
       copy.position = series.position
       copy.width = series.width
+      copy.orientation = series.orientation or "vertical"
       copy.points = series.points
       copy.bandwidth = series.bandwidth
       copy.values = copy_array(series.values)
@@ -628,13 +632,24 @@ function M.from_figure(figure)
       copy.meanline = series.meanline and true or false
       local left, right = series.position - series.width / 2,
         series.position + series.width / 2
-      if state.xmin == nil or left < state.xmin then state.xmin = left end
-      if state.xmax == nil or right > state.xmax then state.xmax = right end
-      if state.ymin == nil or series.minimum < state.ymin then
-        state.ymin = series.minimum
-      end
-      if state.ymax == nil or series.maximum > state.ymax then
-        state.ymax = series.maximum
+      if copy.orientation == "horizontal" then
+        if state.ymin == nil or left < state.ymin then state.ymin = left end
+        if state.ymax == nil or right > state.ymax then state.ymax = right end
+        if state.xmin == nil or series.minimum < state.xmin then
+          state.xmin = series.minimum
+        end
+        if state.xmax == nil or series.maximum > state.xmax then
+          state.xmax = series.maximum
+        end
+      else
+        if state.xmin == nil or left < state.xmin then state.xmin = left end
+        if state.xmax == nil or right > state.xmax then state.xmax = right end
+        if state.ymin == nil or series.minimum < state.ymin then
+          state.ymin = series.minimum
+        end
+        if state.ymax == nil or series.maximum > state.ymax then
+          state.ymax = series.maximum
+        end
       end
     elseif series.kind == "box" then
       copy.position = series.position

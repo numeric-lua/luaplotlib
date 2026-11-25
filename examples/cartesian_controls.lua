@@ -50,12 +50,19 @@ fig:fill_between(x, lower, upper, {
   color = "#4c78a8",
   edgecolor = "#2f5f8f",
   alpha = 0.32,
+  hatch = "/",
   label = "active band",
 })
 fig:plot(x, signal, {
   color = "#1f77b4",
   linewidth = 2.2,
   label = "signal",
+})
+fig:axhspan(-0.18, 0.18, {
+  color = "#fde68a", alpha = 0.35, hatch = ".", label = "neutral zone",
+})
+fig:axvspan(3.0, 3.6, {
+  color = "#bbf7d0", alpha = 0.30, hatch = "|", label = "phase window",
 })
 fig:axhline(0.75, {
   xmin = 0.06,

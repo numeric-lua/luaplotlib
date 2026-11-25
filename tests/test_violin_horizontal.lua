@@ -1,0 +1,37 @@
+local plt = require("luaplotlib")
+
+test("violinplot is vertical by default", function()
+  local fig = plt.figure()
+  fig:violinplot({ { 1, 2, 3 }, { 2, 3, 4 } })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-orientation="vertical"')
+  local scene = fig:to_scene()
+  assert_equal(scene.category_axis, "x")
+  assert_equal(scene.series[1].orientation, "vertical")
+end)
+
+test("horizontal violinplot swaps positions and values", function()
+  local fig = plt.figure({ width = 720, height = 480 })
+  fig:violinplot({ { 1, 2, 3, 4, 5 }, { 2, 3, 4 } }, {
+    labels = { "alpha", "beta" }, orientation = "horizontal",
+    showmedians = true,
+  })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-orientation="horizontal"')
+  assert_contains(svg, ">alpha<")
+  assert_contains(svg, ">beta<")
+  assert_match(svg, 'class="violin%-median" x1="[^"]*" y1="[^"]*" x2="[^"]*" y2="[^"]*"')
+  local scene = fig:to_scene()
+  assert_equal(scene.category_axis, "y")
+  assert_equal(scene.series[1].orientation, "horizontal")
+  assert_equal(scene.series[1].minimum, 1)
+  assert_true(scene.xlim[1] <= 1 and scene.xlim[2] >= 5)
+  assert_true(scene.ylim[1] <= 0.7 and scene.ylim[2] >= 2.3)
+end)
+
+test("violinplot orientation validates accepted values", function()
+  local fig = plt.figure()
+  assert_error("orientation must be 'vertical' or 'horizontal'", function()
+    fig:violinplot({ { 1, 2 } }, { orientation = "diagonal" })
+  end)
+end)

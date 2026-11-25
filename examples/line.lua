@@ -58,7 +58,10 @@ fig:plot(x, cos_x, {
   linewidth = 2,
   linestyle = "dashed",
 })
-fig:title("luaplotlib: line plot")
+fig:title("luaplotlib: line plot", {
+  fontsize = 20,
+  color = "#0f172a",
+})
 fig:xlabel("x (radians)", { labelpad = 10 })
 fig:ylabel("value", { labelpad = 8 })
 fig:xlim(0, 2 * math.pi)

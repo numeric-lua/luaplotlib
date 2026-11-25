@@ -26,12 +26,14 @@ examples:
 	@$(LUA) examples/hist2d.lua
 	@$(LUA) examples/scatter_colors.lua
 	@$(LUA) examples/violinplot.lua
+	@$(LUA) examples/violin_horizontal.lua
 	@$(LUA) examples/stack_baseline.lua
 	@$(LUA) examples/bar_errors.lua
 	@$(LUA) examples/bar_linewidth.lua
 	@$(LUA) examples/barh_hatch.lua
 	@$(LUA) examples/broken_barh.lua
 	@$(LUA) examples/pie_explode.lua
+	@$(LUA) examples/pie_rotated.lua
 	@$(LUA) examples/field_coordinates.lua
 	@$(LUA) examples/aspect.lua
 	@$(LUA) examples/minor_subdivisions.lua

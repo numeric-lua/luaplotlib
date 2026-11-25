@@ -63,10 +63,13 @@ luajit examples/bar_linewidth.lua
 luajit examples/barh_hatch.lua
 luajit examples/broken_barh.lua
 luajit examples/pie_explode.lua
+luajit examples/pie_rotated.lua
 luajit examples/heatmap.lua
 luajit examples/minor_subdivisions.lua
 luajit examples/eventplot_layout.lua
 luajit examples/hist_styles.lua
+luajit examples/violinplot.lua
+luajit examples/violin_horizontal.lua
 luajit examples/boxplot_horizontal.lua
 luajit examples/imshow_colorbar.lua
 luajit examples/subplots.lua
@@ -338,6 +341,23 @@ markers. Eventplot lines support solid, dashed, dotted, and hidden styles, and
 `barh` supports the shared hatch patterns. Scenes export per-point markers and
 hatch styles.
 
+Horizontal violins, rotated pie labels, fill/span hatches, and styled titles
+complete the layout controls:
+
+```lua
+fig:violinplot(samples, { orientation = "horizontal", labels = names })
+fig:pie(values, { labels = names, rotatelabels = true })
+fig:fill_between(x, lower, upper, { hatch = "/" })
+fig:axhspan(-0.2, 0.2, { hatch = "." })
+fig:title("Styled title", { fontsize = 20, color = "#0f172a" })
+```
+
+Horizontal violins put cohort labels on y and measured values on x. Rotated pie
+labels follow their slice angle, staying upright on the left half. Fill bands
+and shaded spans use the shared hatch patterns. `title` now accepts
+`fontsize`/`color` for Cartesian, pie, polar, and subplot titles; scenes export
+the resolved style.
+
 Scatter alpha, horizontal stems, quiver projection, tick styling, and histogram
 hatches are also additive:
 
@@ -578,13 +598,14 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Vertical and horizontal bars with numeric positions or categorical labels,
   including multi-series grouped and stacked bars, per-bar color lists,
   configurable outline widths and hatches, and symmetric/asymmetric error bars
-- Pie and donut charts with exploded slices, soft shadows, distance-tuned
-  labels and percentage annotations
+- Pie and donut charts with exploded slices, soft shadows, distance-tuned or
+  rotated labels, and percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional mean markers or
   mean lines
-- Gaussian-kernel violin plots with configurable bandwidth, positions,
-  quartiles, medians, extrema, optional mean marks, and per-sample colors
+- Vertical or horizontal Gaussian-kernel violin plots with configurable
+  bandwidth, positions, quartiles, medians, extrema, optional mean marks, and
+  per-sample colors
 - Vertical or horizontal event lanes with per-row offsets, lengths, colors,
   axis labels, line styles, and scene export
 - Horizontal broken bars for schedules and Gantt-style intervals
@@ -600,12 +621,13 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
-- Explicit `xlim` / `ylim`, optional major/minor grid, aligned titles,
-  label-padded axis labels, and legends with nine locations plus frame
+- Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
+  titles, label-padded axis labels, and legends with nine locations plus frame
   alpha/colors
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
-- Masked or interpolated `fill_between`/`fill_betweenx` bands
+- Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
+  hatch fills, plus hatched `axhspan`/`axvspan` bands
 - Histograms with optional hatch fills and styled stems with custom bases,
   markers, marker face/edge styling, and vertical or horizontal orientation
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
@@ -649,8 +671,9 @@ histogram-outline, title-align, legend-location, legend-frame, marker-style,
 errorbar-stride, ecdf-complementary, per-bar-color, annotation-background,
 label-padding, pie-distance, hist2d-empty, scatter-marker, annotation-rotation,
 error-stem-marker, event-linestyle, barh-hatch, scatter-alpha, stem-horizontal,
-quiver-uv, tick-style, hist-hatch, image-alpha, and equal-aspect metadata, and
-confirms that Cartesian examples stay Cartesian.
+quiver-uv, tick-style, hist-hatch, violin-horizontal, pie-rotation,
+fill-hatch, span-hatch, title-style, image-alpha, and equal-aspect metadata,
+and confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -676,12 +699,14 @@ make examples
 # examples/output/hist2d.svg
 # examples/output/scatter-colors.svg
 # examples/output/violinplot.svg
+# examples/output/violin-horizontal.svg
 # examples/output/stack-baseline.svg
 # examples/output/bar-errors.svg
 # examples/output/bar-linewidth.svg
 # examples/output/barh-hatch.svg
 # examples/output/broken-barh.svg
 # examples/output/pie-explode.svg
+# examples/output/pie-rotated.svg
 # examples/output/heatmap-extent.svg
 # examples/output/contour-coords.svg
 # examples/output/aspect.svg
@@ -720,7 +745,8 @@ bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
 per-row event colors, event lane labels, box/violin means, broken horizontal
 bars, pie explode/shadow, configurable bar/histogram outlines, marker
 face/edge styling, per-point scatter markers and alpha, annotation
-rotation/backgrounds, horizontal stems, quiver uv angles, tick label styling,
+rotation/backgrounds, horizontal stems, quiver uv angles, tick/title label
+styling, horizontal violins, rotated pie labels, fill/span hatches,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
 multi-series colors, label padding, pie label/pct
@@ -779,7 +805,8 @@ See
   empty cells unless `show_empty = true`, and bar `yerr` takes one error
   specification per value series rather than a freely mixed per-bar error
   matrix. Histogram hatching is unavailable for stepped outlines, which have no
-  fill.
+  fill. Fill/span hatches use one shared pattern per series; rotated pie labels
+  may still need a larger canvas or label distance for crowded slices.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

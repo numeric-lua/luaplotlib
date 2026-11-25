@@ -326,10 +326,19 @@ local function data_extents(fig, xscale, yscale)
       include_y(series.y + series.height, series_index, 1,
         "broken_barh height")
     elseif series.kind == "violin" then
-      include_x(series.position - series.width / 2, series_index, 1, "violin")
-      include_x(series.position + series.width / 2, series_index, 1, "violin")
-      include_y(series.minimum, series_index, 1, "violin minimum")
-      include_y(series.maximum, series_index, 1, "violin maximum")
+      if series.orientation == "horizontal" then
+        include_y(series.position - series.width / 2, series_index, 1,
+          "violin")
+        include_y(series.position + series.width / 2, series_index, 1,
+          "violin")
+        include_x(series.minimum, series_index, 1, "violin minimum")
+        include_x(series.maximum, series_index, 1, "violin maximum")
+      else
+        include_x(series.position - series.width / 2, series_index, 1, "violin")
+        include_x(series.position + series.width / 2, series_index, 1, "violin")
+        include_y(series.minimum, series_index, 1, "violin minimum")
+        include_y(series.maximum, series_index, 1, "violin maximum")
+      end
     elseif series.kind == "box" then
       local horizontal = series.orientation == "horizontal"
       local low_edge = series.position - series.width / 2
@@ -769,10 +778,12 @@ local function render_span(series, map_x, map_y, geom, buf)
   end
   local left, right = math.min(x1, x2), math.max(x1, x2)
   local top, bottom = math.min(y1, y2), math.max(y1, y2)
+  local fill = style.color
+  if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
   buf[#buf + 1] = string.format(
     '  <rect class="span %s" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="%s"/>',
     series.kind, util.fmt(left), util.fmt(top), util.fmt(right - left),
-    util.fmt(bottom - top), style.color, util.fmt(style.alpha))
+    util.fmt(bottom - top), fill, util.fmt(style.alpha))
 end
 
 local function render_reference(series, map_x, map_y, geom, buf)
@@ -1521,9 +1532,11 @@ local function render_fill(series, map_x, map_y, buf)
       stack = string.format(' data-stack="true" data-baseline="%s" data-index="%d"',
         series.stack_baseline, series.stack_index or 1)
     end
+    local fill = style.color
+    if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
       '  <polygon class="fill-between"%s points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
-      stack, points, style.color, opacity, style.edgecolor or style.color)
+      stack, points, fill, opacity, style.edgecolor or style.color)
     return
   end
 
@@ -1532,9 +1545,11 @@ local function render_fill(series, map_x, map_y, buf)
     '  <g class="series series-fill" data-where="masked" data-interpolate="%s" data-segments="%d">',
     series.interpolate and "true" or "false", #segments)
   for index, run in ipairs(segments) do
+    local fill = style.color
+    if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
       '   <polygon class="fill-between" data-index="%d" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
-      index, fill_polygon_points(run, map_x, map_y), style.color, opacity,
+      index, fill_polygon_points(run, map_x, map_y), fill, opacity,
       style.edgecolor or style.color)
   end
   buf[#buf + 1] = '  </g>'
@@ -1546,9 +1561,11 @@ local function render_fillx(series, map_x, map_y, buf)
     local points = fill_polygon_points({
       kind = "fillx", y = series.y, x1 = series.x1, x2 = series.x2,
     }, map_x, map_y)
+    local fill = style.color
+    if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
       '  <polygon class="fill-betweenx" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
-      points, style.color, util.fmt(style.alpha),
+      points, fill, util.fmt(style.alpha),
       style.edgecolor or style.color)
     return
   end
@@ -1561,9 +1578,11 @@ local function render_fillx(series, map_x, map_y, buf)
     '  <g class="series series-fillx" data-where="masked" data-interpolate="%s" data-segments="%d">',
     series.interpolate and "true" or "false", #segments)
   for index, run in ipairs(segments) do
+    local fill = style.color
+    if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     buf[#buf + 1] = string.format(
       '   <polygon class="fill-betweenx" data-index="%d" points="%s" fill="%s"%s stroke="%s" stroke-width="1"/>',
-      index, fill_polygon_points(run, map_x, map_y), style.color, opacity,
+      index, fill_polygon_points(run, map_x, map_y), fill, opacity,
       style.edgecolor or style.color)
   end
   buf[#buf + 1] = '  </g>'
@@ -1685,6 +1704,9 @@ end
 
 local function render_violin(series, map_x, map_y, buf)
   local style = series.style
+  local horizontal = series.orientation == "horizontal"
+  local value_map = horizontal and map_x or map_y
+  local position_map = horizontal and map_y or map_x
   local points = {}
   for index = 1, #series.body_x do
     points[index] = util.fmt(map_x(series.body_x[index])) .. "," ..
@@ -1695,51 +1717,103 @@ local function render_violin(series, map_x, map_y, buf)
     label = string.format(' data-label="%s"', attribute(style.label))
   end
   buf[#buf + 1] = string.format(
-    '  <g class="series series-violin" data-position="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-mean="%s" data-q1="%s" data-median="%s" data-q3="%s" data-showmeans="%s" data-meanline="%s"%s>',
+    '  <g class="series series-violin" data-position="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-mean="%s" data-q1="%s" data-median="%s" data-q3="%s" data-showmeans="%s" data-meanline="%s" data-orientation="%s"%s>',
     util.fmt(series.position), series.points, util.fmt(series.bandwidth),
     util.fmt(series.minimum), util.fmt(series.maximum), util.fmt(series.mean),
     util.fmt(series.q1), util.fmt(series.median), util.fmt(series.q3),
     series.showmeans and "true" or "false",
-    series.meanline and "true" or "false", label)
+    series.meanline and "true" or "false",
+    horizontal and "horizontal" or "vertical", label)
   buf[#buf + 1] = string.format(
     '   <polygon class="violin-body" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="%s"/>',
     table.concat(points, " "), style.color, util.fmt(style.alpha),
     style.edgecolor or style.color, util.fmt(style.linewidth or 1))
-  local center = map_x(series.position)
-  buf[#buf + 1] = string.format(
-    '   <line class="violin-center" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
-    util.fmt(center), util.fmt(map_y(series.minimum)), util.fmt(center),
-    util.fmt(map_y(series.maximum)), style.edgecolor or style.color)
+  local center = position_map(series.position)
+  if horizontal then
+    buf[#buf + 1] = string.format(
+      '   <line class="violin-center" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+      util.fmt(value_map(series.minimum)), util.fmt(center),
+      util.fmt(value_map(series.maximum)), util.fmt(center),
+      style.edgecolor or style.color)
+  else
+    buf[#buf + 1] = string.format(
+      '   <line class="violin-center" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1"/>',
+      util.fmt(center), util.fmt(value_map(series.minimum)),
+      util.fmt(center), util.fmt(value_map(series.maximum)),
+      style.edgecolor or style.color)
+  end
   if series.showquartiles then
-    local half = (map_x(series.position + series.width * 0.25) -
-      map_x(series.position - series.width * 0.25)) / 2
     for _, value in ipairs({ series.q1, series.q3 }) do
-      local y = map_y(value)
+      if horizontal then
+        local low = position_map(series.position - series.width * 0.25)
+        local high = position_map(series.position + series.width * 0.25)
+        buf[#buf + 1] = string.format(
+          '   <line class="violin-quartile" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" stroke-dasharray="3 2"/>',
+          util.fmt(value_map(value)), util.fmt(low),
+          util.fmt(value_map(value)), util.fmt(high),
+          style.edgecolor or style.color)
+      else
+        local half = (map_x(series.position + series.width * 0.25) -
+          map_x(series.position - series.width * 0.25)) / 2
+        local y = map_y(value)
+        buf[#buf + 1] = string.format(
+          '   <line class="violin-quartile" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" stroke-dasharray="3 2"/>',
+          util.fmt(center - half), util.fmt(y), util.fmt(center + half),
+          util.fmt(y), style.edgecolor or style.color)
+      end
+    end
+  end
+  if series.showmedians then
+    if horizontal then
+      local low = position_map(series.position - series.width * 0.5)
+      local high = position_map(series.position + series.width * 0.5)
       buf[#buf + 1] = string.format(
-        '   <line class="violin-quartile" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1" stroke-dasharray="3 2"/>',
+        '   <line class="violin-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+        util.fmt(value_map(series.median)), util.fmt(low),
+        util.fmt(value_map(series.median)), util.fmt(high),
+        style.edgecolor or style.color)
+    else
+      local half = (map_x(series.position + series.width * 0.5) -
+        map_x(series.position - series.width * 0.5)) / 2
+      local y = map_y(series.median)
+      buf[#buf + 1] = string.format(
+        '   <line class="violin-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
         util.fmt(center - half), util.fmt(y), util.fmt(center + half),
         util.fmt(y), style.edgecolor or style.color)
     end
   end
-  if series.showmedians then
-    local half = (map_x(series.position + series.width * 0.5) -
-      map_x(series.position - series.width * 0.5)) / 2
-    local y = map_y(series.median)
-    buf[#buf + 1] = string.format(
-      '   <line class="violin-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-      util.fmt(center - half), util.fmt(y), util.fmt(center + half),
-      util.fmt(y), style.edgecolor or style.color)
-  end
   if series.showextrema then
     for _, value in ipairs({ series.minimum, series.maximum }) do
-      buf[#buf + 1] = string.format(
-        '   <circle class="violin-extrema" cx="%s" cy="%s" r="2.5" fill="%s"/>',
-        util.fmt(center), util.fmt(map_y(value)),
-        style.edgecolor or style.color)
+      if horizontal then
+        buf[#buf + 1] = string.format(
+          '   <circle class="violin-extrema" cx="%s" cy="%s" r="2.5" fill="%s"/>',
+          util.fmt(value_map(value)), util.fmt(center),
+          style.edgecolor or style.color)
+      else
+        buf[#buf + 1] = string.format(
+          '   <circle class="violin-extrema" cx="%s" cy="%s" r="2.5" fill="%s"/>',
+          util.fmt(center), util.fmt(value_map(value)),
+          style.edgecolor or style.color)
+      end
     end
   end
   if series.showmeans then
-    if series.meanline then
+    if horizontal then
+      if series.meanline then
+        local low = position_map(series.position - series.width * 0.5)
+        local high = position_map(series.position + series.width * 0.5)
+        buf[#buf + 1] = string.format(
+          '   <line class="violin-mean-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5" stroke-dasharray="4 2"/>',
+          util.fmt(value_map(series.mean)), util.fmt(low),
+          util.fmt(value_map(series.mean)), util.fmt(high),
+          style.edgecolor or style.color)
+      else
+        buf[#buf + 1] = string.format(
+          '   <circle class="violin-mean-marker" cx="%s" cy="%s" r="3" fill="%s"/>',
+          util.fmt(value_map(series.mean)), util.fmt(center),
+          style.edgecolor or style.color)
+      end
+    elseif series.meanline then
       local half = (map_x(series.position + series.width * 0.5) -
         map_x(series.position - series.width * 0.5)) / 2
       buf[#buf + 1] = string.format(
@@ -1756,7 +1830,6 @@ local function render_violin(series, map_x, map_y, buf)
   end
   buf[#buf + 1] = '  </g>'
 end
-
 local function render_box(series, map_x, map_y, buf)
   local color = series.style.color
   local horizontal = series.orientation == "horizontal"
@@ -2128,10 +2201,11 @@ function M.to_pie_svg(fig)
   local buf = {}
   local function add(line) buf[#buf + 1] = line end
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s">',
+  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-rotatelabels="%s">',
     util.fmt(width), util.fmt(height), util.fmt(width), util.fmt(height),
     util.fmt(fig.dpi), util.fmt(pie.labeldistance or 1.08),
-    util.fmt(pie.pctdistance or 0.64)))
+    util.fmt(pie.pctdistance or 0.64),
+    pie.rotatelabels and "true" or "false"))
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   add(' <rect class="background" width="' .. util.fmt(width) .. '" height="' ..
     util.fmt(height) .. '" fill="#ffffff"/>')
@@ -2142,8 +2216,10 @@ function M.to_pie_svg(fig)
     elseif fig._title_loc == "right" then
       title_x, title_anchor = width * 0.95, "end"
     end
-    add(string.format(' <text class="title" x="%s" y="28" font-size="18" fill="#222222" text-anchor="%s">%s</text>',
-      util.fmt(title_x), title_anchor, util.escape_xml(fig._title)))
+    add(string.format(' <text class="title" x="%s" y="28" font-size="%s" fill="%s" text-anchor="%s">%s</text>',
+      util.fmt(title_x), util.fmt(fig._title_fontsize or 18),
+      fig._title_color or "#222222", title_anchor,
+      util.escape_xml(fig._title)))
   end
   add(' <g class="pie" font-family="Helvetica, Arial, sans-serif">')
   for index, slice in ipairs(pie.slices) do
@@ -2178,8 +2254,23 @@ function M.to_pie_svg(fig)
       add(string.format('  <line class="pie-label-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="#777777" stroke-width="1"/>',
         util.fmt(edge_x), util.fmt(edge_y), util.fmt(lx), util.fmt(ly)))
       local anchor = math.cos(math.rad(middle)) >= 0 and "start" or "end"
-      add(string.format('  <text class="pie-label" x="%s" y="%s" font-size="12" fill="#222222" text-anchor="%s">%s</text>',
-        util.fmt(lx), util.fmt(ly + 4), anchor, util.escape_xml(slice.label)))
+      local rotation = 0
+      if pie.rotatelabels then
+        local normalized = middle % 360
+        if normalized < 0 then normalized = normalized + 360 end
+        rotation = -normalized
+        if normalized > 90 and normalized < 270 then
+          rotation = rotation + 180
+        end
+      end
+      local transform = ""
+      if rotation ~= 0 then
+        transform = string.format(' transform="rotate(%s %s %s)"',
+          util.fmt(rotation), util.fmt(lx), util.fmt(ly + 4))
+      end
+      add(string.format('  <text class="pie-label" x="%s" y="%s" font-size="12" fill="#222222" text-anchor="%s"%s>%s</text>',
+        util.fmt(lx), util.fmt(ly + 4), anchor, transform,
+        util.escape_xml(slice.label)))
     end
   end
   if inner > 0 then
@@ -2825,9 +2916,11 @@ function M.to_svg(fig)
     elseif fig._title_loc == "right" then
       title_x, title_anchor = geom.right, "end"
     end
-    printf('   <text class="title" x="%s" y="%s" font-size="18" fill="%s" text-anchor="%s">%s</text>',
+    printf('   <text class="title" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s">%s</text>',
       util.fmt(title_x), util.fmt(math.max(16, geom.top - 22)),
-      TEXT_COLOR, title_anchor, util.escape_xml(fig._title))
+      util.fmt(fig._title_fontsize or 18),
+      fig._title_color or TEXT_COLOR, title_anchor,
+      util.escape_xml(fig._title))
   end
   add('  </g>')
 

@@ -1907,8 +1907,10 @@ local function render_title(figure, geom, buf)
   if figure._title == nil then return end
   local x, anchor = title_geometry(figure, geom)
   buf[#buf + 1] = string.format(
-    '  <text class="title" x="%s" y="30" font-size="18" fill="%s" text-anchor="%s">%s</text>',
-    util.fmt(x), TEXT_COLOR, anchor, util.escape_xml(figure._title))
+    '  <text class="title" x="%s" y="30" font-size="%s" fill="%s" text-anchor="%s">%s</text>',
+    util.fmt(x), util.fmt(figure._title_fontsize or 18),
+    figure._title_color or TEXT_COLOR, anchor,
+    util.escape_xml(figure._title))
 end
 
 local function clamp(value, minimum, maximum)
@@ -2112,7 +2114,8 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
   local title_box = nil
   if figure._title ~= nil then
     local title_x, title_anchor = title_geometry(figure, geom)
-    title_box = text.bounds(title_x, 30, figure._title, 18, title_anchor)
+    title_box = text.bounds(title_x, 30, figure._title,
+      figure._title_fontsize or 18, title_anchor)
   end
 
   -- Keep the legend out of the reserved colorbar column as well.
@@ -2671,6 +2674,8 @@ function M.to_scene(figure)
     dpi = figure.dpi,
     title = figure._title,
     title_align = figure._title_loc or "center",
+    title_fontsize = figure._title_fontsize or 18,
+    title_color = figure._title_color or "#222222",
     grid = true,
     legend = figure._legend_requested and true or false,
     series = {},

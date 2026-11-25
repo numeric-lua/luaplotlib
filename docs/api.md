@@ -112,6 +112,7 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `shadow` | boolean | `false` |
 | `labeldistance` | number in [0.01, 2], radius multiplier | `1.08` |
 | `pctdistance` | number in [0.01, 2], radius multiplier | `0.64` |
+| `rotatelabels` | boolean | `false` |
 | `autopct` | `false`, `true`, or a format string | `false` |
 | `legend` | boolean | `true` |
 
@@ -119,8 +120,10 @@ Pie and donut charts. Values must be non-negative with a positive total.
 mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
 wedges keep their labels, leader lines, and percentage text attached to the
 shifted slice. `labeldistance`/`pctdistance` place the slice labels and
-percentage text as radius multipliers. `to_scene()` exports `pie.shadow`, the
-two distances, and each slice's `explode` value.
+percentage text as radius multipliers. `rotatelabels = true` rotates each label
+to its slice angle while keeping left-half labels upright. `to_scene()` exports
+`pie.shadow`, the two distances, `rotatelabels`, and each slice's `explode`
+value.
 
 ### `plt.polar(theta, r[, opts])` / `fig:polar(theta, r[, opts])`
 
@@ -741,6 +744,7 @@ and an interpolation switch:
 
 | Option | Type | Default |
 | --- | --- | --- |
+| `hatch` | shared hatch pattern string | no hatch |
 | `where` | table with one boolean per sample | no mask |
 | `interpolate` | boolean | `false` |
 
@@ -752,7 +756,9 @@ automatic ranging. A masked group carries `data-where="masked"`,
 `data-interpolate`, and `data-segments`; each polygon carries `data-index`.
 `to_scene()` exports `where`, `interpolate`, and resolved `segments` arrays
 when a mask is present. Masks must match the sample count and contain only
-booleans; callbacks and numeric alpha masks are not supported.
+booleans; callbacks and numeric alpha masks are not supported. `hatch` fills
+each polygon with a shared pattern, including masked runs; the resolved hatch
+is exported through the series style and participates in `hatch_defs`.
 
 ### `fig:step(x, y[, opts])`
 
@@ -911,6 +917,7 @@ each sample's extrema and normalized to the widest body.
 | `showquartiles` | boolean | `true` |
 | `showmeans` | boolean, draw the sample mean | `false` |
 | `meanline` | boolean, draw a dashed mean line instead of a marker | `false` |
+| `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `colors` | one color per sample | palette colors |
 | `color` | single color for every sample | palette colors |
 | `labels` | one tick/legend label per sample | `sample N` |
@@ -927,9 +934,11 @@ violin gains a `violin-mean-marker` circle at its mean; `meanline = true`
 draws a dashed `violin-mean-line` across the body instead. The group exposes
 `data-position`, `data-points`, `data-bandwidth`, `data-min`, `data-max`,
 `data-mean`, `data-q1`, `data-median`, `data-q3`, `data-showmeans`, and
-`data-meanline`. Sample labels become category ticks and are also used as
-legend labels. Scene export includes the sorted sample, normalized density
-array, polygon body coordinates, quartiles, mean, and display flags.
+`data-meanline`, and `data-orientation`. Vertical violins put categories on x;
+horizontal violins put them on y, with values on x and the category ticks moved
+accordingly. Sample labels become category ticks and are also used as legend
+labels. Scene export includes `orientation`, the sorted sample, normalized
+density array, polygon body coordinates, quartiles, mean, and display flags.
 
 ### `fig:contour(values, opts)`
 
@@ -1028,8 +1037,9 @@ Formats x tick labels as calendar dates from Unix timestamps. `format` uses
 
 ### `fig:axhspan(y1, y2[, opts])` / `fig:axvspan(x1, x2[, opts])`
 
-Shade a horizontal or vertical data-coordinate band. Options: `color`, `alpha`,
-and `label`. The span extends the reduced axis range.
+Shade a horizontal or vertical data-coordinate band. Options: `color`,
+`alpha`, `label`, and `hatch`. The span extends the reduced axis range and the
+resolved hatch is exported through the series style.
 
 ### `fig:loglog(x, y[, opts])` / `semilogx` / `semilogy`
 
@@ -1087,6 +1097,7 @@ bottom layout margins; SVG roots expose `data-ticklabelsize` and
 fig:title("text")
 fig:title("left aligned", { loc = "left" })
 fig:title("right aligned", { loc = "right" })
+fig:title("styled", { fontsize = 20, color = "#0f172a" })
 fig:xlabel("text")
 fig:xlabel("x", { labelpad = 10 })
 fig:ylabel("y", { labelpad = 8 })
@@ -1099,8 +1110,10 @@ scenes report `xlabel_pad`/`ylabel_pad`. `title` accepts
 `loc = "left"`, `"center"` (default), or `"right"` and aligns the title to the
 axes box (Cartesian), canvas (pie/polar), or outer grid (subplots). Calling
 `title(text)` without options keeps the last alignment. Scenes export the
-resolved `title_align`. Text is XML-escaped and invalid XML control characters
-are replaced. The y label is rotated -90°.
+resolved `title_align`. `fontsize` (number > 0) and `color` style the title;
+the resolved values are exported as `title_fontsize`/`title_color`, including
+pie, polar, and subplot scenes. Text is XML-escaped and invalid XML control
+characters are replaced. The y label is rotated -90°.
 
 ### Annotations and arrows
 
@@ -1417,6 +1430,10 @@ includes, but is not limited to:
 - quiver angles outside xy/uv
 - non-positive tick label sizes or invalid tick label colors
 - histogram hatches on stepped outlines or unsupported patterns
+- violin orientations other than vertical/horizontal
+- non-boolean pie rotatelabels values
+- unsupported fill/span hatch patterns
+- non-positive title font sizes or invalid title colors
 - scatter marker arrays whose length does not match the points
 - annotation rotations outside [-180, 180]
 - invalid errorbar/stem marker face/edge colors or widths
@@ -1504,6 +1521,7 @@ Returns a renderer-agnostic scene table:
   type = "luaplotlib",
   width = 640, height = 480, dpi = 100,
   title = "...", title_align = "center",
+  title_fontsize = 18, title_color = "#222222",
   xlabel = "...", ylabel = "...",
   xlabel_pad = 0, ylabel_pad = 0,
   xscale = "linear", yscale = "linear",
@@ -1570,8 +1588,8 @@ Returns a renderer-agnostic scene table:
       q1 = 2, median = 3, q3 = 4, low = 1, high = 5, outliers = { 9 },
       style = {...} },
     { kind = "violin", position = 1, width = 0.5, mean = 3,
-      showmeans = true, meanline = false, q1 = 2, median = 3, q3 = 4,
-      style = {...} },
+      orientation = "vertical", showmeans = true, meanline = false,
+      q1 = 2, median = 3, q3 = 4, style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8,
       bar_colors = { "#9ecae1", ... } },
     -- Grouped bars keep category centers in x and add a per-series offset:
@@ -1612,15 +1630,18 @@ coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `where`, `interpolate`, and resolved `segments`; histogram scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
 `lineoffsets`, `linelengths`, and optional `colors`/`labels`; broken-bar scenes
-carry their `ranges`, `y`, and `height`; box and violin scenes carry `mean`,
-`showmeans`, and `meanline`; stem scenes carry `base` and `orientation`; and
+carry their `ranges`, `y`, and `height`; box scenes carry `mean`, `showmeans`,
+and `meanline`; violin scenes also carry `orientation`; stem scenes carry
+`base` and `orientation`; and
 ECDF step scenes
 carry `ecdf` plus `complementary`. Cartesian scene roots export `title_align`
 and, when requested, `legend_style`. Error-bar scenes always carry
 `errorevery` and quiver scenes carry `angles`; marker-capable line, errorbar,
 and stem styles may include `markerfacecolor`, `markeredgecolor`, and
 `markeredgewidth`. Scatter styles may include per-point `markers` and `alphas`
-arrays, and bar/barh/hist styles include `hatch` when a pattern is active. Bar series always keep category centers in `x`. The scene
+arrays, and bar/barh/hist/fill/span styles include `hatch` when a pattern is
+active. Scene roots export `title_fontsize`/`title_color`, and pie scenes export
+`rotatelabels`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked

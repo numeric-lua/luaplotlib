@@ -241,6 +241,7 @@ local FILL_OPTIONS = {
   label = true,
   alpha = true,
   edgecolor = true,
+  hatch = true,
   where = true,
   interpolate = true,
 }
@@ -297,6 +298,7 @@ local VIOLIN_OPTIONS = {
   showquartiles = true,
   showmeans = true,
   meanline = true,
+  orientation = true,
   colors = true,
   color = true,
   labels = true,
@@ -318,6 +320,7 @@ local PIE_OPTIONS = {
   shadow = true,
   labeldistance = true,
   pctdistance = true,
+  rotatelabels = true,
   legend = true,
 }
 
@@ -912,6 +915,8 @@ function Figure.new(opts)
     _color_serial = 0,
     _title = nil,
     _title_loc = "center",
+    _title_fontsize = 18,
+    _title_color = "#222222",
     _twin = nil,
     _twiny = nil,
     _xlabel = nil,
@@ -3392,6 +3397,12 @@ function Figure:fill_between(x, y1, y2, opts)
     "fill_between interpolate")
   local style = checked_style(self, opts, "fill_between")
   style.linewidth = 0
+  if opts.hatch ~= nil then
+    if type(opts.hatch) ~= "string" or not HATCH_TYPES[opts.hatch] then
+      fail("fill_between hatch must be /, \\, |, -, +, x, ., or o")
+    end
+    style.hatch = opts.hatch
+  end
   self._series[#self._series + 1] = {
     kind = "fill", x = xv, y1 = lower, y2 = upper,
     where = where, interpolate = interpolate, style = style,
@@ -3412,6 +3423,12 @@ function Figure:fill_betweenx(y, x1, x2, opts)
     "fill_betweenx interpolate")
   local style = checked_style(self, opts, "fill_betweenx")
   style.linewidth = 0
+  if opts.hatch ~= nil then
+    if type(opts.hatch) ~= "string" or not HATCH_TYPES[opts.hatch] then
+      fail("fill_betweenx hatch must be /, \\, |, -, +, x, ., or o")
+    end
+    style.hatch = opts.hatch
+  end
   self._series[#self._series + 1] = {
     kind = "fillx", y = yv, x1 = left, x2 = right,
     where = where, interpolate = interpolate, style = style,
@@ -3658,6 +3675,10 @@ function Figure:pie(values, opts)
     pctdistance = util.check_number(opts.pctdistance,
       "pie pctdistance", 0.01, 2)
   end
+  local rotatelabels = opts.rotatelabels == true
+  if opts.rotatelabels ~= nil then
+    util.check_boolean(opts.rotatelabels, "pie rotatelabels")
+  end
   local slices = {}
   local angle = startangle
   for index, value in ipairs(values_v) do
@@ -3677,6 +3698,7 @@ function Figure:pie(values, opts)
     slices = slices, radius = radius, inner_radius = inner,
     autopct = autopct, shadow = shadow, legend = legend,
     labeldistance = labeldistance, pctdistance = pctdistance,
+    rotatelabels = rotatelabels,
   }
   return self
 end
@@ -4114,6 +4136,10 @@ function Figure:violinplot(values, opts)
   if opts.meanline ~= nil then
     util.check_boolean(opts.meanline, "violinplot meanline")
   end
+  local orientation = opts.orientation or "vertical"
+  if orientation ~= "vertical" and orientation ~= "horizontal" then
+    fail("violinplot orientation must be 'vertical' or 'horizontal'")
+  end
 
   local positions = {}
   if opts.positions ~= nil then
@@ -4238,14 +4264,26 @@ function Figure:violinplot(values, opts)
 
     local body_x, body_y = {}, {}
     for point = 1, points do
-      local y = minimum + span * (point - 1) / (points - 1)
-      body_x[#body_x + 1] = positions[index] + width * 0.5 * densities[point]
-      body_y[#body_y + 1] = y
+      local value = minimum + span * (point - 1) / (points - 1)
+      local offset = width * 0.5 * densities[point]
+      if orientation == "horizontal" then
+        body_x[#body_x + 1] = value
+        body_y[#body_y + 1] = positions[index] + offset
+      else
+        body_x[#body_x + 1] = positions[index] + offset
+        body_y[#body_y + 1] = value
+      end
     end
     for point = points - 1, 2, -1 do
-      local y = minimum + span * (point - 1) / (points - 1)
-      body_x[#body_x + 1] = positions[index] - width * 0.5 * densities[point]
-      body_y[#body_y + 1] = y
+      local value = minimum + span * (point - 1) / (points - 1)
+      local offset = width * 0.5 * densities[point]
+      if orientation == "horizontal" then
+        body_x[#body_x + 1] = value
+        body_y[#body_y + 1] = positions[index] - offset
+      else
+        body_x[#body_x + 1] = positions[index] - offset
+        body_y[#body_y + 1] = value
+      end
     end
 
     local color = color_list and color_list[index] or
@@ -4287,6 +4325,7 @@ function Figure:violinplot(values, opts)
       showquartiles = showquartiles,
       showmeans = showmeans,
       meanline = meanline,
+      orientation = orientation,
       style = style,
     }
     ticks[#ticks + 1] = {
@@ -4295,7 +4334,7 @@ function Figure:violinplot(values, opts)
     }
   end
   self._category_ticks = ticks
-  self._category_axis = "x"
+  self._category_axis = orientation == "horizontal" and "y" or "x"
   return self
 end
 
@@ -4446,17 +4485,28 @@ end
 function Figure:title(text, opts)
   util.check_string(text, "title", true)
   local loc = self._title_loc or "center"
+  local fontsize = self._title_fontsize or 18
+  local color = self._title_color or "#222222"
   if opts ~= nil then
-    opts = util.check_options(opts, { loc = true }, "title")
+    opts = util.check_options(opts,
+      { loc = true, fontsize = true, color = true }, "title")
     if opts.loc ~= nil then
       if type(opts.loc) ~= "string" or not TITLE_LOCATIONS[opts.loc] then
         fail("title loc must be left, center, or right")
       end
       loc = opts.loc
     end
+    if opts.fontsize ~= nil then
+      fontsize = util.check_number(opts.fontsize, "title fontsize", 0.1)
+    end
+    if opts.color ~= nil then
+      color = util.check_color(opts.color, "title color")
+    end
   end
   self._title = text
   self._title_loc = loc
+  self._title_fontsize = fontsize
+  self._title_color = color
   return self
 end
 
@@ -4599,7 +4649,7 @@ local function checked_fraction_span(opts, name, minimum_key, maximum_key)
   return minimum, maximum
 end
 
-local SPAN_OPTIONS = { color = true, alpha = true, label = true }
+local SPAN_OPTIONS = { color = true, alpha = true, label = true, hatch = true }
 
 function Figure:axhspan(y1, y2, opts)
   if type(y1) ~= "number" or type(y2) ~= "number" then
@@ -4607,12 +4657,17 @@ function Figure:axhspan(y1, y2, opts)
   end
   if y1 > y2 then y1, y2 = y2, y1 end
   opts = util.check_options(opts, SPAN_OPTIONS, "axhspan")
+  if opts.hatch ~= nil and
+      (type(opts.hatch) ~= "string" or not HATCH_TYPES[opts.hatch]) then
+    fail("axhspan hatch must be /, \\, |, -, +, x, ., or o")
+  end
   self._series[#self._series + 1] = {
     kind = "axhspan", y1 = y1, y2 = y2,
     style = {
       color = util.check_color(opts.color or "#cccccc", "axhspan color"),
       alpha = opts.alpha and util.check_alpha(opts.alpha, "axhspan alpha") or 0.3,
       label = opts.label,
+      hatch = opts.hatch,
     },
   }
   return self
@@ -4624,12 +4679,17 @@ function Figure:axvspan(x1, x2, opts)
   end
   if x1 > x2 then x1, x2 = x2, x1 end
   opts = util.check_options(opts, SPAN_OPTIONS, "axvspan")
+  if opts.hatch ~= nil and
+      (type(opts.hatch) ~= "string" or not HATCH_TYPES[opts.hatch]) then
+    fail("axvspan hatch must be /, \\, |, -, +, x, ., or o")
+  end
   self._series[#self._series + 1] = {
     kind = "axvspan", x1 = x1, x2 = x2,
     style = {
       color = util.check_color(opts.color or "#cccccc", "axvspan color"),
       alpha = opts.alpha and util.check_alpha(opts.alpha, "axvspan alpha") or 0.3,
       label = opts.label,
+      hatch = opts.hatch,
     },
   }
   return self

@@ -1,0 +1,47 @@
+local plt = require("luaplotlib")
+
+local function hatched(svg, klass)
+  return select(2, svg:gsub('class="' .. klass .. '"[^>]*fill="url%(#hatch%-', ""))
+end
+
+test("fill bands are unhatched by default", function()
+  local fig = plt.figure()
+  fig:fill_between({ 1, 2 }, { 1, 1 }, { 2, 2 })
+  local svg = fig:to_svg()
+  assert_not_contains(svg, '<pattern id="hatch-')
+  assert_equal(fig:to_scene().series[1].style.hatch, nil)
+end)
+
+test("fill_between and fill_betweenx support hatch patterns", function()
+  local fig = plt.figure()
+  fig:fill_between({ 1, 2 }, { 1, 1 }, { 2, 2 }, { hatch = "/" })
+  fig:fill_betweenx({ 1, 2 }, { 1, 1 }, { 2, 2 }, { hatch = "." })
+  local svg = fig:to_svg()
+  assert_contains(svg, '<pattern id="hatch-')
+  assert_equal(hatched(svg, "fill%-between"), 1)
+  assert_equal(hatched(svg, "fill%-betweenx"), 1)
+  local scene = fig:to_scene()
+  assert_equal(scene.series[1].style.hatch, "/")
+  assert_equal(scene.series[2].style.hatch, ".")
+end)
+
+test("masked fill hatch patterns survive segmentation", function()
+  local fig = plt.figure()
+  fig:fill_between({ 1, 2, 3, 4 }, { 1, 1, 1, 1 }, { 2, 2, 2, 2 }, {
+    where = { true, false, true, true }, hatch = "x",
+  })
+  local svg = fig:to_svg()
+  local segments = select(2, svg:gsub('class="fill%-between"', ""))
+  assert_equal(segments, 2)
+  assert_equal(hatched(svg, "fill%-between"), 2)
+end)
+
+test("fill hatch validates supported patterns", function()
+  local fig = plt.figure()
+  assert_error("hatch must be", function()
+    fig:fill_between({ 1, 2 }, { 1, 1 }, { 2, 2 }, { hatch = "*" })
+  end)
+  assert_error("hatch must be", function()
+    fig:fill_betweenx({ 1, 2 }, { 1, 1 }, { 2, 2 }, { hatch = 7 })
+  end)
+end)

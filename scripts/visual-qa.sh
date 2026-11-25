@@ -348,12 +348,14 @@ for svg in \
   examples/output/hist2d.svg \
   examples/output/scatter-colors.svg \
   examples/output/violinplot.svg \
+  examples/output/violin-horizontal.svg \
   examples/output/stack-baseline.svg \
   examples/output/bar-errors.svg \
   examples/output/bar-linewidth.svg \
   examples/output/barh-hatch.svg \
   examples/output/broken-barh.svg \
   examples/output/pie-explode.svg \
+  examples/output/pie-rotated.svg \
   examples/output/heatmap-extent.svg \
   examples/output/contour-coords.svg \
   examples/output/aspect.svg \
@@ -404,6 +406,8 @@ grep -q 'data-ticklabelsize="12" data-ticklabelcolor="#334155"' "$LINE" ||
   fail "$LINE should expose tick label styling"
 grep -q 'class="tick-label"[^>]*font-size="12" fill="#334155"' "$LINE" ||
   fail "$LINE should render styled tick labels"
+grep -q 'class="title" x="[^"]*" y="[^"]*" font-size="20" fill="#0f172a"' \
+  "$LINE" || fail "$LINE should render a styled title"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg
@@ -577,6 +581,16 @@ fill_polygons=$(grep -o 'class="fill-between"' "$CONTROLS" | wc -l |
   tr -d ' ')
 [ "$fill_polygons" -eq "$fill_segments" ] ||
   fail "$CONTROLS has $fill_segments fill segments but $fill_polygons polygons"
+grep -q '<pattern id="hatch-' "$CONTROLS" ||
+  fail "$CONTROLS has no hatch pattern definitions"
+fill_hatched=$(grep -o 'class="fill-between"[^>]*fill="url(#hatch-' "$CONTROLS" |
+  wc -l | tr -d ' ')
+[ "$fill_hatched" -eq "$fill_segments" ] ||
+  fail "$CONTROLS fill segments should use their hatch pattern"
+span_hatched=$(grep -o 'class="span ax[hv]span"[^>]*fill="url(#hatch-' \
+  "$CONTROLS" | wc -l | tr -d ' ')
+[ "$span_hatched" -eq 2 ] ||
+  fail "$CONTROLS should hatch both shaded spans"
 grep -q 'class="series series-axhline" data-xmin="0.06" data-xmax="0.4"' \
   "$CONTROLS" || fail "$CONTROLS has no fractional axhline span"
 grep -q 'class="series series-axvline" data-ymin="0.18" data-ymax="0.82"' \
@@ -835,6 +849,18 @@ violin_extrema=$(grep -o 'class="violin-extrema"' "$VIOLIN" | wc -l |
   fail "$VIOLIN should draw two extrema per violin"
 grep -q 'data-points="80"' "$VIOLIN" ||
   fail "$VIOLIN should use 80 KDE points"
+
+VIOLIN_H=examples/output/violin-horizontal.svg
+grep -q 'class="series series-violin"[^>]*data-orientation="horizontal"' \
+  "$VIOLIN_H" || fail "$VIOLIN_H is not a horizontal violin plot"
+for label in control shifted wide; do
+  grep -q ">$label<" "$VIOLIN_H" ||
+    fail "$VIOLIN_H is missing the $label category label"
+done
+violin_h_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN_H" | wc -l |
+  tr -d ' ')
+[ "$violin_h_means" -eq 3 ] ||
+  fail "$VIOLIN_H should draw one mean marker per violin"
 violin_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN" | wc -l |
   tr -d ' ')
 [ "$violin_means" -eq 3 ] ||
@@ -933,6 +959,14 @@ pie_percent=$(grep -o 'class="pie-percent"' "$PIE_EXPLODE" | wc -l |
   tr -d ' ')
 [ "$pie_percent" -eq 4 ] ||
   fail "$PIE_EXPLODE should label every slice percentage"
+
+PIE_ROTATED=examples/output/pie-rotated.svg
+grep -q 'data-rotatelabels="true"' "$PIE_ROTATED" ||
+  fail "$PIE_ROTATED should rotate its labels"
+pie_rotated_labels=$(grep -o 'class="pie-label"[^>]*transform="rotate(' \
+  "$PIE_ROTATED" | wc -l | tr -d ' ')
+[ "$pie_rotated_labels" -eq 5 ] ||
+  fail "$PIE_ROTATED should rotate all five pie labels"
 grep -q 'data-labeldistance="1.14" data-pctdistance="0.55"' "$PIE_EXPLODE" ||
   fail "$PIE_EXPLODE should expose its label and percentage distances"
 
@@ -966,11 +1000,11 @@ done
 # marker density, minor grids, asymmetric caps, vector glyphs, hexagons,
 # extent/origin placement, explicit contour coordinates, and equal aspect.
 for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" \
-  "$STEM" "$STEM_H" "$QUIVER_CART" "$QUIVER_UV" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
-  "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BARS_GROUPED" \
-  "$BARH_HATCH" "$ANNOTATIONS" "$BROKEN_BARH" "$PIE_EXPLODE" "$HEATMAP_EXTENT" \
-  "$CONTOUR_COORDS" "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" \
-  "$BOX_H" "$IMSHOW"; do
+  "$STEM" "$STEM_H" "$QUIVER_CART" "$QUIVER_UV" "$HEXBIN" "$HIST2D" \
+  "$SCATTER_COLORS" "$VIOLIN" "$VIOLIN_H" "$STACK_BASELINE" "$BAR_ERRORS" \
+  "$BAR_WIDTH" "$BARS_GROUPED" "$BARH_HATCH" "$ANNOTATIONS" "$BROKEN_BARH" \
+  "$PIE_EXPLODE" "$PIE_ROTATED" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" \
+  "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

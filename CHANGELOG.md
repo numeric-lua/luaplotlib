@@ -43,14 +43,25 @@
   metadata report the resolved values;
 - `fig:hist` accepts a shared hatch pattern for `bar` and `stepfilled` styles.
   Stepped outlines reject hatching because they have no fill, and the resolved
-  hatch is exported through the series style.
+  hatch is exported through the series style;
+- `fig:violinplot` accepts `orientation = "vertical" | "horizontal"`.
+  Horizontal violins place cohort positions on y and values on x, keep all
+  median/quartile/extrema/mean marks correctly oriented, and export the
+  orientation through SVG and scenes;
+- `fig:pie`/`fig:donut` accept `rotatelabels = true`. Labels follow their slice
+  angle, stay upright on the left half, and the flag is exported by pie scenes;
+- `fig:fill_between`/`fill_betweenx` and `fig:axhspan`/`axvspan` accept the
+  shared hatch patterns. Masked fill runs keep their hatch, and spans export
+  the resolved hatch through their series style;
+- `fig:title` accepts `fontsize` and `color` for Cartesian, pie, polar, and
+  subplot titles. Scenes export `title_fontsize` and `title_color`.
   Existing examples and visual QA cover per-bar colors, annotation
-  backgrounds/rotation, label padding, pie distances, complete hist2d grids,
-  per-point markers/alpha, errorbar/stem marker styling, horizontal stems,
-  quiver angle modes, tick label styling, event line styles, and horizontal or
-  histogram hatches. The dependency-free suite grows from 410 to 457 tests.
-  Existing Cartesian APIs remain compatible, polar rendering is unchanged, and
-  there are no new runtime dependencies.
+  backgrounds/rotation, label padding, pie distances/rotation, complete hist2d
+  grids, per-point markers/alpha, errorbar/stem marker styling, horizontal
+  stems/violins, quiver angle modes, tick/title styling, event line styles,
+  and fill/span/histogram hatches. The dependency-free suite grows from 410 to
+  474 tests. Existing Cartesian APIs remain compatible, polar rendering is
+  unchanged, and there are no new runtime dependencies.
 
 ## 4.28.0
 
