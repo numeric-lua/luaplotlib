@@ -1831,6 +1831,22 @@ local function render_annotations(figure, cfg, geom, buf)
       index, util.fmt(annotation.theta), util.fmt(annotation.r),
       clamped and "true" or "false")
 
+    if annotation.background ~= nil then
+      local background = annotation.background
+      local pad = background.pad or 3
+      local stroke = ""
+      if background.edgecolor ~= nil then
+        stroke = string.format(' stroke="%s" stroke-width="1"',
+          background.edgecolor)
+      end
+      buf[#buf + 1] = string.format(
+        '    <rect class="annotation-background" x="%s" y="%s" width="%s" height="%s" rx="2" fill="%s" fill-opacity="%s"%s/>',
+        util.fmt(layout.box.x - pad), util.fmt(layout.box.y - pad),
+        util.fmt(layout.box.width + 2 * pad),
+        util.fmt(layout.box.height + 2 * pad),
+        background.color, util.fmt(background.alpha), stroke)
+    end
+
     if annotation.arrow ~= nil then
       local dx = target_x - text_x
       local dy = target_y - text_y
@@ -2539,6 +2555,15 @@ local function copy_annotation(annotation)
     local theta, r = annotation.xytext[1], annotation.xytext[2]
     copy.xytext = { theta, r, theta = theta, r = r }
   end
+  if annotation.background ~= nil then
+    copy.background = {
+      color = annotation.background.color,
+      edgecolor = annotation.background.edgecolor,
+      alpha = annotation.background.alpha,
+      pad = annotation.background.pad,
+    }
+  end
+
   if annotation.arrow ~= nil then
     copy.arrow = {
       enabled = true,

@@ -59,8 +59,8 @@ fig:plot(x, cos_x, {
   linestyle = "dashed",
 })
 fig:title("luaplotlib: line plot")
-fig:xlabel("x (radians)")
-fig:ylabel("value")
+fig:xlabel("x (radians)", { labelpad = 10 })
+fig:ylabel("value", { labelpad = 8 })
 fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
 fig:minorticks(true)

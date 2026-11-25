@@ -69,6 +69,10 @@ local POLAR_ANNOTATE_OPTIONS = {
   fontsize = true,
   align = true,
   arrow = true,
+  backgroundcolor = true,
+  backgroundedgecolor = true,
+  backgroundalpha = true,
+  backgroundpad = true,
   degrees = true,
   theta_unit = true,
 }
@@ -202,6 +206,7 @@ local HIST2D_OPTIONS = {
   alpha = true,
   edgecolor = true,
   linewidth = true,
+  show_empty = true,
   label = true,
 }
 
@@ -302,6 +307,8 @@ local PIE_OPTIONS = {
   inner_radius = true,
   explode = true,
   shadow = true,
+  labeldistance = true,
+  pctdistance = true,
   legend = true,
 }
 
@@ -407,6 +414,10 @@ local ANNOTATE_OPTIONS = {
   fontsize = true,
   align = true,
   arrow = true,
+  backgroundcolor = true,
+  backgroundedgecolor = true,
+  backgroundalpha = true,
+  backgroundpad = true,
 }
 
 local ARROW_OPTIONS = {
@@ -638,6 +649,36 @@ local function checked_arrow(value, color)
   }
 end
 
+-- Normalize an optional annotation background box.  Supplying
+-- `backgroundcolor` enables the box; the edge, alpha, and padding are optional.
+local function checked_annotation_background(opts, context)
+  if opts.backgroundcolor == nil then
+    if opts.backgroundedgecolor ~= nil or opts.backgroundalpha ~= nil or
+        opts.backgroundpad ~= nil then
+      fail(context .. " background options require backgroundcolor")
+    end
+    return nil
+  end
+  local color = util.check_color(opts.backgroundcolor,
+    context .. " backgroundcolor")
+  local edgecolor = nil
+  if opts.backgroundedgecolor ~= nil then
+    edgecolor = util.check_color(opts.backgroundedgecolor,
+      context .. " backgroundedgecolor")
+  end
+  local alpha = 1
+  if opts.backgroundalpha ~= nil then
+    alpha = util.check_alpha(opts.backgroundalpha,
+      context .. " backgroundalpha")
+  end
+  local pad = 3
+  if opts.backgroundpad ~= nil then
+    pad = util.check_number(opts.backgroundpad,
+      context .. " backgroundpad", 0)
+  end
+  return { color = color, edgecolor = edgecolor, alpha = alpha, pad = pad }
+end
+
 -- Normalize symmetric or asymmetric error input into one lower and one upper
 -- value per point. Symmetric input is a non-negative number or a flat numeric
 -- sequence. Asymmetric input is either { lower = ..., upper = ... } or a
@@ -804,6 +845,8 @@ function Figure.new(opts)
     _twiny = nil,
     _xlabel = nil,
     _ylabel = nil,
+    _xlabel_pad = 0,
+    _ylabel_pad = 0,
     _xlim = nil,
     _ylim = nil,
     _xscale = checked_scale(opts.xscale, "figure xscale", true),
@@ -1832,6 +1875,7 @@ function Figure:polar_annotate(text, theta, r, opts)
     fontsize = fontsize,
     align = align,
     arrow = checked_arrow(opts.arrow, color),
+    background = checked_annotation_background(opts, "polar annotate"),
   }
   return self
 end
@@ -2259,6 +2303,10 @@ function Figure:hist2d(x, y, opts)
   if opts.density ~= nil then
     util.check_boolean(opts.density, "hist2d density")
   end
+  local show_empty = opts.show_empty == true
+  if opts.show_empty ~= nil then
+    util.check_boolean(opts.show_empty, "hist2d show_empty")
+  end
 
   local span_x = maximum_x - minimum_x
   local span_y = maximum_y - minimum_y
@@ -2299,7 +2347,7 @@ function Figure:hist2d(x, y, opts)
   for row = 1, bins_y do
     for column = 1, bins_x do
       local count = counts[row][column]
-      if count > 0 then
+      if count > 0 or show_empty then
         local value = cell_value(count)
         if value > maximum_value then maximum_value = value end
         cells[#cells + 1] = {
@@ -2346,6 +2394,7 @@ function Figure:hist2d(x, y, opts)
     point_count = #xv,
     inside_count = inside,
     density = density,
+    show_empty = show_empty,
     vmin = vmin,
     vmax = vmax,
     colorbar = colorbar,
@@ -2769,23 +2818,48 @@ function Figure:bar(labels_or_x, values, opts, ...)
     bar_linewidth = util.check_number(opts.linewidth, "bar linewidth", 0)
   end
 
-  local bar_colors = nil
+  local bar_colors_series = nil
   if opts.bar_colors ~= nil then
     if type(opts.bar_colors) ~= "table" then
       fail("bar bar_colors must be a table")
     end
-    if series_count ~= 1 then
-      fail("bar bar_colors supports a single value series")
-    end
-    if #opts.bar_colors ~= #xv then
-      fail(string.format(
-        "bar bar_colors must have one color per bar (%d ~= %d)",
-        #opts.bar_colors, #xv))
-    end
-    bar_colors = {}
-    for i = 1, #opts.bar_colors do
-      bar_colors[i] = util.check_color(opts.bar_colors[i],
-        "bar bar_colors[" .. i .. "]")
+    local nested = type(opts.bar_colors[1]) == "table"
+    if nested then
+      if #opts.bar_colors ~= series_count then
+        fail(string.format(
+          "bar bar_colors must have one color list per series (%d ~= %d)",
+          #opts.bar_colors, series_count))
+      end
+      bar_colors_series = {}
+      for series_index = 1, series_count do
+        local list = opts.bar_colors[series_index]
+        if type(list) ~= "table" or #list ~= #xv then
+          fail(string.format(
+            "bar bar_colors[%d] must have one color per bar (%d)",
+            series_index, #xv))
+        end
+        local colors = {}
+        for i = 1, #list do
+          colors[i] = util.check_color(list[i],
+            string.format("bar bar_colors[%d][%d]", series_index, i))
+        end
+        bar_colors_series[series_index] = colors
+      end
+    else
+      if series_count ~= 1 then
+        fail("bar bar_colors for multiple series must contain one color list per series")
+      end
+      if #opts.bar_colors ~= #xv then
+        fail(string.format(
+          "bar bar_colors must have one color per bar (%d ~= %d)",
+          #opts.bar_colors, #xv))
+      end
+      local colors = {}
+      for i = 1, #opts.bar_colors do
+        colors[i] = util.check_color(opts.bar_colors[i],
+          "bar bar_colors[" .. i .. "]")
+      end
+      bar_colors_series = { colors }
     end
   end
   if opts.show_values ~= nil then
@@ -2953,7 +3027,7 @@ function Figure:bar(labels_or_x, values, opts, ...)
       mode = mode,
       series_index = i,
       series_count = series_count,
-      bar_colors = bar_colors,
+      bar_colors = bar_colors_series and bar_colors_series[i] or nil,
       show_values = opts.show_values == true,
     }
     if mode == "grouped" then
@@ -3437,6 +3511,16 @@ function Figure:pie(values, opts)
   if opts.shadow ~= nil then
     util.check_boolean(opts.shadow, "pie shadow")
   end
+  local labeldistance = 1.08
+  if opts.labeldistance ~= nil then
+    labeldistance = util.check_number(opts.labeldistance,
+      "pie labeldistance", 0.01, 2)
+  end
+  local pctdistance = 0.64
+  if opts.pctdistance ~= nil then
+    pctdistance = util.check_number(opts.pctdistance,
+      "pie pctdistance", 0.01, 2)
+  end
   local slices = {}
   local angle = startangle
   for index, value in ipairs(values_v) do
@@ -3455,6 +3539,7 @@ function Figure:pie(values, opts)
   self._pie = {
     slices = slices, radius = radius, inner_radius = inner,
     autopct = autopct, shadow = shadow, legend = legend,
+    labeldistance = labeldistance, pctdistance = pctdistance,
   }
   return self
 end
@@ -4208,6 +4293,7 @@ function Figure:annotate(text, x, y, opts)
     fontsize = fontsize,
     align = align,
     arrow = checked_arrow(opts.arrow, color),
+    background = checked_annotation_background(opts, "annotate"),
   }
   return self
 end
@@ -4229,15 +4315,31 @@ function Figure:title(text, opts)
   return self
 end
 
-function Figure:xlabel(text)
+function Figure:xlabel(text, opts)
   util.check_string(text, "xlabel", true)
+  local pad = self._xlabel_pad or 0
+  if opts ~= nil then
+    opts = util.check_options(opts, { labelpad = true }, "xlabel")
+    if opts.labelpad ~= nil then
+      pad = util.check_number(opts.labelpad, "xlabel labelpad", 0)
+    end
+  end
   self._xlabel = text
+  self._xlabel_pad = pad
   return self
 end
 
-function Figure:ylabel(text)
+function Figure:ylabel(text, opts)
   util.check_string(text, "ylabel", true)
+  local pad = self._ylabel_pad or 0
+  if opts ~= nil then
+    opts = util.check_options(opts, { labelpad = true }, "ylabel")
+    if opts.labelpad ~= nil then
+      pad = util.check_number(opts.labelpad, "ylabel labelpad", 0)
+    end
+  end
   self._ylabel = text
+  self._ylabel_pad = pad
   return self
 end
 

@@ -110,14 +110,17 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `inner_radius` | number in [0, 0.95] | `0` (`0.55` for donut) |
 | `explode` | number or per-slice array in [0, 0.5] | `0` |
 | `shadow` | boolean | `false` |
+| `labeldistance` | number in [0.01, 2], radius multiplier | `1.08` |
+| `pctdistance` | number in [0.01, 2], radius multiplier | `0.64` |
 | `autopct` | `false`, `true`, or a format string | `false` |
 | `legend` | boolean | `true` |
 
 `explode` shifts each wedge outward by that fraction of the radius along its
 mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
 wedges keep their labels, leader lines, and percentage text attached to the
-shifted slice. `to_scene()` exports `pie.shadow` and each slice's `explode`
-value.
+shifted slice. `labeldistance`/`pctdistance` place the slice labels and
+percentage text as radius multipliers. `to_scene()` exports `pie.shadow`, the
+two distances, and each slice's `explode` value.
 
 ### `plt.polar(theta, r[, opts])` / `fig:polar(theta, r[, opts])`
 
@@ -626,18 +629,22 @@ the shared heat palette.
 | `colorbar_tick_values` | non-empty numeric table | uniform ticks |
 | `edgecolor` | color string | `#ffffff` |
 | `linewidth` | number ≥ 0 | `0.5` |
+| `show_empty` | boolean | `false` |
 | `color`, `label`, `alpha` | normal series style | palette/`1` |
 
 `bins = { nx, ny }` controls the x and y cell counts independently. An explicit
 `range` clips samples outside the rectangle and fixes the cell edges; the
 default range uses the sample extrema, padded when an axis is degenerate.
 `density = true` divides each cell count by the in-range sample count and the
-cell area. Empty bins are omitted from the SVG and scene cell lists, while the
-grid edges and bin counts are preserved. `colorbar_ticks` and
+cell area. Empty bins are omitted from the SVG and scene cell lists by default;
+`show_empty = true` emits every cell in the grid with count/value zero so the
+full rectangular field is visible. Grid edges and bin counts are always
+preserved. `colorbar_ticks` and
 `colorbar_tick_values` are mutually exclusive.
 
 The series group exposes `data-points`, `data-inside`, `data-bins-x`,
-`data-bins-y`, `data-norm` (`count` or `density`), `data-vmin`, and `data-vmax`.
+`data-bins-y`, `data-norm` (`count` or `density`), `data-show-empty`,
+`data-vmin`, and `data-vmax`.
 Each `hist2d-cell` rectangle carries `data-row`, `data-col`, `data-count`,
 `data-value`, and its source cell bounds. The colorbar group
 (`colorbar hist2d-colorbar`) reports the same norm and value range. Scene export
@@ -935,6 +942,7 @@ fig:bar({ "Q1", "Q2" }, {
 | `linewidth` | number ≥ 0, bar outline stroke | `1` |
 | `color` | color string | next palette color |
 | `colors` | table of color strings, one per series | palette colors |
+| `bar_colors` | flat color list (single series) or one list per series | series colors |
 | `label` | string | no legend entry |
 | `labels` | table of strings, one per series | descriptor labels or none |
 | `alpha` | number in [0, 1] | `1` |
@@ -955,6 +963,10 @@ stacked mode positive and negative values accumulate separately from zero.
 `stacked = true` and `grouped = true` are mutually exclusive. `label` applies to
 a single series; use `labels` (or descriptor labels) for multiple series. The
 `labels` and `colors` tables must have exactly one entry per value series.
+`bar_colors` is a flat list with one color per bar for a single series, or a
+nested list with one color list per series for grouped/stacked bars; each nested
+list must contain one color per bar. Bar scene series export their resolved
+`bar_colors` array.
 
 `yerr` mirrors `errorbar` error specifications. For a single series it may be a
 non-negative number, a flat per-bar sequence, or an asymmetric
@@ -1042,10 +1054,14 @@ fig:title("text")
 fig:title("left aligned", { loc = "left" })
 fig:title("right aligned", { loc = "right" })
 fig:xlabel("text")
-fig:ylabel("text")
+fig:xlabel("x", { labelpad = 10 })
+fig:ylabel("y", { labelpad = 8 })
 ```
 
-Arguments must be strings (empty strings are allowed). `title` accepts
+Arguments must be strings (empty strings are allowed). `xlabel` and `ylabel`
+accept `labelpad` (number ≥ 0, default `0`) to increase the corresponding layout
+margin and move the axis label away from the plot box; root SVG metadata and
+scenes report `xlabel_pad`/`ylabel_pad`. `title` accepts
 `loc = "left"`, `"center"` (default), or `"right"` and aligns the title to the
 axes box (Cartesian), canvas (pie/polar), or outer grid (subplots). Calling
 `title(text)` without options keeps the last alignment. Scenes export the
@@ -1077,8 +1093,16 @@ Annotations are rendered above the series and clipped to the plot rectangle.
 | `fontsize` | number > 0, in SVG user units | `12` |
 | `align` | `"left"`, `"center"`, or `"right"` | `"left"` |
 | `arrow` | boolean or options table | no arrow |
+| `backgroundcolor` | color string | no background |
+| `backgroundedgecolor` | color string | no border |
+| `backgroundalpha` | number in [0, 1] | `1` |
+| `backgroundpad` | number ≥ 0 | `3` |
 
-`arrow = true` draws a leader line from the text to `(x, y)` using the
+`backgroundcolor` draws a rounded `annotation-background` box behind the text
+using approximate Helvetica/Arial metrics; the edge, opacity, and padding are
+optional, and the other background options require `backgroundcolor`.
+Background boxes work for Cartesian and polar annotations and are exported in
+scenes. `arrow = true` draws a leader line from the text to `(x, y)` using the
 annotation color. It also accepts a table with `color`, `linewidth` (or
 `width`), and `head` (or `headsize`) values; `head` is the arrowhead length in
 SVG user units and defaults to `8`. Set `arrow = false` or omit it for plain
@@ -1347,6 +1371,11 @@ includes, but is not limited to:
 - negative marker edge widths or invalid marker face/edge colors
 - non-positive errorbar `errorevery` values
 - non-boolean ECDF complementary values
+- malformed multi-series bar color lists
+- annotation background options without a background color
+- negative axis label padding
+- pie label/percentage distances outside [0.01, 2]
+- non-boolean hist2d show_empty values
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1430,6 +1459,7 @@ Returns a renderer-agnostic scene table:
   width = 640, height = 480, dpi = 100,
   title = "...", title_align = "center",
   xlabel = "...", ylabel = "...",
+  xlabel_pad = 0, ylabel_pad = 0,
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
   minorticks = false, minor_tick_axis = "both", minor_subdivisions = 5,
@@ -1491,7 +1521,8 @@ Returns a renderer-agnostic scene table:
     { kind = "violin", position = 1, width = 0.5, mean = 3,
       showmeans = true, meanline = false, q1 = 2, median = 3, q3 = 4,
       style = {...} },
-    { kind = "bar", x = {...}, y = {...}, width = 0.8 },
+    { kind = "bar", x = {...}, y = {...}, width = 0.8,
+      bar_colors = { "#9ecae1", ... } },
     -- Grouped bars keep category centers in x and add a per-series offset:
     { kind = "bar", x = {...}, y = {...}, width = 0.4, mode = "grouped",
       grouped = true, offset = -0.2, offsets = {...} },
@@ -1500,6 +1531,8 @@ Returns a renderer-agnostic scene table:
       stacked = true, bottom = {...}, top = {...}, stack = {...} },
     { kind = "hist", edges = {...}, counts = {...},
       orientation = "horizontal", histtype = "stepfilled" },
+    { kind = "hist2d", x = {...}, y = {...}, bins_x = 10, bins_y = 10,
+      show_empty = true, edges_x = {...}, edges_y = {...}, cells = {...} },
     { kind = "step", x = {...}, y = {...}, where = "post",
       ecdf = true, complementary = true, style = {...} },
   },
@@ -1510,6 +1543,8 @@ Returns a renderer-agnostic scene table:
       color = "#444444", fontsize = 13, align = "center",
       style = { color = "#444444", fontsize = 13, align = "center" },
       arrow = { enabled = true, color = "#444444", linewidth = 1.5, head = 8 },
+      background = { color = "#ffffff", edgecolor = "#d62728",
+                     alpha = 0.9, pad = 4 },
     },
   },
 }

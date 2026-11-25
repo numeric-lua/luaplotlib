@@ -97,6 +97,15 @@ local function copy_annotation(annotation)
     copy.xytext = { x, y, x = x, y = y }
   end
 
+  if annotation.background ~= nil then
+    copy.background = {
+      color = annotation.background.color,
+      edgecolor = annotation.background.edgecolor,
+      alpha = annotation.background.alpha,
+      pad = annotation.background.pad,
+    }
+  end
+
   if annotation.arrow ~= nil then
     copy.arrow = {
       enabled = true,
@@ -126,6 +135,8 @@ function M.from_figure(figure)
     title_align = figure._title_loc or "center",
     xlabel = figure._xlabel,
     ylabel = figure._ylabel,
+    xlabel_pad = figure._xlabel_pad or 0,
+    ylabel_pad = figure._ylabel_pad or 0,
     xscale = figure._xscale or "linear",
     yscale = figure._yscale or "linear",
     xtick_rotation = figure._xtick_rotation or 0,
@@ -185,6 +196,8 @@ function M.from_figure(figure)
       radius = figure._pie.radius,
       inner_radius = figure._pie.inner_radius,
       shadow = figure._pie.shadow and true or false,
+      labeldistance = figure._pie.labeldistance or 1.08,
+      pctdistance = figure._pie.pctdistance or 0.64,
       slices = {},
     }
     for index, slice in ipairs(figure._pie.slices) do
@@ -275,6 +288,7 @@ function M.from_figure(figure)
       copy.point_count = series.point_count
       copy.inside_count = series.inside_count
       copy.density = series.density and true or false
+      copy.show_empty = series.show_empty and true or false
       copy.vmin = series.vmin
       copy.vmax = series.vmax
       copy.colorbar = series.colorbar and true or false
@@ -673,6 +687,9 @@ function M.from_figure(figure)
       copy.y = copy_array(series.y)
       copy.width = series.width
       copy.category = series.category
+      if series.bar_colors ~= nil then
+        copy.bar_colors = copy_array(series.bar_colors)
+      end
       copy.mode = mode
       if series.yerr_lower ~= nil then
         copy.yerr_lower = copy_array(series.yerr_lower)

@@ -44,6 +44,10 @@ grouped:bar(quarters, { product, services }, {
   labels = { "Product", "Services" },
   grouped = true,
   colors = { "#1f77b4", "#ff7f0e" },
+  bar_colors = {
+    { "#9ecae1", "#6baed6", "#4292c6", "#2171b5" },
+    { "#fdae6b", "#fd8d3c", "#f16913", "#d94801" },
+  },
 })
 grouped:title("luaplotlib: grouped bars")
 grouped:xlabel("quarter")

@@ -29,6 +29,8 @@ fig:pie({ 34, 26, 22, 18 }, {
   explode = { 0.08, 0.04, 0.0, 0.12 },
   shadow = true,
   autopct = true,
+  labeldistance = 1.14,
+  pctdistance = 0.55,
 })
 fig:title("Effort by phase")
 

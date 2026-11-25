@@ -283,6 +283,38 @@ edge options apply to filled marker shapes. `errorevery` keeps every line
 vertex and marker but draws error bars only at the first point and every Nth
 point after it. `ecdf(..., { complementary = true })` plots `1 - F_n(x)`.
 
+Per-bar color lists, annotation boxes, label padding, pie distances, and empty
+hist2d cells are also available:
+
+```lua
+fig:bar(quarters, { product, services }, {
+  bar_colors = {
+    { "#9ecae1", "#6baed6", "#4292c6", "#2171b5" },
+    { "#fdae6b", "#fd8d3c", "#f16913", "#d94801" },
+  },
+})
+
+fig:annotate("peak", 2.5, 4.1, {
+  backgroundcolor = "#ffffff",
+  backgroundedgecolor = "#d62728",
+  backgroundalpha = 0.9,
+  backgroundpad = 4,
+})
+
+fig:xlabel("x", { labelpad = 10 })
+fig:ylabel("y", { labelpad = 8 })
+
+fig:pie(values, { labeldistance = 1.14, pctdistance = 0.55 })
+fig:hist2d(x, y, { show_empty = true })
+```
+
+`bar_colors` now accepts one flat list for a single series or one list per
+series for grouped/stacked bars. Annotation backgrounds use approximate
+Helvetica/Arial metrics to size the box; `backgroundpad` expands it around the
+text. Axis label padding increases the corresponding layout margin, moving the
+plot box away from the label. Pie distances are radius multipliers, and
+`hist2d` includes zero-count cells when `show_empty` is true.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -500,12 +532,12 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   `c` values mapped through the heat palette and an optional colorbar
 - Histograms with configurable bins, ranges, `bar`/`step`/`stepfilled`
   outlines, and outline widths, plus rectangular `hist2d` counts/densities with
-  explicit grids, value limits, and colorbars
+  explicit grids, optional empty cells, value limits, and colorbars
 - Vertical bars with numeric positions or categorical labels, including
-  multi-series grouped and stacked bars, configurable outline widths, and
-  symmetric/asymmetric error bars
-- Pie and donut charts with exploded slices, soft shadows, labels, and
-  percentage annotations
+  multi-series grouped and stacked bars, per-bar color lists, configurable
+  outline widths, and symmetric/asymmetric error bars
+- Pie and donut charts with exploded slices, soft shadows, distance-tuned
+  labels and percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional mean markers or
   mean lines
@@ -519,15 +551,16 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   collision-aware contour labels, explicit colorbar ticks, measured-text
   label-aware legends, polar annotations with canvas clamping, and polar scene
   export
-- Text annotations with optional leader arrows at Cartesian or polar data
-  coordinates
+- Text annotations with optional leader arrows and background boxes at
+  Cartesian or polar data coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
   and upper extents, optional `errorevery` decimation, and configurable caps
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
-- Explicit `xlim` / `ylim`, optional major/minor grid, aligned titles, axis
-  labels, and legends with nine locations plus frame alpha/colors
+- Explicit `xlim` / `ylim`, optional major/minor grid, aligned titles,
+  label-padded axis labels, and legends with nine locations plus frame
+  alpha/colors
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands
@@ -569,8 +602,9 @@ hexbin-count, image-extent/origin, contour-coordinate, minor-subdivision,
 horizontal-event, histogram-step, horizontal-box, image-colorbar, event-color,
 event-label, distribution-mean, bar-outline, broken-bar, pie-explode,
 histogram-outline, title-align, legend-location, legend-frame, marker-style,
-errorbar-stride, ecdf-complementary, image-alpha, and equal-aspect metadata,
-and confirms that Cartesian examples stay Cartesian.
+errorbar-stride, ecdf-complementary, per-bar-color, annotation-background,
+label-padding, pie-distance, hist2d-empty, image-alpha, and equal-aspect
+metadata, and confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -636,9 +670,11 @@ canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
 per-row event colors, event lane labels, box/violin means, broken horizontal
 bars, pie explode/shadow, configurable bar/histogram outlines, marker
-face/edge styling, error-bar decimation, complementary ECDFs, image alpha,
-aligned titles, expanded legend locations and frame styling, minor ticks and
-minor grids, clipped `axline` reference lines, marker
+face/edge styling, error-bar decimation, complementary ECDFs, per-bar
+multi-series colors, annotation backgrounds, label padding, pie label/pct
+distances, hist2d empty cells, image alpha, aligned titles, expanded legend
+locations and frame styling, minor ticks and minor grids, clipped `axline`
+reference lines, marker
 decimation, x/y tick-label rotation, 3-D
 line/scatter/surface/mesh, subplots, custom ticks, per-bar colors, value labels,
 legends, reference lines, axis-specific grid lines, fractional reference
@@ -687,8 +723,9 @@ See
 - **Distribution/color helpers are focused.** `violinplot` uses a Gaussian KDE
   (no alternate kernels, split violins, or per-sample bandwidth arrays), and
   numeric scatter colors always use the shared heat palette. `hist2d` omits
-  empty cells, and bar `yerr` takes one error specification per value series
-  rather than a freely mixed per-bar error matrix.
+  empty cells unless `show_empty = true`, and bar `yerr` takes one error
+  specification per value series rather than a freely mixed per-bar error
+  matrix.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.
@@ -702,8 +739,9 @@ See
   numeric alpha mask, and interpolation uses the midpoint between adjacent
   samples. Horizontal histograms still use the same bin/density/cumulative
   calculation as vertical ones.
-- **One color per bar series.** Colors are not split per bar, and categorical
-  series with different label sets share one categorical x-axis.
+- **Bar color granularity.** `bar` accepts per-bar lists for each series, but
+  categorical series with different label sets still share one categorical
+  x-axis; `barh` remains single-series.
 - **Heuristic tensor interop.** luatorch/numlua-style one-dimensional objects
   are detected from accessor methods (`dim`, `numel`, `get`, `totable`,
   `nDimension`, `nElement`, `size`, etc.). Multi-dimensional data must be

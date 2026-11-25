@@ -395,6 +395,8 @@ printf '%s\n' "$marker_line" | grep -q 'stroke="#1f77b4"' ||
   fail "$LINE markers should have a blue edge"
 printf '%s\n' "$marker_line" | grep -q 'stroke-width="1.2"' ||
   fail "$LINE markers should have a 1.2-pixel edge"
+grep -q 'data-xlabel-pad="10" data-ylabel-pad="8"' "$LINE" ||
+  fail "$LINE should expose axis label padding"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg
@@ -513,6 +515,13 @@ grep -q 'class="series series-step"' "$ECDF" ||
   fail "$ECDF has no step series"
 grep -q 'class="legend"' "$ECDF" ||
   fail "$ECDF has no legend"
+
+# Annotations with a background expose a box behind the text.
+ANNOTATIONS=examples/output/annotations.svg
+grep -q 'class="annotation-background"' "$ANNOTATIONS" ||
+  fail "$ANNOTATIONS has no annotation background"
+grep -q 'class="annotation-background" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*" rx="2" fill="#ffffff" fill-opacity="0.9" stroke="#d62728"' \
+  "$ANNOTATIONS" || fail "$ANNOTATIONS background styling is incomplete"
 
 # axline must be clipped, omit polar output, and rotate y tick labels.
 AXLINE=examples/output/axline.svg
@@ -701,6 +710,10 @@ hist2d_cells=$(grep -o 'class="hist2d-cell"' "$HIST2D" | wc -l |
   fail "$HIST2D has no hist2d cells"
 [ "$hist2d_cells" -le $((hist2d_bins_x * hist2d_bins_y)) ] ||
   fail "$HIST2D draws more cells than its grid"
+grep -q 'data-show-empty="true"' "$HIST2D" ||
+  fail "$HIST2D should include empty cells"
+[ "$hist2d_cells" -eq $((hist2d_bins_x * hist2d_bins_y)) ] ||
+  fail "$HIST2D should draw the complete hist2d grid"
 hist2d_sum=$(grep -o 'class="hist2d-cell"[^>]*data-count="[0-9]*"' "$HIST2D" |
   sed -E 's/.*data-count="([0-9]+)"/\1/' |
   awk '{ total += $1 } END { print total + 0 }')
@@ -783,6 +796,15 @@ for index in 1 2 3; do
     fail "$STACK_BASELINE is missing stack layer $index"
 done
 
+# Grouped bars support one color per bar within each series.
+BARS_GROUPED=examples/output/bars-grouped.svg
+grep -q 'class="series series-bar"[^>]*data-per-bar-colors="true"' \
+  "$BARS_GROUPED" || fail "$BARS_GROUPED has no per-bar colors"
+bar_fills=$(grep -o 'class="bar"[^>]*fill="[^"]*"' "$BARS_GROUPED" |
+  sed -E 's/.*fill="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$bar_fills" -eq 8 ] ||
+  fail "$BARS_GROUPED should use eight distinct bar fills"
+
 # Grouped bars must carry both symmetric and asymmetric error geometry.
 BAR_ERRORS=examples/output/bar-errors.svg
 grep -q '<g class="series series-bar"[^>]*data-yerr="true"' "$BAR_ERRORS" ||
@@ -840,6 +862,8 @@ pie_percent=$(grep -o 'class="pie-percent"' "$PIE_EXPLODE" | wc -l |
   tr -d ' ')
 [ "$pie_percent" -eq 4 ] ||
   fail "$PIE_EXPLODE should label every slice percentage"
+grep -q 'data-labeldistance="1.14" data-pctdistance="0.55"' "$PIE_EXPLODE" ||
+  fail "$PIE_EXPLODE should expose its label and percentage distances"
 
 # Equal aspect must produce a square plot box.
 ASPECT=examples/output/aspect.svg
@@ -872,9 +896,10 @@ done
 # extent/origin placement, explicit contour coordinates, and equal aspect.
 for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
   "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
-  "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BROKEN_BARH" \
-  "$PIE_EXPLODE" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" "$ASPECT" \
-  "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do
+  "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BARS_GROUPED" \
+  "$ANNOTATIONS" "$BROKEN_BARH" "$PIE_EXPLODE" "$HEATMAP_EXTENT" \
+  "$CONTOUR_COORDS" "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" \
+  "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"
   [ -s "$png" ] || fail "rasterization produced no output for $svg"

@@ -48,6 +48,10 @@ fig:annotate("maximum", 2.5, 3.125, {
   color = "#333333",
   fontsize = 13,
   arrow = { color = "#d62728", linewidth = 1.5, head = 9 },
+  backgroundcolor = "#ffffff",
+  backgroundedgecolor = "#d62728",
+  backgroundalpha = 0.9,
+  backgroundpad = 4,
 })
 fig:annotate("smooth arc", 1.0, 2.0, {
   xytext = { 0.25, 0.35 },

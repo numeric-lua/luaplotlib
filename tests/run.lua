@@ -252,6 +252,11 @@ local test_files = {
   "test_errorbar_errorevery.lua",
   "test_marker_style.lua",
   "test_ecdf_complementary.lua",
+  "test_bar_multicolor.lua",
+  "test_annotation_background.lua",
+  "test_labelpad.lua",
+  "test_pie_distances.lua",
+  "test_hist2d_empty.lua",
   "test_export.lua",
 }
 

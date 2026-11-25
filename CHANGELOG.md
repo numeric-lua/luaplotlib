@@ -1,3 +1,26 @@
+## Unreleased
+
+- `fig:bar` accepts nested `bar_colors` for grouped/stacked multi-series bars:
+  each series can now have its own per-bar color list while a single series
+  keeps the existing flat list. Bar scenes export the resolved colors;
+- `fig:annotate` and `fig:polar_annotate` accept `backgroundcolor`,
+  `backgroundedgecolor`, `backgroundalpha`, and `backgroundpad`. A rounded
+  `annotation-background` box is sized with the shared approximate text metrics
+  and exported through scenes;
+- `fig:xlabel` and `fig:ylabel` accept `labelpad` to enlarge the corresponding
+  layout margin. SVG roots expose `data-xlabel-pad`/`data-ylabel-pad`, and
+  scenes export `xlabel_pad`/`ylabel_pad`;
+- `fig:pie`/`fig:donut` accept `labeldistance` and `pctdistance` radius
+  multipliers for slice labels and percentage text. SVG roots and scenes expose
+  both values;
+- `fig:hist2d` accepts `show_empty = true`, which emits every grid cell with a
+  zero count/value instead of omitting empty bins. The series group reports
+  `data-show-empty`, and scenes export `show_empty`. Existing examples and
+  visual QA cover per-bar colors, annotation backgrounds, label padding, pie
+  distances, and complete hist2d grids. The dependency-free suite grows from
+  410 to 427 tests. Existing Cartesian APIs remain compatible, polar rendering
+  is unchanged, and there are no new runtime dependencies.
+
 ## 4.28.0
 
 - `fig:legend` adds `upper center`, `lower center`, `center left`,

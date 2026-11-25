@@ -19,7 +19,7 @@ test("bar color/label options are validated", function()
   assert_error("one color per bar", function()
     fig:bar({ "a", "b" }, { 1, 2 }, { bar_colors = { "#fff" } })
   end)
-  assert_error("single value series", function()
+  assert_error("one color list per series", function()
     fig:bar({ "a", "b" }, { { 1, 2 }, { 2, 3 } },
       { bar_colors = { "#fff", "#000" } })
   end)
