@@ -39,13 +39,19 @@ for index = 1, 260 do
   c[index] = math.sin(t * 1.7) + 0.35 * math.cos(t * 0.6)
 end
 
+local marker_names = { "circle", "square", "triangle", "diamond" }
+local markers = {}
+for index = 1, #x do
+  markers[index] = marker_names[(index - 1) % #marker_names + 1]
+end
+
 local fig = plt.figure({ width = 800, height = 540 })
 fig:scatter(x, y, {
   c = c,
   vmin = -1.6,
   vmax = 1.6,
   size = 5.2,
-  marker = "circle",
+  marker = markers,
   label = "phase-colored samples",
   colorbar = true,
   colorbar_label = "phase signal",

@@ -1,0 +1,40 @@
+local plt = require("luaplotlib")
+
+local function event_count(svg)
+  return select(2, svg:gsub('class="event"', ""))
+end
+
+test("eventplot is solid by default", function()
+  local fig = plt.figure()
+  fig:eventplot({ 1, 2 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-linestyle="solid"')
+  assert_equal(event_count(svg), 2)
+  assert_equal(fig:to_scene().series[1].style.linestyle, "solid")
+end)
+
+test("eventplot supports dashed, dotted, and hidden event lines", function()
+  local dashed = plt.figure()
+  dashed:eventplot({ 1, 2 }, { linestyle = "dashed" })
+  assert_contains(dashed:to_svg(), 'data-linestyle="dashed"')
+  assert_contains(dashed:to_svg(), 'stroke-dasharray="6 4"')
+
+  local dotted = plt.figure()
+  dotted:eventplot({ 1, 2 }, { linestyle = "dotted" })
+  assert_contains(dotted:to_svg(), 'data-linestyle="dotted"')
+  assert_contains(dotted:to_svg(), 'stroke-dasharray="1.5 3"')
+
+  local hidden = plt.figure()
+  hidden:eventplot({ 1, 2 }, { linestyle = "none" })
+  local svg = hidden:to_svg()
+  assert_contains(svg, 'data-linestyle="none"')
+  assert_equal(event_count(svg), 0)
+  assert_equal(hidden:to_scene().series[1].style.linestyle, "none")
+end)
+
+test("eventplot linestyle validates accepted names", function()
+  local fig = plt.figure()
+  assert_error("linestyle must be one of", function()
+    fig:eventplot({ 1, 2 }, { linestyle = "dashdot" })
+  end)
+end)

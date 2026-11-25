@@ -58,6 +58,7 @@ luajit examples/field_coordinates.lua
 luajit examples/aspect.lua
 luajit examples/bars.lua
 luajit examples/bar_linewidth.lua
+luajit examples/barh_hatch.lua
 luajit examples/broken_barh.lua
 luajit examples/pie_explode.lua
 luajit examples/heatmap.lua
@@ -315,6 +316,26 @@ text. Axis label padding increases the corresponding layout margin, moving the
 plot box away from the label. Pie distances are radius multipliers, and
 `hist2d` includes zero-count cells when `show_empty` is true.
 
+Markers, annotations, events, and horizontal hatches add more styling:
+
+```lua
+fig:scatter(x, y, { marker = { "circle", "square", "triangle", "diamond" } })
+fig:annotate("slope", 1.2, 2.4, { rotation = -12 })
+fig:errorbar(x, y, yerr, {
+  markerfacecolor = "#ffffff", markeredgecolor = "#1f77b4",
+})
+fig:stem(x, y, { markerfacecolor = "#ffffff", markeredgecolor = "#8c564b" })
+fig:eventplot(rows, { linestyle = "dashed" })
+fig:barh(phases, effort, { hatch = "/" })
+```
+
+`scatter` accepts one marker or one marker per point (Cartesian and polar).
+`rotation` applies to Cartesian and polar annotation text around its anchor.
+Errorbar and stem markers now accept the same face/edge styling as line
+markers. Eventplot lines support solid, dashed, dotted, and hidden styles, and
+`barh` supports the shared hatch patterns. Scenes export per-point markers and
+hatch styles.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -528,14 +549,14 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
   `fig:savefig(path)`
 - Line plots with colors, dashes, marker face/edge styling, labels, and alpha
-- Scatter plots rendered as SVG circles, with per-point colors/sizes or numeric
-  `c` values mapped through the heat palette and an optional colorbar
+- Scatter plots with per-point markers, colors, and sizes, or numeric `c`
+  values mapped through the heat palette and an optional colorbar
 - Histograms with configurable bins, ranges, `bar`/`step`/`stepfilled`
   outlines, and outline widths, plus rectangular `hist2d` counts/densities with
   explicit grids, optional empty cells, value limits, and colorbars
-- Vertical bars with numeric positions or categorical labels, including
-  multi-series grouped and stacked bars, per-bar color lists, configurable
-  outline widths, and symmetric/asymmetric error bars
+- Vertical and horizontal bars with numeric positions or categorical labels,
+  including multi-series grouped and stacked bars, per-bar color lists,
+  configurable outline widths and hatches, and symmetric/asymmetric error bars
 - Pie and donut charts with exploded slices, soft shadows, distance-tuned
   labels and percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
@@ -544,15 +565,15 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Gaussian-kernel violin plots with configurable bandwidth, positions,
   quartiles, medians, extrema, optional mean marks, and per-sample colors
 - Vertical or horizontal event lanes with per-row offsets, lengths, colors,
-  axis labels, and scene export
+  axis labels, line styles, and scene export
 - Horizontal broken bars for schedules and Gantt-style intervals
 - Polar line, scatter, bar, error-bar, quiver, heatmap, and contour plots with
   circular grid, theta/r ticks, configurable orientation and limits, rotated
   collision-aware contour labels, explicit colorbar ticks, measured-text
   label-aware legends, polar annotations with canvas clamping, and polar scene
   export
-- Text annotations with optional leader arrows and background boxes at
-  Cartesian or polar data coordinates
+- Text annotations with optional leader arrows, rotation, and background boxes
+  at Cartesian or polar data coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
   and upper extents, optional `errorevery` decimation, and configurable caps
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
@@ -564,7 +585,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands
-- Horizontal histograms and styled stems with custom bases and markers
+- Horizontal histograms and styled stems with custom bases, markers, and
+  marker face/edge styling
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
 - Cartesian quiver vector fields with automatic/explicit scaling, pivots,
   normalization, deterministic arrow caps, and legend/scene metadata
@@ -603,7 +625,8 @@ horizontal-event, histogram-step, horizontal-box, image-colorbar, event-color,
 event-label, distribution-mean, bar-outline, broken-bar, pie-explode,
 histogram-outline, title-align, legend-location, legend-frame, marker-style,
 errorbar-stride, ecdf-complementary, per-bar-color, annotation-background,
-label-padding, pie-distance, hist2d-empty, image-alpha, and equal-aspect
+label-padding, pie-distance, hist2d-empty, scatter-marker, annotation-rotation,
+error-stem-marker, event-linestyle, barh-hatch, image-alpha, and equal-aspect
 metadata, and confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
@@ -631,6 +654,7 @@ make examples
 # examples/output/stack-baseline.svg
 # examples/output/bar-errors.svg
 # examples/output/bar-linewidth.svg
+# examples/output/barh-hatch.svg
 # examples/output/broken-barh.svg
 # examples/output/pie-explode.svg
 # examples/output/heatmap-extent.svg
@@ -670,8 +694,10 @@ canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
 per-row event colors, event lane labels, box/violin means, broken horizontal
 bars, pie explode/shadow, configurable bar/histogram outlines, marker
-face/edge styling, error-bar decimation, complementary ECDFs, per-bar
-multi-series colors, annotation backgrounds, label padding, pie label/pct
+face/edge styling, per-point scatter markers, annotation rotation/backgrounds,
+error-bar and stem marker styling, event line styles, barh hatches,
+error-bar decimation, complementary ECDFs, per-bar
+multi-series colors, label padding, pie label/pct
 distances, hist2d empty cells, image alpha, aligned titles, expanded legend
 locations and frame styling, minor ticks and minor grids, clipped `axline`
 reference lines, marker
@@ -741,7 +767,7 @@ See
   calculation as vertical ones.
 - **Bar color granularity.** `bar` accepts per-bar lists for each series, but
   categorical series with different label sets still share one categorical
-  x-axis; `barh` remains single-series.
+  x-axis; `barh` remains single-series and accepts one hatch per call.
 - **Heuristic tensor interop.** luatorch/numlua-style one-dimensional objects
   are detected from accessor methods (`dim`, `numel`, `get`, `totable`,
   `nDimension`, `nElement`, `size`, etc.). Multi-dimensional data must be

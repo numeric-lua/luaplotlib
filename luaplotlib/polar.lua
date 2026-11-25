@@ -558,7 +558,8 @@ local function render_scatter(series, figure, cfg, geom, buf)
     local color = style.colors and style.colors[index] or style.color
     local x, y = M.point(figure, cfg, geom, series.theta[index],
       series.r[index])
-    buf[#buf + 1] = markers.svg(style.marker, "point", x, y, radius, color,
+    local marker = style.markers and style.markers[index] or style.marker
+    buf[#buf + 1] = markers.svg(marker, "point", x, y, radius, color,
       fade, outline)
   end
   buf[#buf + 1] = '  </g>'
@@ -1874,10 +1875,16 @@ local function render_annotations(figure, cfg, geom, buf)
         end
       end
     end
+    local rotation = annotation.rotation or 0
+    local rotation_attr = ""
+    if rotation ~= 0 then
+      rotation_attr = string.format(' transform="rotate(%s %s %s)"',
+        util.fmt(rotation), util.fmt(text_x), util.fmt(text_y))
+    end
     buf[#buf + 1] = string.format(
-      '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s">%s</text>',
+      '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s"%s>%s</text>',
       util.fmt(text_x), util.fmt(text_y), util.fmt(fontsize), color, anchor,
-      align, util.escape_xml(annotation.text))
+      align, rotation_attr, util.escape_xml(annotation.text))
     buf[#buf + 1] = '   </g>'
   end
   buf[#buf + 1] = '  </g>'
@@ -2528,6 +2535,8 @@ local function copy_style(style)
     linestyle = style.linestyle,
     marker = style.marker,
     markersize = style.markersize,
+    markers = style.markers and copy_array(style.markers) or nil,
+    hatch = style.hatch,
     radius = style.radius,
     capsize = style.capsize,
     elinewidth = style.elinewidth,
@@ -2545,10 +2554,12 @@ local function copy_annotation(annotation)
     color = annotation.color,
     fontsize = annotation.fontsize,
     align = annotation.align,
+    rotation = annotation.rotation or 0,
     style = {
       color = annotation.color,
       fontsize = annotation.fontsize,
       align = annotation.align,
+      rotation = annotation.rotation or 0,
     },
   }
   if annotation.xytext ~= nil then

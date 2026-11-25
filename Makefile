@@ -27,6 +27,7 @@ examples:
 	@$(LUA) examples/stack_baseline.lua
 	@$(LUA) examples/bar_errors.lua
 	@$(LUA) examples/bar_linewidth.lua
+	@$(LUA) examples/barh_hatch.lua
 	@$(LUA) examples/broken_barh.lua
 	@$(LUA) examples/pie_explode.lua
 	@$(LUA) examples/field_coordinates.lua

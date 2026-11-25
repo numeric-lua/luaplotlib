@@ -33,6 +33,7 @@ fig:eventplot({
   labels = { "fast", "nominal", "slow" },
   colors = { "#2ca02c", "#d62728", "#9467bd" },
   linewidth = 2.5,
+  linestyle = "dashed",
   label = "events",
 })
 fig:title("Horizontal event lanes")

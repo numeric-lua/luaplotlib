@@ -257,6 +257,11 @@ local test_files = {
   "test_labelpad.lua",
   "test_pie_distances.lua",
   "test_hist2d_empty.lua",
+  "test_scatter_markers.lua",
+  "test_annotation_rotation.lua",
+  "test_error_stem_markers.lua",
+  "test_eventplot_linestyle.lua",
+  "test_barh_hatch.lua",
   "test_export.lua",
 }
 

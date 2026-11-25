@@ -15,11 +15,26 @@
   both values;
 - `fig:hist2d` accepts `show_empty = true`, which emits every grid cell with a
   zero count/value instead of omitting empty bins. The series group reports
-  `data-show-empty`, and scenes export `show_empty`. Existing examples and
-  visual QA cover per-bar colors, annotation backgrounds, label padding, pie
-  distances, and complete hist2d grids. The dependency-free suite grows from
-  410 to 427 tests. Existing Cartesian APIs remain compatible, polar rendering
-  is unchanged, and there are no new runtime dependencies.
+  `data-show-empty`, and scenes export `show_empty`;
+- `fig:scatter` and `fig:polar_scatter` accept a marker array with one marker
+  per point. Scenes export the `markers` array, and the existing single-marker
+  behavior is unchanged;
+- `fig:annotate` and `fig:polar_annotate` accept `rotation` in [-180, 180] to
+  rotate text around its anchor. Scenes export `rotation`; annotation
+  background boxes remain axis-aligned;
+- `fig:errorbar` (Cartesian and polar) and `fig:stem` accept the same
+  `markerfacecolor`, `markeredgecolor`, and `markeredgewidth` options as
+  `fig:plot`;
+- `fig:eventplot` accepts `linestyle = "solid" | "dashed" | "dotted" | "none"`
+  and reports it through the SVG group and scene style;
+- `fig:barh` accepts one shared hatch pattern per call. Bar/barh scenes now
+  export `hatch`, and existing bar hatches are also preserved in scene styles.
+  Existing examples and visual QA cover per-bar colors, annotation
+  backgrounds/rotation, label padding, pie distances, complete hist2d grids,
+  per-point markers, errorbar/stem marker styling, event line styles, and
+  horizontal hatches. The dependency-free suite grows from 410 to 442 tests.
+  Existing Cartesian APIs remain compatible, polar rendering is unchanged, and
+  there are no new runtime dependencies.
 
 ## 4.28.0
 

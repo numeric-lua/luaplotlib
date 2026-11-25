@@ -76,7 +76,7 @@ Draw a connected line series.
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `2` |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
-| `marker` | `"circle"`, `"square"`, `"triangle"`, `"diamond"`, `"cross"`, `"x"`, aliases, `true`, or `false` | `false` |
+| `marker` | marker name, `true`/`false`, or array of marker names | `false` |
 | `markersize` | number > 0 | `4` |
 | `markevery` | positive integer stride or table of 1-based point indices | draw every marker |
 | `markerfacecolor` | color string | series color |
@@ -454,7 +454,8 @@ figure that already has Cartesian series or annotations.
 ### `fig:barh(labels_or_y, values, opts)`
 
 Horizontal bars for a single numeric series. Category labels are placed on the
-y axis; `bar_colors`, `show_values`, and `linewidth` behave like `bar`.
+y axis; `bar_colors`, `show_values`, `linewidth`, and the one-per-call `hatch`
+pattern behave like `bar`.
 
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
@@ -470,6 +471,9 @@ upper sides.
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
 | `marker` | marker name, `true`, or `false` | `"circle"` |
 | `markersize` | number > 0 | `4` |
+| `markerfacecolor` | color string | series color |
+| `markeredgecolor` | color string | no outline |
+| `markeredgewidth` | number ≥ 0 | `1` when an outline is present |
 | `alpha` | number in [0, 1] | `1` |
 | `capsize` | number ≥ 0, in SVG user units | `4` |
 | `elinewidth` | number ≥ 0 | `1` |
@@ -497,7 +501,9 @@ track the upper side for compatibility, and `yerr_asymmetric`/
 `xerr_asymmetric` are set when the input was asymmetric. The four-argument form
 `errorbar(x, y, yerr, opts)` is accepted when the fourth argument is an options
 table; an asymmetric `xerr` table in that position is treated as error data.
-`errorevery = n` keeps every line vertex and marker but draws error bars only at
+Errorbar markers accept the same `markerfacecolor`, `markeredgecolor`, and
+`markeredgewidth` options as line markers. `errorevery = n` keeps every line
+vertex and marker but draws error bars only at
 the first point and every nth point after it. The group exposes
 `data-errorevery` and `data-error-points`, and scenes export `errorevery`;
 automatic limits cover the drawn error extents plus every point position.
@@ -505,12 +511,13 @@ automatic limits cover the drawn error extents plus every point position.
 ### `fig:scatter(x, y, opts)`
 
 Draw one marker per point. `marker` selects circle (default), square,
-triangle, diamond, cross, or x.
+triangle, diamond, cross, or x, or a table with one marker name per point.
 
 | Option | Type | Default |
 | --- | --- | --- |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
+| `marker` | marker name, or array of marker names | `"circle"` |
 | `size` | number > 0 or array of numbers | `4` |
 | `markersize` | number > 0 | alias/precedence after `size` |
 | `s` | number > 0 | additional size alias |
@@ -526,8 +533,10 @@ triangle, diamond, cross, or x.
 
 `size`/`markersize`/`s` are a circle **radius in SVG user units**, not
 matplotlib's area-in-points-squared convention. Arrays must match the number
-of points. `color` may also be an array of fill colors. The last listed size
-aliases are only used when the earlier ones are absent.
+of points. `marker` may be one marker name or a table with one marker per
+point; marker tables must match the point count and are exported in scenes.
+`color` may also be an array of fill colors. The last listed size aliases are
+only used when the earlier ones are absent.
 
 When `c` is supplied, every numeric value is mapped through the shared heat
 palette (`colors.heat`) using `vmin`/`vmax`, and a vertical scatter colorbar is
@@ -694,6 +703,7 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `linelengths` | positive number or array, one length per row | `0.8` |
 | `colors` | array with one color per row | series `color` |
 | `labels` | array with one axis label per row | no labels |
+| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
 | `color`, `label`, `linewidth`, `alpha` | normal series style | palette / `2` / `1` |
 
 In the default vertical orientation each value is an x coordinate and the mark
@@ -703,8 +713,10 @@ centered on its row's x offset. `lineoffsets` place the lane centers and
 `linelengths` set each lane's span in data units. `colors` gives one stroke
 color per row and cannot be combined with `color`. Offsets and
 lengths participate in automatic ranging, and a row's length may differ from
-its neighbors'. `to_scene()` exports `orientation`, `rows`, `lineoffsets`,
-`linelengths`, and `colors` when row colors were supplied.
+its neighbors'. Setting `linestyle = "none"` hides event marks while keeping
+the lane group and axis labels. `to_scene()` exports `orientation`, `rows`,
+`lineoffsets`, `linelengths`, `colors` when row colors were supplied, and
+`labels` when lane labels were supplied.
 
 ### `fig:ecdf(values[, opts])`
 
@@ -748,6 +760,9 @@ Stem plot with vertical lines and markers at each point.
 | `base` | finite number, data y coordinate | `0` |
 | `marker` | marker name, `true`, or `false` | `"circle"` |
 | `markersize` | number > 0 | `4` |
+| `markerfacecolor` | color string | series color |
+| `markeredgecolor` | color string | no outline |
+| `markeredgewidth` | number ≥ 0 | `1` when an outline is present |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
 | `linewidth` | number ≥ 0 | `1.5` |
 | `color` | color string | next palette color |
@@ -756,7 +771,8 @@ Stem plot with vertical lines and markers at each point.
 
 The stem group exposes `data-base`, `data-marker`, and `data-linestyle`. A
 non-zero `base` participates in automatic ranging, `linestyle = "none"` keeps
-only the markers, and `marker = false` keeps only the stems. `to_scene()`
+only the markers, and `marker = false` keeps only the stems. Marker face and
+edge styling matches `plot`, and scenes export the three marker style fields. `to_scene()`
 exports the base plus the marker/line style through the normal series style.
 
 ### `fig:stackplot(x, series[, opts])`
@@ -1097,8 +1113,10 @@ Annotations are rendered above the series and clipped to the plot rectangle.
 | `backgroundedgecolor` | color string | no border |
 | `backgroundalpha` | number in [0, 1] | `1` |
 | `backgroundpad` | number ≥ 0 | `3` |
+| `rotation` | number in [-180, 180], degrees | `0` |
 
-`backgroundcolor` draws a rounded `annotation-background` box behind the text
+`rotation` rotates the text around its anchor; background boxes stay
+axis-aligned. `backgroundcolor` draws a rounded `annotation-background` box behind the text
 using approximate Helvetica/Arial metrics; the edge, opacity, and padding are
 optional, and the other background options require `backgroundcolor`.
 Background boxes work for Cartesian and polar annotations and are exported in
@@ -1376,6 +1394,11 @@ includes, but is not limited to:
 - negative axis label padding
 - pie label/percentage distances outside [0.01, 2]
 - non-boolean hist2d show_empty values
+- scatter marker arrays whose length does not match the points
+- annotation rotations outside [-180, 180]
+- invalid errorbar/stem marker face/edge colors or widths
+- eventplot linestyles outside the shared set
+- barh hatch patterns outside the shared set
 - writing to a nonexistent directory
 
 ## Polar axes
@@ -1476,7 +1499,8 @@ Returns a renderer-agnostic scene table:
   category_axis = "x", category_ticks = nil,
   series = {
     { kind = "line", x = {...}, y = {...}, style = {...} },
-    { kind = "scatter", x = {...}, y = {...}, style = {...} },
+    { kind = "scatter", x = {...}, y = {...},
+      style = { marker = "circle", markers = { "circle", "square" } } },
     { kind = "quiver", x = {...}, y = {...}, u = {...}, v = {...},
       scale = nil, scale_mode = "auto", scale_unit = "screen_multiplier",
       auto_length = 18, pivot = "tail", max_arrows = 512,
@@ -1540,8 +1564,9 @@ Returns a renderer-agnostic scene table:
     {
       kind = "annotation", text = "peak", x = 2.5, y = 4.1,
       xytext = { 3.5, 5.0, x = 3.5, y = 5.0 },
-      color = "#444444", fontsize = 13, align = "center",
-      style = { color = "#444444", fontsize = 13, align = "center" },
+      color = "#444444", fontsize = 13, align = "center", rotation = -12,
+      style = { color = "#444444", fontsize = 13, align = "center",
+                rotation = -12 },
       arrow = { enabled = true, color = "#444444", linewidth = 1.5, head = 8 },
       background = { color = "#ffffff", edgecolor = "#d62728",
                      alpha = 0.9, pad = 4 },
@@ -1564,8 +1589,10 @@ carry their `ranges`, `y`, and `height`; box and violin scenes carry `mean`,
 `showmeans`, and `meanline`; stem scenes carry `base`; and ECDF step scenes
 carry `ecdf` plus `complementary`. Cartesian scene roots export `title_align`
 and, when requested, `legend_style`. Error-bar scenes always carry
-`errorevery`; marker-capable line styles may include `markerfacecolor`,
-`markeredgecolor`, and `markeredgewidth`. Bar series always keep category centers in `x`. The scene
+`errorevery`; marker-capable line, errorbar, and stem styles may include
+`markerfacecolor`, `markeredgecolor`, and `markeredgewidth`. Scatter styles may
+include a per-point `markers` array, and bar/barh styles include `hatch` when a
+pattern is active. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked

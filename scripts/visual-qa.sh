@@ -349,6 +349,7 @@ for svg in \
   examples/output/stack-baseline.svg \
   examples/output/bar-errors.svg \
   examples/output/bar-linewidth.svg \
+  examples/output/barh-hatch.svg \
   examples/output/broken-barh.svg \
   examples/output/pie-explode.svg \
   examples/output/heatmap-extent.svg \
@@ -435,6 +436,10 @@ grep -q 'data-labels="true"' "$EVENT" ||
 for label in fast nominal slow; do
   grep -q ">$label<" "$EVENT" || fail "$EVENT is missing the $label lane label"
 done
+grep -q 'data-linestyle="dashed"' "$EVENT" ||
+  fail "$EVENT should use dashed event lines"
+grep -q 'stroke-dasharray="6 4"' "$EVENT" ||
+  fail "$EVENT is missing its dashed event pattern"
 event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$event_colors" -eq 3 ] ||
@@ -506,6 +511,12 @@ grep -q 'data-errorevery="2" data-error-points="3"' "$ERRORBAR" ||
 errorbar_lines=$(grep -o 'class="errorbar"' "$ERRORBAR" | wc -l | tr -d ' ')
 [ "$errorbar_lines" -eq 6 ] ||
   fail "$ERRORBAR should draw six error-bar segments for three points"
+errorbar_marker=$(grep -o '<circle class="marker"[^>]*/>' "$ERRORBAR" | head -1)
+[ -n "$errorbar_marker" ] || fail "$ERRORBAR has no markers"
+printf '%s\n' "$errorbar_marker" | grep -q 'fill="#ffffff"' ||
+  fail "$ERRORBAR markers should have a white face"
+printf '%s\n' "$errorbar_marker" | grep -q 'stroke="#1f77b4"' ||
+  fail "$ERRORBAR markers should have a blue edge"
 
 # Complementary ECDF steps count down and expose their mode.
 ECDF=examples/output/ecdf-complementary.svg
@@ -522,6 +533,8 @@ grep -q 'class="annotation-background"' "$ANNOTATIONS" ||
   fail "$ANNOTATIONS has no annotation background"
 grep -q 'class="annotation-background" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*" rx="2" fill="#ffffff" fill-opacity="0.9" stroke="#d62728"' \
   "$ANNOTATIONS" || fail "$ANNOTATIONS background styling is incomplete"
+grep -q 'class="annotation-text"[^>]*transform="rotate(-12 ' "$ANNOTATIONS" ||
+  fail "$ANNOTATIONS has no rotated annotation"
 
 # axline must be clipped, omit polar output, and rotate y tick labels.
 AXLINE=examples/output/axline.svg
@@ -600,6 +613,8 @@ grep -q 'stroke-dasharray="6 4"' "$STEM" ||
   fail "$STEM should use the dashed stem style"
 grep -q '<polygon class="stem-marker"' "$STEM" ||
   fail "$STEM should use diamond stem markers"
+grep -q '<polygon class="stem-marker"[^>]*fill="#ffffff" stroke="#8c564b" stroke-width="1.2"' \
+  "$STEM" || fail "$STEM should style its diamond markers"
 
 # Cartesian quiver glyph groups must agree with their decimation metadata.
 QUIVER_CART=examples/output/quiver.svg
@@ -740,6 +755,10 @@ scatter_fills=$(grep -o 'class="point"[^>]*fill="[^"]*"' "$SCATTER_COLORS" |
   sed -E 's/.*fill="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$scatter_fills" -gt 1 ] ||
   fail "$SCATTER_COLORS maps every point to the same color"
+scatter_shapes=$(grep -oE '<(circle|rect|polygon) class="point"' "$SCATTER_COLORS" |
+  sed -E 's/<([a-z]+).*/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$scatter_shapes" -eq 3 ] ||
+  fail "$SCATTER_COLORS should mix circles, squares, and polygon markers"
 grep -q 'class="colorbar scatter-colorbar"' "$SCATTER_COLORS" ||
   fail "$SCATTER_COLORS has no scatter colorbar"
 scatter_ticks=$(grep -o 'data-ticks="[0-9]*"' "$SCATTER_COLORS" | head -1 |
@@ -795,6 +814,15 @@ for index in 1 2 3; do
   grep -q "data-baseline=\"wiggle\" data-index=\"$index\"" "$STACK_BASELINE" ||
     fail "$STACK_BASELINE is missing stack layer $index"
 done
+
+# Horizontal bars expose hatch patterns in defs and fills.
+BARH_HATCH=examples/output/barh-hatch.svg
+grep -q '<pattern id="hatch-' "$BARH_HATCH" ||
+  fail "$BARH_HATCH has no hatch pattern definition"
+barh_hatched=$(grep -o 'class="barh"[^>]*fill="url(#hatch-' "$BARH_HATCH" |
+  wc -l | tr -d ' ')
+[ "$barh_hatched" -eq 4 ] ||
+  fail "$BARH_HATCH should fill four bars with a hatch pattern"
 
 # Grouped bars support one color per bar within each series.
 BARS_GROUPED=examples/output/bars-grouped.svg
@@ -897,7 +925,7 @@ done
 for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
   "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
   "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BARS_GROUPED" \
-  "$ANNOTATIONS" "$BROKEN_BARH" "$PIE_EXPLODE" "$HEATMAP_EXTENT" \
+  "$BARH_HATCH" "$ANNOTATIONS" "$BROKEN_BARH" "$PIE_EXPLODE" "$HEATMAP_EXTENT" \
   "$CONTOUR_COORDS" "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" \
   "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"

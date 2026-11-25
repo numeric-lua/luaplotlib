@@ -973,7 +973,8 @@ local function render_scatter(series, map_x, map_y, buf)
   for i = 1, #series.x do
     local radius = style.radii and style.radii[i] or style.radius
     local color = style.colors and style.colors[i] or style.color
-    buf[#buf + 1] = markers.svg(style.marker, "point",
+    local marker = style.markers and style.markers[i] or style.marker
+    buf[#buf + 1] = markers.svg(marker, "point",
       map_x(series.x[i]), map_y(series.y[i]), radius, color, fade, outline)
   end
   buf[#buf + 1] = '  </g>'
@@ -1381,6 +1382,8 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
   buf[#buf + 1] = '  </g>'
 end
 
+local hatch_id
+
 local function render_barh(series, map_x, map_y, baseline, buf)
   local style = series.style
   local opacity = ""
@@ -1581,8 +1584,19 @@ local function render_stem(series, map_x, map_y, buf)
     line_opacity = string.format(' stroke-opacity="%s"', util.fmt(style.alpha))
   end
   local marker_opacity = ""
+  local marker_outline = ""
   if style.alpha < 1 then
-    marker_opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
+    local alpha = util.fmt(style.alpha)
+    marker_opacity = string.format(' fill-opacity="%s"', alpha)
+    if style.markeredgecolor ~= nil then
+      marker_outline = string.format(' stroke-opacity="%s"', alpha)
+    end
+  end
+  local marker_fill = style.markerfacecolor or style.color
+  if style.markeredgecolor ~= nil then
+    marker_outline = string.format(' stroke="%s" stroke-width="%s"%s',
+      style.markeredgecolor, util.fmt(style.markeredgewidth or 1),
+      marker_outline)
   end
   buf[#buf + 1] = string.format(
     '  <g class="series series-stem" data-base="%s" data-marker="%s" data-linestyle="%s">',
@@ -1598,7 +1612,7 @@ local function render_stem(series, map_x, map_y, buf)
     end
     if style.marker ~= nil then
       buf[#buf + 1] = markers.svg(style.marker, "stem-marker", x, y,
-        style.markersize or 4, style.color, marker_opacity, "")
+        style.markersize or 4, marker_fill, marker_opacity, marker_outline)
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -1833,7 +1847,7 @@ local HATCH_PATTERNS = {
   o = { body = '<circle cx="3" cy="3" r="2" fill="none" stroke="#333" stroke-width="1"/>' },
 }
 
-local function hatch_id(hatch, color)
+hatch_id = function(hatch, color)
   return "hatch-" .. hatch:gsub("[^%w]", "x") .. "-" ..
     color:gsub("[^%w]", "")
 end
@@ -2045,10 +2059,16 @@ local function render_annotation(annotation, index, map_x, map_y, xscale, yscale
       end
     end
   end
+  local rotation = annotation.rotation or 0
+  local rotation_attr = ""
+  if rotation ~= 0 then
+    rotation_attr = string.format(' transform="rotate(%s %s %s)"',
+      util.fmt(rotation), util.fmt(text_x), util.fmt(text_y))
+  end
   buf[#buf + 1] = string.format(
-    '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s">%s</text>',
+    '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s"%s>%s</text>',
     util.fmt(text_x), util.fmt(text_y), util.fmt(fontsize), color, anchor, align,
-    util.escape_xml(annotation.text))
+    rotation_attr, util.escape_xml(annotation.text))
   buf[#buf + 1] = '   </g>'
 end
 
@@ -2520,11 +2540,18 @@ function M.to_svg(fig)
         label = string.format(' data-label="%s"', attribute(style.label))
       end
       local row_colors = series.colors
+      local dash = ""
+      if style.linestyle == "dashed" then
+        dash = ' stroke-dasharray="6 4"'
+      elseif style.linestyle == "dotted" then
+        dash = ' stroke-dasharray="1.5 3"'
+      end
       buf[#buf + 1] = string.format(
-        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-labels="%s"%s>',
+        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-labels="%s" data-linestyle="%s"%s>',
         horizontal and "horizontal" or "vertical", #series.rows,
         row_colors ~= nil and "true" or "false",
-        series.labels ~= nil and "true" or "false", label)
+        series.labels ~= nil and "true" or "false",
+        style.linestyle or "solid", label)
       for row, events in ipairs(series.rows) do
         local offset = series.lineoffsets[row]
         local half = series.linelengths[row] / 2
@@ -2535,20 +2562,20 @@ function M.to_svg(fig)
             local y = map_y(value)
             local x1, x2 = map_x(offset - half), map_x(offset + half)
             line = string.format(
-              '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
+              '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x1), util.fmt(y), util.fmt(x2), util.fmt(y),
-              row_color, util.fmt(style.linewidth), opacity)
+              row_color, util.fmt(style.linewidth), dash, opacity)
           else
             local x = map_x(value)
             local y1, y2 = map_y(offset - half), map_y(offset + half)
             line = string.format(
-              '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s/>',
+              '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
-              row_color, util.fmt(style.linewidth), opacity)
+              row_color, util.fmt(style.linewidth), dash, opacity)
           end
-          buf[#buf + 1] = line
+          if style.linestyle ~= "none" then buf[#buf + 1] = line end
         end
       end
       buf[#buf + 1] = '  </g>'

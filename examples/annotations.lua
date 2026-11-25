@@ -58,6 +58,7 @@ fig:annotate("smooth arc", 1.0, 2.0, {
   align = "left",
   color = "#555555",
   fontsize = 12,
+  rotation = -12,
 })
 fig:title("luaplotlib: annotations and arrows")
 fig:xlabel("x")

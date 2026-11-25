@@ -73,6 +73,7 @@ local POLAR_ANNOTATE_OPTIONS = {
   backgroundedgecolor = true,
   backgroundalpha = true,
   backgroundpad = true,
+  rotation = true,
   degrees = true,
   theta_unit = true,
 }
@@ -84,6 +85,9 @@ local POLAR_ERRORBAR_OPTIONS = {
   linestyle = true,
   marker = true,
   markersize = true,
+  markerfacecolor = true,
+  markeredgecolor = true,
+  markeredgewidth = true,
   alpha = true,
   capsize = true,
   elinewidth = true,
@@ -266,6 +270,9 @@ local STEM_OPTIONS = {
   linestyle = true,
   marker = true,
   markersize = true,
+  markerfacecolor = true,
+  markeredgecolor = true,
+  markeredgewidth = true,
   base = true,
   alpha = true,
 }
@@ -318,6 +325,7 @@ local BARH_OPTIONS = {
   labels = true,
   height = true,
   linewidth = true,
+  hatch = true,
   alpha = true,
   edgecolor = true,
   bar_colors = true,
@@ -401,6 +409,9 @@ local ERRORBAR_OPTIONS = {
   linestyle = true,
   marker = true,
   markersize = true,
+  markerfacecolor = true,
+  markeredgecolor = true,
+  markeredgewidth = true,
   alpha = true,
   capsize = true,
   elinewidth = true,
@@ -418,6 +429,7 @@ local ANNOTATE_OPTIONS = {
   backgroundedgecolor = true,
   backgroundalpha = true,
   backgroundpad = true,
+  rotation = true,
 }
 
 local ARROW_OPTIONS = {
@@ -453,6 +465,17 @@ local LINESTYLES = {
   dashed = true,
   dotted = true,
   none = true,
+}
+
+local HATCH_TYPES = {
+  ["/"] = true,
+  ["\\"] = true,
+  ["|"] = true,
+  ["-"] = true,
+  ["+"] = true,
+  x = true,
+  ["."] = true,
+  o = true,
 }
 
 local QUIVER_PIVOTS = {
@@ -545,6 +568,42 @@ local function checked_marker(value, context)
     fail(context .. " marker must be circle, square, triangle, diamond, cross, x, true, or false")
   end
   return value
+end
+
+-- Normalize one marker (string/true/false) or one marker per data point.
+local function checked_markers(value, count, context)
+  if type(value) ~= "table" then
+    return nil, checked_marker(value, context) or "circle"
+  end
+  if #value ~= count then
+    fail(context .. " marker array must match the number of points")
+  end
+  local markers = {}
+  for index = 1, count do
+    local marker = checked_marker(value[index], context)
+    if marker == nil then
+      fail(string.format("%s marker[%d] must be a marker name or true",
+        context, index))
+    end
+    markers[index] = marker
+  end
+  return markers, markers[1] or "circle"
+end
+
+local function checked_marker_style(opts, context, style)
+  if opts.markerfacecolor ~= nil then
+    style.markerfacecolor = util.check_color(opts.markerfacecolor,
+      context .. " markerfacecolor")
+  end
+  if opts.markeredgecolor ~= nil then
+    style.markeredgecolor = util.check_color(opts.markeredgecolor,
+      context .. " markeredgecolor")
+  end
+  if opts.markeredgewidth ~= nil then
+    style.markeredgewidth = util.check_number(opts.markeredgewidth,
+      context .. " markeredgewidth", 0)
+  end
+  return style
 end
 
 -- Normalize markevery into a sorted list of one-based point indices. An integer
@@ -651,6 +710,15 @@ end
 
 -- Normalize an optional annotation background box.  Supplying
 -- `backgroundcolor` enables the box; the edge, alpha, and padding are optional.
+local function checked_annotation_rotation(opts, context)
+  local rotation = 0
+  if opts.rotation ~= nil then
+    rotation = util.check_number(opts.rotation, context .. " rotation",
+      -180, 180)
+  end
+  return rotation
+end
+
 local function checked_annotation_background(opts, context)
   if opts.backgroundcolor == nil then
     if opts.backgroundedgecolor ~= nil or opts.backgroundalpha ~= nil or
@@ -908,18 +976,7 @@ function Figure:plot(x, y, opts)
   style.marker = marker
   style.markersize = markersize
   style.markevery = checked_markevery(opts.markevery, #xv, "plot")
-  if opts.markerfacecolor ~= nil then
-    style.markerfacecolor = util.check_color(opts.markerfacecolor,
-      "plot markerfacecolor")
-  end
-  if opts.markeredgecolor ~= nil then
-    style.markeredgecolor = util.check_color(opts.markeredgecolor,
-      "plot markeredgecolor")
-  end
-  if opts.markeredgewidth ~= nil then
-    style.markeredgewidth = util.check_number(opts.markeredgewidth,
-      "plot markeredgewidth", 0)
-  end
+  checked_marker_style(opts, "plot", style)
 
   self._series[#self._series + 1] = {
     kind = "line",
@@ -1182,7 +1239,10 @@ function Figure:polar_scatter(theta, r, opts)
   end
 
   local style = checked_style(self, style_opts, "polar scatter")
-  style.marker = checked_marker(opts.marker, "polar scatter") or "circle"
+  local marker_list, marker = checked_markers(opts.marker, #tv,
+    "polar scatter")
+  style.marker = marker
+  style.markers = marker_list
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
@@ -1360,6 +1420,7 @@ function Figure:polar_errorbar(theta, r, rerr, opts)
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
+  checked_marker_style(opts, "errorbar", style)
   style.capsize = capsize
   style.elinewidth = elinewidth
   if opts.ecolor ~= nil then
@@ -1874,6 +1935,7 @@ function Figure:polar_annotate(text, theta, r, opts)
     color = color,
     fontsize = fontsize,
     align = align,
+    rotation = checked_annotation_rotation(opts, "polar annotate"),
     arrow = checked_arrow(opts.arrow, color),
     background = checked_annotation_background(opts, "polar annotate"),
   }
@@ -1986,7 +2048,9 @@ function Figure:scatter(x, y, opts)
     style_opts.color = point_colors[1]
   end
   local style = checked_style(self, style_opts, "scatter")
-  style.marker = checked_marker(opts.marker, "scatter") or "circle"
+  local marker_list, marker = checked_markers(opts.marker, #xv, "scatter")
+  style.marker = marker
+  style.markers = marker_list
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
@@ -2011,7 +2075,7 @@ end
 
 local EVENT_OPTIONS = {
   color = true, colors = true, label = true, labels = true,
-  linewidth = true, alpha = true,
+  linewidth = true, linestyle = true, alpha = true,
   orientation = true, lineoffsets = true, linelengths = true,
 }
 
@@ -2085,8 +2149,13 @@ function Figure:eventplot(positions, opts)
   local linewidth = opts.linewidth
   if linewidth == nil then linewidth = 2 end
   linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
+  local linestyle = opts.linestyle or "solid"
+  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+    fail("eventplot linestyle must be one of solid, dashed, dotted, or none")
+  end
   local style = checked_style(self, opts, "eventplot")
   style.linewidth = linewidth
+  style.linestyle = linestyle
   if row_colors ~= nil then style.color = row_colors[1] end
   self._series[#self._series + 1] = {
     kind = "eventplot", rows = rows, orientation = orientation,
@@ -2875,9 +2944,7 @@ function Figure:bar(labels_or_x, values, opts, ...)
     end
     for i = 1, #hatch do
       local value = hatch[i]
-      if type(value) ~= "string" or
-          not ({ ["/"]=true, ["\\"]=true, ["|"]=true, ["-"]=true,
-            ["+"]=true, x=true, ["."]=true, o=true })[value] then
+      if type(value) ~= "string" or not HATCH_TYPES[value] then
         error("bar hatch entries must be /, \\, |, -, +, x, ., or o", 2)
       end
     end
@@ -3358,6 +3425,7 @@ function Figure:stem(x, y, opts)
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
+  checked_marker_style(opts, "stem", style)
   self._series[#self._series + 1] = {
     kind = "stem", x = xv, y = yv, base = base, style = style,
   }
@@ -3579,6 +3647,12 @@ function Figure:barh(labels_or_y, values, opts)
   if opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "barh linewidth", 0)
   end
+  local hatch = opts.hatch
+  if hatch ~= nil then
+    if type(hatch) ~= "string" or not HATCH_TYPES[hatch] then
+      fail("barh hatch must be /, \\, |, -, +, x, ., or o")
+    end
+  end
   local color = opts.color and util.check_color(opts.color, "barh color") or
     colors.next(self._color_serial)
   if opts.color == nil then self._color_serial = self._color_serial + 1 end
@@ -3619,7 +3693,7 @@ function Figure:barh(labels_or_y, values, opts)
     kind = "barh", x = values_v, y = positions, height = height,
     bar_colors = bar_colors, show_values = opts.show_values == true,
     style = { color = color, label = opts.label, alpha = alpha,
-      edgecolor = edgecolor, linewidth = linewidth },
+      edgecolor = edgecolor, linewidth = linewidth, hatch = hatch },
   }
   return self
 end
@@ -4223,6 +4297,7 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
+  checked_marker_style(opts, "errorbar", style)
   style.capsize = capsize
   style.elinewidth = elinewidth
   if opts.ecolor ~= nil then
@@ -4292,6 +4367,7 @@ function Figure:annotate(text, x, y, opts)
     color = color,
     fontsize = fontsize,
     align = align,
+    rotation = checked_annotation_rotation(opts, "annotate"),
     arrow = checked_arrow(opts.arrow, color),
     background = checked_annotation_background(opts, "annotate"),
   }

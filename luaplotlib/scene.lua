@@ -29,6 +29,8 @@ local function copy_style(style)
     linestyle = style.linestyle,
     marker = style.marker,
     markersize = style.markersize,
+    markers = style.markers and copy_array(style.markers) or nil,
+    hatch = style.hatch,
     markevery = style.markevery and copy_array(style.markevery) or nil,
     markerfacecolor = style.markerfacecolor,
     markeredgecolor = style.markeredgecolor,
@@ -83,10 +85,12 @@ local function copy_annotation(annotation)
     color = annotation.color,
     fontsize = annotation.fontsize,
     align = annotation.align,
+    rotation = annotation.rotation or 0,
     style = {
       color = annotation.color,
       fontsize = annotation.fontsize,
       align = annotation.align,
+      rotation = annotation.rotation or 0,
     },
   }
 
