@@ -341,7 +341,9 @@ for svg in \
   examples/output/cartesian-controls.svg \
   examples/output/histogram-horizontal.svg \
   examples/output/stem.svg \
+  examples/output/stem-horizontal.svg \
   examples/output/quiver.svg \
+  examples/output/quiver-uv.svg \
   examples/output/hexbin.svg \
   examples/output/hist2d.svg \
   examples/output/scatter-colors.svg \
@@ -398,6 +400,10 @@ printf '%s\n' "$marker_line" | grep -q 'stroke-width="1.2"' ||
   fail "$LINE markers should have a 1.2-pixel edge"
 grep -q 'data-xlabel-pad="10" data-ylabel-pad="8"' "$LINE" ||
   fail "$LINE should expose axis label padding"
+grep -q 'data-ticklabelsize="12" data-ticklabelcolor="#334155"' "$LINE" ||
+  fail "$LINE should expose tick label styling"
+grep -q 'class="tick-label"[^>]*font-size="12" fill="#334155"' "$LINE" ||
+  fail "$LINE should render styled tick labels"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg
@@ -462,6 +468,10 @@ hist_filled_thick=$(grep -o   'class="hist-step-filled"[^>]*stroke-width="2.5"' 
   wc -l | tr -d ' ')
 [ "$hist_thick" -eq 1 ] && [ "$hist_filled_thick" -eq 1 ] ||
   fail "$HIST_STYLES should use a 2.5-pixel outline"
+grep -q '<pattern id="hatch-' "$HIST_STYLES" ||
+  fail "$HIST_STYLES has no histogram hatch definition"
+grep -q 'class="hist-step-filled"[^>]*fill="url(#hatch-' "$HIST_STYLES" ||
+  fail "$HIST_STYLES stepfilled body should use its hatch pattern"
 
 # Horizontal boxplots keep their category labels on the y axis.
 BOX_H=examples/output/boxplot-horizontal.svg
@@ -616,6 +626,25 @@ grep -q '<polygon class="stem-marker"' "$STEM" ||
 grep -q '<polygon class="stem-marker"[^>]*fill="#ffffff" stroke="#8c564b" stroke-width="1.2"' \
   "$STEM" || fail "$STEM should style its diamond markers"
 
+# Horizontal stems grow along x and expose their orientation.
+STEM_H=examples/output/stem-horizontal.svg
+grep -q 'class="series series-stem"[^>]*data-orientation="horizontal"' \
+  "$STEM_H" || fail "$STEM_H is not a horizontal stem plot"
+stem_h_lines=$(grep -o '<line class="stem-line"[^>]*/>' "$STEM_H" | wc -l |
+  tr -d ' ')
+[ "$stem_h_lines" -eq 6 ] || fail "$STEM_H should draw six stems"
+grep -o '<line class="stem-line"[^>]*/>' "$STEM_H" | awk '
+  {
+    if (!match($0, /y1="[^"]*"/)) exit 1
+    y1 = substr($0, RSTART + 4, RLENGTH - 5) + 0
+    if (!match($0, /y2="[^"]*"/)) exit 1
+    y2 = substr($0, RSTART + 4, RLENGTH - 5) + 0
+    if (y1 != y2) exit 1
+  }
+' || fail "$STEM_H contains a non-horizontal stem"
+grep -q '<polygon class="stem-marker"[^>]*fill="#ffffff" stroke="#0f766e"' \
+  "$STEM_H" || fail "$STEM_H markers are not styled"
+
 # Cartesian quiver glyph groups must agree with their decimation metadata.
 QUIVER_CART=examples/output/quiver.svg
 grep -q 'class="series series-quiver"' "$QUIVER_CART" ||
@@ -645,6 +674,16 @@ angled=$(grep -o 'class="quiver-arrow"[^>]*data-angle="[^"]*"' "$QUIVER_CART" |
 if grep -Eqi 'nan|inf' "$QUIVER_CART"; then
   fail "$QUIVER_CART contains non-finite geometry"
 fi
+
+QUIVER_UV=examples/output/quiver-uv.svg
+grep -q 'class="series series-quiver"[^>]*data-angles="uv"' "$QUIVER_UV" ||
+  fail "$QUIVER_UV should use uv angles"
+quiver_uv_drawn=$(grep -o 'data-drawn="[0-9]*"' "$QUIVER_UV" | head -1 |
+  tr -dc '0-9')
+quiver_uv_heads=$(grep -o 'class="quiver-head"' "$QUIVER_UV" | wc -l |
+  tr -d ' ')
+[ -n "$quiver_uv_drawn" ] && [ "$quiver_uv_heads" -eq "$quiver_uv_drawn" ] ||
+  fail "$QUIVER_UV arrow heads do not match its drawn count"
 
 # Hexbin cells, counts, and colorbar labels must stay consistent.
 HEXBIN=examples/output/hexbin.svg
@@ -759,6 +798,10 @@ scatter_shapes=$(grep -oE '<(circle|rect|polygon) class="point"' "$SCATTER_COLOR
   sed -E 's/<([a-z]+).*/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$scatter_shapes" -eq 3 ] ||
   fail "$SCATTER_COLORS should mix circles, squares, and polygon markers"
+scatter_alphas=$(grep -o 'class="point"[^>]*fill-opacity="[^"]*"' "$SCATTER_COLORS" |
+  sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$scatter_alphas" -gt 3 ] ||
+  fail "$SCATTER_COLORS should vary per-point alpha"
 grep -q 'class="colorbar scatter-colorbar"' "$SCATTER_COLORS" ||
   fail "$SCATTER_COLORS has no scatter colorbar"
 scatter_ticks=$(grep -o 'data-ticks="[0-9]*"' "$SCATTER_COLORS" | head -1 |
@@ -922,8 +965,8 @@ done
 # Rasterize the Cartesian feature examples too, so a reviewer can inspect
 # marker density, minor grids, asymmetric caps, vector glyphs, hexagons,
 # extent/origin placement, explicit contour coordinates, and equal aspect.
-for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" "$STEM" \
-  "$QUIVER_CART" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
+for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" \
+  "$STEM" "$STEM_H" "$QUIVER_CART" "$QUIVER_UV" "$HEXBIN" "$HIST2D" "$SCATTER_COLORS" "$VIOLIN" \
   "$STACK_BASELINE" "$BAR_ERRORS" "$BAR_WIDTH" "$BARS_GROUPED" \
   "$BARH_HATCH" "$ANNOTATIONS" "$BROKEN_BARH" "$PIE_EXPLODE" "$HEATMAP_EXTENT" \
   "$CONTOUR_COORDS" "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" \

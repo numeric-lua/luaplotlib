@@ -537,10 +537,6 @@ end
 
 local function render_scatter(series, figure, cfg, geom, buf)
   local style = series.style
-  local fade = ""
-  if style.alpha < 1 then
-    fade = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
-  end
   local outline = ""
   if style.edgecolor ~= nil then
     outline = string.format(' stroke="%s" stroke-width="%s"',
@@ -559,8 +555,18 @@ local function render_scatter(series, figure, cfg, geom, buf)
     local x, y = M.point(figure, cfg, geom, series.theta[index],
       series.r[index])
     local marker = style.markers and style.markers[index] or style.marker
+    local alpha = style.alphas and style.alphas[index] or style.alpha
+    local fade, point_outline = "", outline
+    if alpha < 1 then
+      local opacity = util.fmt(alpha)
+      fade = string.format(' fill-opacity="%s"', opacity)
+      if outline ~= "" then
+        point_outline = outline ..
+          string.format(' stroke-opacity="%s"', opacity)
+      end
+    end
     buf[#buf + 1] = markers.svg(marker, "point", x, y, radius, color,
-      fade, outline)
+      fade, point_outline)
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -2536,6 +2542,7 @@ local function copy_style(style)
     marker = style.marker,
     markersize = style.markersize,
     markers = style.markers and copy_array(style.markers) or nil,
+    alphas = style.alphas and copy_array(style.alphas) or nil,
     hatch = style.hatch,
     radius = style.radius,
     capsize = style.capsize,

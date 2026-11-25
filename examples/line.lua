@@ -63,6 +63,8 @@ fig:xlabel("x (radians)", { labelpad = 10 })
 fig:ylabel("value", { labelpad = 8 })
 fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
+fig:ticklabelsize(12)
+fig:ticklabelcolor("#334155")
 fig:minorticks(true)
 fig:grid(true, { minor = true })
 fig:legend({

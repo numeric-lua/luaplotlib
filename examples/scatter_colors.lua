@@ -40,9 +40,10 @@ for index = 1, 260 do
 end
 
 local marker_names = { "circle", "square", "triangle", "diamond" }
-local markers = {}
+local markers, alphas = {}, {}
 for index = 1, #x do
   markers[index] = marker_names[(index - 1) % #marker_names + 1]
+  alphas[index] = 0.35 + 0.65 * (((index - 1) % 10) / 9)
 end
 
 local fig = plt.figure({ width = 800, height = 540 })
@@ -52,6 +53,7 @@ fig:scatter(x, y, {
   vmax = 1.6,
   size = 5.2,
   marker = markers,
+  alpha = alphas,
   label = "phase-colored samples",
   colorbar = true,
   colorbar_label = "phase signal",

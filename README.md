@@ -52,7 +52,9 @@ luajit examples/axline.lua
 luajit examples/cartesian_controls.lua
 luajit examples/histogram_horizontal.lua
 luajit examples/stem.lua
+luajit examples/stem_horizontal.lua
 luajit examples/quiver.lua
+luajit examples/quiver_uv.lua
 luajit examples/hexbin.lua
 luajit examples/field_coordinates.lua
 luajit examples/aspect.lua
@@ -336,6 +338,25 @@ markers. Eventplot lines support solid, dashed, dotted, and hidden styles, and
 `barh` supports the shared hatch patterns. Scenes export per-point markers and
 hatch styles.
 
+Scatter alpha, horizontal stems, quiver projection, tick styling, and histogram
+hatches are also additive:
+
+```lua
+fig:scatter(x, y, { alpha = { 0.3, 0.6, 0.9 } })
+fig:stem(positions, values, { orientation = "horizontal", base = 0.5 })
+fig:quiver(x, y, u, v, { angles = "uv" })
+fig:ticklabelsize(12)
+fig:ticklabelcolor("#334155")
+fig:hist(values, { histtype = "stepfilled", hatch = "/" })
+```
+
+Per-point alpha arrays work on Cartesian and polar scatter and export through
+the scene style. Horizontal stems read values from `y` and positions from `x`,
+growing from a base on the x axis. Quiver `angles = "uv"` draws directions in
+screen space instead of through the data-axis transforms. Tick label size/color
+adjust the Cartesian layout margins automatically, and histogram hatches work
+for `bar` and `stepfilled` styles.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -549,8 +570,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
   `fig:savefig(path)`
 - Line plots with colors, dashes, marker face/edge styling, labels, and alpha
-- Scatter plots with per-point markers, colors, and sizes, or numeric `c`
-  values mapped through the heat palette and an optional colorbar
+- Scatter plots with per-point markers, colors, sizes, and alpha, or numeric
+  `c` values mapped through the heat palette and an optional colorbar
 - Histograms with configurable bins, ranges, `bar`/`step`/`stepfilled`
   outlines, and outline widths, plus rectangular `hist2d` counts/densities with
   explicit grids, optional empty cells, value limits, and colorbars
@@ -585,18 +606,19 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands
-- Horizontal histograms and styled stems with custom bases, markers, and
-  marker face/edge styling
+- Histograms with optional hatch fills and styled stems with custom bases,
+  markers, marker face/edge styling, and vertical or horizontal orientation
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
-- Cartesian quiver vector fields with automatic/explicit scaling, pivots,
-  normalization, deterministic arrow caps, and legend/scene metadata
+- Cartesian quiver vector fields with data-space or screen-space (`uv`) angles,
+  automatic/explicit scaling, pivots, normalization, deterministic arrow caps,
+  and legend/scene metadata
 - Hexagonal binning with minimum counts, value limits, explicit or uniform
   colorbar ticks, and renderer-agnostic cell/count export
 - Image `extent`/`origin` mapping, image colorbar titles and explicit or
   uniform ticks, cell alpha, and explicit contour column/row coordinates
 - Optional equal or numeric data-unit aspect ratios that center the plot box
 - Independent major/minor grid color, width, dash, and opacity
-- X/y tick-label rotation, including twin y axes
+- X/y tick-label rotation, size, and color, including twin axes
 - XML-escaped text, no scripts, no external references, standalone SVG 1.1
 - Plain Lua tables, plus optional duck-typed 1-D tensor/array inputs
   (luatorch/numlua style); neither library is required
@@ -626,8 +648,9 @@ event-label, distribution-mean, bar-outline, broken-bar, pie-explode,
 histogram-outline, title-align, legend-location, legend-frame, marker-style,
 errorbar-stride, ecdf-complementary, per-bar-color, annotation-background,
 label-padding, pie-distance, hist2d-empty, scatter-marker, annotation-rotation,
-error-stem-marker, event-linestyle, barh-hatch, image-alpha, and equal-aspect
-metadata, and confirms that Cartesian examples stay Cartesian.
+error-stem-marker, event-linestyle, barh-hatch, scatter-alpha, stem-horizontal,
+quiver-uv, tick-style, hist-hatch, image-alpha, and equal-aspect metadata, and
+confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -646,7 +669,9 @@ make examples
 # examples/output/cartesian-controls.svg
 # examples/output/histogram-horizontal.svg
 # examples/output/stem.svg
+# examples/output/stem-horizontal.svg
 # examples/output/quiver.svg
+# examples/output/quiver-uv.svg
 # examples/output/hexbin.svg
 # examples/output/hist2d.svg
 # examples/output/scatter-colors.svg
@@ -694,8 +719,9 @@ canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
 per-row event colors, event lane labels, box/violin means, broken horizontal
 bars, pie explode/shadow, configurable bar/histogram outlines, marker
-face/edge styling, per-point scatter markers, annotation rotation/backgrounds,
-error-bar and stem marker styling, event line styles, barh hatches,
+face/edge styling, per-point scatter markers and alpha, annotation
+rotation/backgrounds, horizontal stems, quiver uv angles, tick label styling,
+error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
 multi-series colors, label padding, pie label/pct
 distances, hist2d empty cells, image alpha, aligned titles, expanded legend
@@ -744,14 +770,16 @@ See
   `adjustable = "datalim"`.
 - **Cartesian quiver glyphs are screen-space.** `scale` is a multiplier on the
   projected component displacement, `normalize` replaces magnitudes with unit
-  directions, and arrow tips can be clipped at the axes rectangle. The input
+  directions, and arrow tips can be clipped at the axes rectangle. `angles =
+  "uv"` uses screen-space components instead of data-axis transforms. The input
   `x`/`y` anchors define automatic ranging.
 - **Distribution/color helpers are focused.** `violinplot` uses a Gaussian KDE
   (no alternate kernels, split violins, or per-sample bandwidth arrays), and
   numeric scatter colors always use the shared heat palette. `hist2d` omits
   empty cells unless `show_empty = true`, and bar `yerr` takes one error
   specification per value series rather than a freely mixed per-bar error
-  matrix.
+  matrix. Histogram hatching is unavailable for stepped outlines, which have no
+  fill.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

@@ -30,6 +30,7 @@ local function copy_style(style)
     marker = style.marker,
     markersize = style.markersize,
     markers = style.markers and copy_array(style.markers) or nil,
+    alphas = style.alphas and copy_array(style.alphas) or nil,
     hatch = style.hatch,
     markevery = style.markevery and copy_array(style.markevery) or nil,
     markerfacecolor = style.markerfacecolor,
@@ -145,6 +146,8 @@ function M.from_figure(figure)
     yscale = figure._yscale or "linear",
     xtick_rotation = figure._xtick_rotation or 0,
     ytick_rotation = figure._ytick_rotation or 0,
+    ticklabelsize = figure._ticklabelsize or 11,
+    ticklabelcolor = figure._ticklabelcolor or "#222222",
     minorticks = figure._minorticks and figure._minorticks.enabled or false,
     minor_tick_axis = figure._minorticks and figure._minorticks.axis or "both",
     minor_subdivisions = figure._minorticks and
@@ -256,6 +259,7 @@ function M.from_figure(figure)
       copy.pivot = series.pivot
       copy.max_arrows = series.max_arrows
       copy.normalize = series.normalize
+      copy.angles = series.angles or "xy"
       local stride = math.max(1, math.ceil(#series.x / series.max_arrows))
       local drawn = 0
       for index = 1, #series.x, stride do
@@ -520,12 +524,25 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       copy.base = series.base or 0
-      update_xy_range(state, copy)
-      if state.ymin == nil or copy.base < state.ymin then
-        state.ymin = copy.base
-      end
-      if state.ymax == nil or copy.base > state.ymax then
-        state.ymax = copy.base
+      copy.orientation = series.orientation or "vertical"
+      if copy.orientation == "horizontal" then
+        for index = 1, #copy.x do
+          local value, position = copy.y[index], copy.x[index]
+          if state.xmin == nil or value < state.xmin then state.xmin = value end
+          if state.xmax == nil or value > state.xmax then state.xmax = value end
+          if state.ymin == nil or position < state.ymin then state.ymin = position end
+          if state.ymax == nil or position > state.ymax then state.ymax = position end
+        end
+        if state.xmin == nil or copy.base < state.xmin then state.xmin = copy.base end
+        if state.xmax == nil or copy.base > state.xmax then state.xmax = copy.base end
+      else
+        update_xy_range(state, copy)
+        if state.ymin == nil or copy.base < state.ymin then
+          state.ymin = copy.base
+        end
+        if state.ymax == nil or copy.base > state.ymax then
+          state.ymax = copy.base
+        end
       end
     elseif series.kind == "image" then
       copy.rows = series.rows

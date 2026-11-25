@@ -521,7 +521,7 @@ triangle, diamond, cross, or x, or a table with one marker name per point.
 | `size` | number > 0 or array of numbers | `4` |
 | `markersize` | number > 0 | alias/precedence after `size` |
 | `s` | number > 0 | additional size alias |
-| `alpha` | number in [0, 1] | `1` |
+| `alpha` | number or per-point array in [0, 1] | `1` |
 | `edgecolor` | color string | no outline |
 | `linewidth` | number ≥ 0 | `1` when an outline is present |
 | `c` | numeric array matching the points | unset |
@@ -565,18 +565,22 @@ the arrows stay legible on linear and log axes.
 | `pivot` | `"tail"`, `"middle"`, or `"tip"` | `"tail"` |
 | `max_arrows` | integer in [1, 4096] | `512` |
 | `normalize` | boolean | `false` |
+| `angles` | `"xy"` or `"uv"` | `"xy"` |
 | `alpha` | number in [0, 1] | `1` |
 
 With `scale` omitted, the largest glyph is automatically drawn 18 SVG units
 long. An explicit `scale` multiplies the screen-space displacement produced by
-the unit components. `normalize = true` gives every nonzero vector a unit
-direction before scaling. Zero-magnitude vectors are skipped. When the input
+the unit components. `angles = "xy"` projects components through the data
+transforms; `angles = "uv"` treats `u`/`v` as screen-space components instead,
+so anisotropic axes do not skew the arrow directions. `normalize = true` gives
+every nonzero vector a unit direction before scaling. Zero-magnitude vectors
+are skipped. When the input
 is larger than `max_arrows`, indices are decimated deterministically with
 `stride = ceil(count / max_arrows)`.
 
 The series group exposes `data-count`, `data-drawn`, `data-stride`,
-`data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`, and
-`data-normalize`. Each `quiver-arrow` group carries `data-index`,
+`data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`,
+`data-normalize`, and `data-angles`. Scenes export `angles`. Each `quiver-arrow` group carries `data-index`,
 `data-magnitude`, `data-x`, `data-y`, and `data-angle`, with `quiver-shaft`
 and `quiver-head` children. Labelled quivers join the regular legend with an
 arrow swatch. `to_scene()` exports the component arrays, scale mode, pivot,
@@ -593,6 +597,7 @@ Draw a histogram as adjacent filled rectangles.
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `histtype` | `"bar"`, `"step"`, or `"stepfilled"` | `"bar"` |
 | `linewidth` | number ≥ 0, outline stroke | `1` (`1.5` for step) |
+| `hatch` | shared hatch pattern string | no hatch |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
 | `alpha` | number in [0, 1] | `1` |
@@ -615,7 +620,9 @@ its fill and `edgecolor` (or the series color) as its stroke. Both outlines
 respect `orientation`, `density`, `cumulative`, `alpha`, and the automatic
 count range. `linewidth` sets the outline stroke for all three styles and is
 exported through the series style; `to_scene()` also exports `histtype`
-alongside the edges/counts.
+alongside the edges/counts. `hatch` fills `bar` and `stepfilled` histograms with
+one of the shared patterns; stepped outlines have no fill and reject `hatch`.
+The resolved hatch is exported through the series style.
 
 If all values are equal, the default range is padded around that value. Values
 outside an explicit `range` are ignored. Counts are integers, and the automatic
@@ -758,6 +765,7 @@ Stem plot with vertical lines and markers at each point.
 | Option | Type | Default |
 | --- | --- | --- |
 | `base` | finite number, data y coordinate | `0` |
+| `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `marker` | marker name, `true`, or `false` | `"circle"` |
 | `markersize` | number > 0 | `4` |
 | `markerfacecolor` | color string | series color |
@@ -769,9 +777,12 @@ Stem plot with vertical lines and markers at each point.
 | `alpha` | number in [0, 1] | `1` |
 | `label` | string | no legend entry |
 
-The stem group exposes `data-base`, `data-marker`, and `data-linestyle`. A
-non-zero `base` participates in automatic ranging, `linestyle = "none"` keeps
-only the markers, and `marker = false` keeps only the stems. Marker face and
+Vertical stems use `x` as positions and `y` as values; horizontal stems swap
+that mapping, placing positions on y and growing from `base` along x. The stem
+group exposes `data-base`, `data-marker`, `data-linestyle`, and
+`data-orientation`. A non-zero `base` participates in automatic ranging,
+`linestyle = "none"` keeps only the markers, and `marker = false` keeps only the
+stems. Marker face and
 edge styling matches `plot`, and scenes export the three marker style fields. `to_scene()`
 exports the base plus the marker/line style through the normal series style.
 
@@ -1062,6 +1073,13 @@ categorical labels and for wide y labels. Rotated labels keep the existing
 right/left alignment and pivot around their text anchor. Both settings are
 exported as `xtick_rotation` / `ytick_rotation` in the scene. On figures with a
 twin y axis, `ytick_rotation` applies to both right-hand label columns.
+
+### `fig:ticklabelsize(size)` / `fig:ticklabelcolor(color)`
+
+Set the Cartesian tick-label font size and color for both axes (including twin
+axes). Defaults remain `11` and `#222222`. Larger sizes expand the left and
+bottom layout margins; SVG roots expose `data-ticklabelsize` and
+`data-ticklabelcolor` when changed, and scenes export both values.
 
 ### Labels and titles
 
@@ -1394,6 +1412,11 @@ includes, but is not limited to:
 - negative axis label padding
 - pie label/percentage distances outside [0.01, 2]
 - non-boolean hist2d show_empty values
+- scatter alpha arrays whose length does not match the points
+- stem orientations outside vertical/horizontal
+- quiver angles outside xy/uv
+- non-positive tick label sizes or invalid tick label colors
+- histogram hatches on stepped outlines or unsupported patterns
 - scatter marker arrays whose length does not match the points
 - annotation rotations outside [-180, 180]
 - invalid errorbar/stem marker face/edge colors or widths
@@ -1485,6 +1508,7 @@ Returns a renderer-agnostic scene table:
   xlabel_pad = 0, ylabel_pad = 0,
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
+  ticklabelsize = 11, ticklabelcolor = "#222222",
   minorticks = false, minor_tick_axis = "both", minor_subdivisions = 5,
   minor_grid = false,
   xlim = { min, max }, ylim = { min, max },
@@ -1500,11 +1524,13 @@ Returns a renderer-agnostic scene table:
   series = {
     { kind = "line", x = {...}, y = {...}, style = {...} },
     { kind = "scatter", x = {...}, y = {...},
-      style = { marker = "circle", markers = { "circle", "square" } } },
+      style = { marker = "circle", markers = { "circle", "square" },
+                alphas = { 0.4, 0.8 } } },
     { kind = "quiver", x = {...}, y = {...}, u = {...}, v = {...},
       scale = nil, scale_mode = "auto", scale_unit = "screen_multiplier",
       auto_length = 18, pivot = "tail", max_arrows = 512,
-      normalize = false, stride = 1, drawn = 63, style = {...} },
+      normalize = false, angles = "xy", stride = 1, drawn = 63,
+      style = {...} },
     { kind = "hexbin", x = {...}, y = {...}, cells = {
         { row = 1, column = 1, x = 0.5, y = 0.25, count = 4 }, ...
       }, counts = { 4, ... }, gridsize = 20, mincnt = 1,
@@ -1529,7 +1555,8 @@ Returns a renderer-agnostic scene table:
       segments = { { x = {...}, y1 = {...}, y2 = {...} }, ... },
       style = {...} },
     { kind = "fillx", y = {...}, x1 = {...}, x2 = {...}, style = {...} },
-    { kind = "stem", x = {...}, y = {...}, base = 0.5, style = {...} },
+    { kind = "stem", x = {...}, y = {...}, base = 0.5,
+      orientation = "vertical", style = {...} },
     { kind = "eventplot", orientation = "horizontal",
       rows = { { 0.4, 1.1 }, { 0.8, 1.4 } },
       lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 },
@@ -1586,13 +1613,14 @@ coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
 `lineoffsets`, `linelengths`, and optional `colors`/`labels`; broken-bar scenes
 carry their `ranges`, `y`, and `height`; box and violin scenes carry `mean`,
-`showmeans`, and `meanline`; stem scenes carry `base`; and ECDF step scenes
+`showmeans`, and `meanline`; stem scenes carry `base` and `orientation`; and
+ECDF step scenes
 carry `ecdf` plus `complementary`. Cartesian scene roots export `title_align`
 and, when requested, `legend_style`. Error-bar scenes always carry
-`errorevery`; marker-capable line, errorbar, and stem styles may include
-`markerfacecolor`, `markeredgecolor`, and `markeredgewidth`. Scatter styles may
-include a per-point `markers` array, and bar/barh styles include `hatch` when a
-pattern is active. Bar series always keep category centers in `x`. The scene
+`errorevery` and quiver scenes carry `angles`; marker-capable line, errorbar,
+and stem styles may include `markerfacecolor`, `markeredgecolor`, and
+`markeredgewidth`. Scatter styles may include per-point `markers` and `alphas`
+arrays, and bar/barh/hist styles include `hatch` when a pattern is active. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked

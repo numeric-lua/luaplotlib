@@ -28,11 +28,27 @@
 - `fig:eventplot` accepts `linestyle = "solid" | "dashed" | "dotted" | "none"`
   and reports it through the SVG group and scene style;
 - `fig:barh` accepts one shared hatch pattern per call. Bar/barh scenes now
-  export `hatch`, and existing bar hatches are also preserved in scene styles.
+  export `hatch`, and existing bar hatches are also preserved in scene styles;
+- `fig:scatter` and `fig:polar_scatter` accept one alpha value or one alpha per
+  point. Per-point opacity applies to both marker fill and outline and is
+  exported as `style.alphas`;
+- `fig:stem` accepts `orientation = "vertical" | "horizontal"`. Horizontal
+  stems place `x` positions on y and grow values along x from `base`; SVG and
+  scene metadata report the orientation;
+- `fig:quiver` accepts `angles = "xy" | "uv"`. `"uv"` uses screen-space vector
+  components instead of data-axis transforms, and the mode is exported in SVG
+  and scenes;
+- `fig:ticklabelsize(size)` and `fig:ticklabelcolor(color)` style Cartesian
+  tick labels on both axes. Larger sizes expand the plot margins, and SVG/scene
+  metadata report the resolved values;
+- `fig:hist` accepts a shared hatch pattern for `bar` and `stepfilled` styles.
+  Stepped outlines reject hatching because they have no fill, and the resolved
+  hatch is exported through the series style.
   Existing examples and visual QA cover per-bar colors, annotation
   backgrounds/rotation, label padding, pie distances, complete hist2d grids,
-  per-point markers, errorbar/stem marker styling, event line styles, and
-  horizontal hatches. The dependency-free suite grows from 410 to 442 tests.
+  per-point markers/alpha, errorbar/stem marker styling, horizontal stems,
+  quiver angle modes, tick label styling, event line styles, and horizontal or
+  histogram hatches. The dependency-free suite grows from 410 to 457 tests.
   Existing Cartesian APIs remain compatible, polar rendering is unchanged, and
   there are no new runtime dependencies.
 

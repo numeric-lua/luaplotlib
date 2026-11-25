@@ -19,7 +19,9 @@ examples:
 	@$(LUA) examples/cartesian_controls.lua
 	@$(LUA) examples/histogram_horizontal.lua
 	@$(LUA) examples/stem.lua
+	@$(LUA) examples/stem_horizontal.lua
 	@$(LUA) examples/quiver.lua
+	@$(LUA) examples/quiver_uv.lua
 	@$(LUA) examples/hexbin.lua
 	@$(LUA) examples/hist2d.lua
 	@$(LUA) examples/scatter_colors.lua

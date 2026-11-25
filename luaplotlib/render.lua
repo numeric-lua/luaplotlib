@@ -12,6 +12,7 @@ local M = {}
 local FONT_FAMILY = "Helvetica, Arial, sans-serif"
 local TEXT_COLOR = "#222222"
 local AXIS_COLOR = "#333333"
+local hatch_id
 
 local function clamp(value, minimum, maximum)
   if value < minimum then return minimum end
@@ -22,15 +23,16 @@ end
 local function layout(fig)
   local width = fig.width
   local height = fig.height
+  local tick_extra = math.max(0, (fig._ticklabelsize or 11) - 11)
   local left = math.min(72, math.max(36, width * 0.14)) +
-    (fig._ylabel_pad or 0)
+    (fig._ylabel_pad or 0) + tick_extra
   local right = width - math.min(28, math.max(12, width * 0.04))
   if fig._colorbar then right = right - 62 end
   if fig._twin then right = right - 58 end
   local top = math.min(48, math.max(24, height * 0.10))
   if fig._twiny then top = top + 52 end
   local bottom = height - math.min(66, math.max(36, height * 0.16)) -
-    (fig._xlabel_pad or 0)
+    (fig._xlabel_pad or 0) - tick_extra
 
   if right - left < 20 or bottom - top < 20 then
     util.fail("figure is too small to render a plot area", 3)
@@ -276,10 +278,18 @@ local function data_extents(fig, xscale, yscale)
         include_y(series.y[i], series_index, i, "step y")
       end
     elseif series.kind == "stem" then
-      include_y(series.base or 0, series_index, 1, "stem baseline")
-      for i = 1, #series.x do
-        include_x(series.x[i], series_index, i, "stem x")
-        include_y(series.y[i], series_index, i, "stem y")
+      if series.orientation == "horizontal" then
+        include_x(series.base or 0, series_index, 1, "stem baseline")
+        for i = 1, #series.x do
+          include_x(series.y[i], series_index, i, "stem value")
+          include_y(series.x[i], series_index, i, "stem position")
+        end
+      else
+        include_y(series.base or 0, series_index, 1, "stem baseline")
+        for i = 1, #series.x do
+          include_x(series.x[i], series_index, i, "stem x")
+          include_y(series.y[i], series_index, i, "stem y")
+        end
       end
     elseif series.kind == "contour" then
       if series.x_coords ~= nil then
@@ -950,10 +960,6 @@ end
 
 local function render_scatter(series, map_x, map_y, buf)
   local style = series.style
-  local fade = ""
-  if style.alpha < 1 then
-    fade = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
-  end
   local outline = ""
   if style.edgecolor ~= nil then
     outline = string.format(' stroke="%s" stroke-width="%s"',
@@ -974,8 +980,19 @@ local function render_scatter(series, map_x, map_y, buf)
     local radius = style.radii and style.radii[i] or style.radius
     local color = style.colors and style.colors[i] or style.color
     local marker = style.markers and style.markers[i] or style.marker
+    local alpha = style.alphas and style.alphas[i] or style.alpha
+    local fade, point_outline = "", outline
+    if alpha < 1 then
+      local opacity = util.fmt(alpha)
+      fade = string.format(' fill-opacity="%s"', opacity)
+      if outline ~= "" then
+        point_outline = outline ..
+          string.format(' stroke-opacity="%s"', opacity)
+      end
+    end
     buf[#buf + 1] = markers.svg(marker, "point",
-      map_x(series.x[i]), map_y(series.y[i]), radius, color, fade, outline)
+      map_x(series.x[i]), map_y(series.y[i]), radius, color, fade,
+      point_outline)
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -994,8 +1011,13 @@ local function render_quiver(series, map_x, map_y, buf)
     local magnitude = math.sqrt(u * u + v * v)
     if magnitude > 1e-12 then
       local x, y = series.x[index], series.y[index]
-      local dx = map_x(x + u) - map_x(x)
-      local dy = map_y(y + v) - map_y(y)
+      local dx, dy
+      if series.angles == "uv" then
+        dx, dy = u, -v
+      else
+        dx = map_x(x + u) - map_x(x)
+        dy = map_y(y + v) - map_y(y)
+      end
       local length = math.sqrt(dx * dx + dy * dy)
       if length > 1e-12 then
         if series.normalize then
@@ -1028,10 +1050,10 @@ local function render_quiver(series, map_x, map_y, buf)
   end
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-quiver" data-count="%d" data-drawn="%d" data-stride="%d" data-max-arrows="%d" data-scale="%s" data-scale-mode="%s" data-pivot="%s" data-normalize="%s"%s>',
+    '  <g class="series series-quiver" data-count="%d" data-drawn="%d" data-stride="%d" data-max-arrows="%d" data-scale="%s" data-scale-mode="%s" data-pivot="%s" data-normalize="%s" data-angles="%s"%s>',
     count, #entries, stride, series.max_arrows, util.fmt(scale),
     automatic and "auto" or "explicit", series.pivot,
-    series.normalize and "true" or "false", label)
+    series.normalize and "true" or "false", series.angles or "xy", label)
 
   for _, entry in ipairs(entries) do
     local length = entry.length * scale
@@ -1345,6 +1367,9 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
         points, style.color, util.fmt(style.linewidth or 1), stroke_opacity)
     else
       local fill = style.color
+      if style.hatch then
+        fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
+      end
       local stroke = style.edgecolor or style.color
       buf[#buf + 1] = string.format(
         '   <polygon class="hist-step-filled" points="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
@@ -1360,20 +1385,28 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
           local value_x = map_x(count)
           local left = math.min(x_baseline, value_x)
           local top = math.min(y1, y2)
+          local fill = style.color
+          if style.hatch then
+            fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
+          end
           buf[#buf + 1] = string.format(
             '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(left), util.fmt(top),
             util.fmt(math.abs(value_x - x_baseline)),
-            util.fmt(math.abs(y2 - y1)), style.color, edge,
+            util.fmt(math.abs(y2 - y1)), fill, edge,
             util.fmt(style.linewidth or 1), opacity)
         else
           local x1 = map_x(series.edges[i])
           local x2 = map_x(series.edges[i + 1])
           local top = map_y(count)
+          local fill = style.color
+          if style.hatch then
+            fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
+          end
           buf[#buf + 1] = string.format(
             '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
-            util.fmt(y_baseline - top), style.color, edge,
+            util.fmt(y_baseline - top), fill, edge,
             util.fmt(style.linewidth or 1), opacity)
         end
       end
@@ -1381,8 +1414,6 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
   end
   buf[#buf + 1] = '  </g>'
 end
-
-local hatch_id
 
 local function render_barh(series, map_x, map_y, baseline, buf)
   local style = series.style
@@ -1575,7 +1606,9 @@ end
 
 local function render_stem(series, map_x, map_y, buf)
   local style = series.style
-  local baseline = map_y(series.base or 0)
+  local horizontal = series.orientation == "horizontal"
+  local baseline = horizontal and map_x(series.base or 0) or
+    map_y(series.base or 0)
   local dash = ""
   if style.linestyle == "dashed" then dash = ' stroke-dasharray="6 4"'
   elseif style.linestyle == "dotted" then dash = ' stroke-dasharray="1.5 3"' end
@@ -1599,20 +1632,29 @@ local function render_stem(series, map_x, map_y, buf)
       marker_outline)
   end
   buf[#buf + 1] = string.format(
-    '  <g class="series series-stem" data-base="%s" data-marker="%s" data-linestyle="%s">',
-    util.fmt(series.base or 0), style.marker or "none", style.linestyle or "solid")
+    '  <g class="series series-stem" data-base="%s" data-marker="%s" data-linestyle="%s" data-orientation="%s">',
+    util.fmt(series.base or 0), style.marker or "none",
+    style.linestyle or "solid",
+    horizontal and "horizontal" or "vertical")
   for i = 1, #series.x do
-    local x = map_x(series.x[i])
-    local y = map_y(series.y[i])
+    local value = horizontal and map_x(series.y[i]) or map_y(series.y[i])
+    local position = horizontal and map_y(series.x[i]) or map_x(series.x[i])
     if style.linestyle ~= "none" then
+      local x1, y1, x2, y2
+      if horizontal then
+        x1, y1, x2, y2 = baseline, position, value, position
+      else
+        x1, y1, x2, y2 = position, baseline, position, value
+      end
       buf[#buf + 1] = string.format(
         '   <line class="stem-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
-        util.fmt(x), util.fmt(baseline), util.fmt(x), util.fmt(y),
+        util.fmt(x1), util.fmt(y1), util.fmt(x2), util.fmt(y2),
         style.color, util.fmt(style.linewidth or 1.5), dash, line_opacity)
     end
     if style.marker ~= nil then
-      buf[#buf + 1] = markers.svg(style.marker, "stem-marker", x, y,
-        style.markersize or 4, marker_fill, marker_opacity, marker_outline)
+      buf[#buf + 1] = markers.svg(style.marker, "stem-marker", value,
+        position, style.markersize or 4, marker_fill, marker_opacity,
+        marker_outline)
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -2421,6 +2463,14 @@ function M.to_svg(fig)
       ' data-xlabel-pad="%s" data-ylabel-pad="%s"',
       util.fmt(fig._xlabel_pad or 0), util.fmt(fig._ylabel_pad or 0))
   end
+  local tickstyle_metadata = ""
+  if (fig._ticklabelsize or 11) ~= 11 or
+      (fig._ticklabelcolor or "#222222") ~= "#222222" then
+    tickstyle_metadata = string.format(
+      ' data-ticklabelsize="%s" data-ticklabelcolor="%s"',
+      util.fmt(fig._ticklabelsize or 11),
+      util.escape_xml(fig._ticklabelcolor or "#222222"))
+  end
 
   add('<?xml version="1.0" encoding="UTF-8"?>')
   printf('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" role="img" aria-label="%s" data-dpi="%s" data-xscale="%s" data-yscale="%s" data-minorticks="%s" data-minor-subdivisions="%d" data-minor-grid="%s"%s>',
@@ -2429,7 +2479,8 @@ function M.to_svg(fig)
     util.escape_xml(fig._aria_label or fig._title or "luaplotlib figure"),
     util.fmt(fig.dpi), util.escape_xml(xscale), util.escape_xml(yscale),
     minorticks.enabled and minor_axis or "none", minor_subdivisions,
-    grid_minor and "true" or "false", aspect_metadata .. labelpad_metadata)
+    grid_minor and "true" or "false",
+    aspect_metadata .. labelpad_metadata .. tickstyle_metadata)
   add(' <title>' .. util.escape_xml(fig._title or "luaplotlib figure") .. '</title>')
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   printf(' <rect class="background" x="0" y="0" width="%s" height="%s" fill="%s"/>',
@@ -2655,9 +2706,10 @@ function M.to_svg(fig)
         transform = string.format(' transform="rotate(%d %s %s)"', rotation,
           util.fmt(geom.right + 9), util.fmt(y + 4))
       end
-      printf('   <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="start"%s>%s</text>',
-        util.fmt(geom.right + 9), util.fmt(y + 4), TEXT_COLOR, transform,
-        util.escape_xml(tick.label))
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="start"%s>%s</text>',
+        util.fmt(geom.right + 9), util.fmt(y + 4),
+        util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
+        transform, util.escape_xml(tick.label))
     end
     if twin._ylabel ~= nil then
       local center_y = geom.top + geom.plot_height / 2
@@ -2680,8 +2732,9 @@ function M.to_svg(fig)
         util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.top - 5),
         AXIS_COLOR)
       local label = format_value(value, twiny._xtick_format)
-      printf('   <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="middle">%s</text>',
-        util.fmt(x), util.fmt(geom.top - 9), TEXT_COLOR,
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle">%s</text>',
+        util.fmt(x), util.fmt(geom.top - 9),
+        util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
         util.escape_xml(label))
     end
     if twiny._xlabel ~= nil then
@@ -2710,9 +2763,10 @@ function M.to_svg(fig)
         util.fmt(x), util.fmt(geom.bottom + 19))
       anchor = rotation > 0 and "end" or "start"
     end
-    printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="%s"%s>%s</text>',
-      util.fmt(x), util.fmt(geom.bottom + 19), TEXT_COLOR, anchor, transform,
-      util.escape_xml(tick.label))
+    printf('    <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
+      util.fmt(x), util.fmt(geom.bottom + 19),
+      util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
+      anchor, transform, util.escape_xml(tick.label))
   end
   if minorticks.enabled and minor_axis ~= "y" then
     for _, value in ipairs(x_minor) do
@@ -2735,9 +2789,10 @@ function M.to_svg(fig)
       transform = string.format(' transform="rotate(%d %s %s)"', rotation,
         util.fmt(geom.left - 9), util.fmt(y + 4))
     end
-    printf('    <text class="tick-label" x="%s" y="%s" font-size="11" fill="%s" text-anchor="end"%s>%s</text>',
-      util.fmt(geom.left - 9), util.fmt(y + 4), TEXT_COLOR, transform,
-      util.escape_xml(tick.label))
+    printf('    <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="end"%s>%s</text>',
+      util.fmt(geom.left - 9), util.fmt(y + 4),
+      util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
+      transform, util.escape_xml(tick.label))
   end
   if minorticks.enabled and minor_axis ~= "x" then
     for _, value in ipairs(y_minor) do

@@ -262,6 +262,11 @@ local test_files = {
   "test_error_stem_markers.lua",
   "test_eventplot_linestyle.lua",
   "test_barh_hatch.lua",
+  "test_stem_horizontal.lua",
+  "test_scatter_alpha.lua",
+  "test_quiver_angles.lua",
+  "test_tick_style.lua",
+  "test_hist_hatch.lua",
   "test_export.lua",
 }
 

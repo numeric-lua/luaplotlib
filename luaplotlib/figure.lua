@@ -195,6 +195,7 @@ local HIST_OPTIONS = {
   orientation = true,
   histtype = true,
   linewidth = true,
+  hatch = true,
 }
 
 local HIST2D_OPTIONS = {
@@ -274,6 +275,7 @@ local STEM_OPTIONS = {
   markeredgecolor = true,
   markeredgewidth = true,
   base = true,
+  orientation = true,
   alpha = true,
 }
 
@@ -389,6 +391,7 @@ local QUIVER_OPTIONS = {
   pivot = true,
   max_arrows = true,
   normalize = true,
+  angles = true,
 }
 
 
@@ -938,6 +941,8 @@ function Figure.new(opts)
     _aspect = nil,
     _xtick_rotation = 0,
     _ytick_rotation = 0,
+    _ticklabelsize = 11,
+    _ticklabelcolor = "#222222",
     _xticks = nil,
     _yticks = nil,
     _xtick_format = nil,
@@ -1032,6 +1037,10 @@ function Figure:quiver(x, y, u, v, opts)
   if opts.normalize ~= nil then
     normalize = util.check_boolean(opts.normalize, "quiver normalize")
   end
+  local angles = opts.angles or "xy"
+  if angles ~= "xy" and angles ~= "uv" then
+    fail("quiver angles must be 'xy' or 'uv'")
+  end
 
   local style = checked_style(self, opts, "quiver")
   style.linewidth = linewidth
@@ -1047,6 +1056,7 @@ function Figure:quiver(x, y, u, v, opts)
     pivot = pivot,
     max_arrows = max_arrows,
     normalize = normalize,
+    angles = angles,
     style = style,
   }
   return self
@@ -1238,6 +1248,22 @@ function Figure:polar_scatter(theta, r, opts)
     style_opts.color = point_colors[1]
   end
 
+  local point_alphas
+  if type(opts.alpha) == "table" then
+    if #opts.alpha ~= #tv then
+      fail("polar scatter alpha array must match the number of points")
+    end
+    point_alphas = {}
+    for index = 1, #opts.alpha do
+      point_alphas[index] = util.check_alpha(opts.alpha[index],
+        "polar scatter alpha[" .. index .. "]")
+    end
+    if style_opts == opts then
+      style_opts = {}
+      for key, value in pairs(opts) do style_opts[key] = value end
+    end
+    style_opts.alpha = 1
+  end
   local style = checked_style(self, style_opts, "polar scatter")
   local marker_list, marker = checked_markers(opts.marker, #tv,
     "polar scatter")
@@ -1246,6 +1272,7 @@ function Figure:polar_scatter(theta, r, opts)
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
+  style.alphas = point_alphas
   style.linewidth = linewidth
 
   local state = ensure_polar_state(self)
@@ -2047,6 +2074,22 @@ function Figure:scatter(x, y, opts)
     for key, value in pairs(opts) do style_opts[key] = value end
     style_opts.color = point_colors[1]
   end
+  local point_alphas
+  if type(opts.alpha) == "table" then
+    if #opts.alpha ~= #xv then
+      fail("scatter alpha array must match the number of points")
+    end
+    point_alphas = {}
+    for index = 1, #opts.alpha do
+      point_alphas[index] = util.check_alpha(opts.alpha[index],
+        "scatter alpha[" .. index .. "]")
+    end
+    if style_opts == opts then
+      style_opts = {}
+      for key, value in pairs(opts) do style_opts[key] = value end
+    end
+    style_opts.alpha = 1
+  end
   local style = checked_style(self, style_opts, "scatter")
   local marker_list, marker = checked_markers(opts.marker, #xv, "scatter")
   style.marker = marker
@@ -2054,6 +2097,7 @@ function Figure:scatter(x, y, opts)
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
+  style.alphas = point_alphas
   style.linewidth = linewidth
 
   if colorbar then self._colorbar = true end
@@ -2253,6 +2297,15 @@ function Figure:hist(values, opts)
   if opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "hist linewidth", 0)
   end
+  local hatch = opts.hatch
+  if hatch ~= nil then
+    if type(hatch) ~= "string" or not HATCH_TYPES[hatch] then
+      fail("hist hatch must be /, \\, |, -, +, x, ., or o")
+    end
+    if histtype == "step" then
+      fail("hist hatch requires bar or stepfilled histtype")
+    end
+  end
   local bin_width = (hi - lo) / bins
   local counts = {}
   for i = 1, bins do
@@ -2287,6 +2340,7 @@ function Figure:hist(values, opts)
   local style = checked_style(self, opts, "hist")
   style.bins = bins
   style.linewidth = linewidth
+  style.hatch = hatch
 
   self._series[#self._series + 1] = {
     kind = "hist",
@@ -3252,6 +3306,16 @@ function Figure:ytick_rotation(angle)
   return self
 end
 
+function Figure:ticklabelsize(size)
+  self._ticklabelsize = util.check_number(size, "ticklabelsize", 0.1)
+  return self
+end
+
+function Figure:ticklabelcolor(color)
+  self._ticklabelcolor = util.check_color(color, "ticklabelcolor")
+  return self
+end
+
 -- Horizontal bars for a single numeric series.  Category labels are placed on
 -- the y axis; values extend horizontally from zero.
 -- Pie/donut chart.  Values must be non-negative and sum to a positive total.
@@ -3420,6 +3484,10 @@ function Figure:stem(x, y, opts)
   if opts.base ~= nil then
     base = util.check_number(opts.base, "stem base")
   end
+  local orientation = opts.orientation or "vertical"
+  if orientation ~= "vertical" and orientation ~= "horizontal" then
+    fail("stem orientation must be 'vertical' or 'horizontal'")
+  end
   local style = checked_style(self, opts, "stem")
   style.linewidth = linewidth
   style.linestyle = linestyle
@@ -3427,7 +3495,8 @@ function Figure:stem(x, y, opts)
   style.markersize = markersize
   checked_marker_style(opts, "stem", style)
   self._series[#self._series + 1] = {
-    kind = "stem", x = xv, y = yv, base = base, style = style,
+    kind = "stem", x = xv, y = yv, base = base,
+    orientation = orientation, style = style,
   }
   return self
 end
