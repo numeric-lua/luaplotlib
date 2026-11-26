@@ -2566,6 +2566,7 @@ local function copy_style(style)
     marker = style.marker,
     markersize = style.markersize,
     markers = style.markers and copy_array(style.markers) or nil,
+    colors = style.colors and copy_array(style.colors) or nil,
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,

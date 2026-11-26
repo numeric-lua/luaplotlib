@@ -30,6 +30,7 @@ local function copy_style(style)
     marker = style.marker,
     markersize = style.markersize,
     markers = style.markers and copy_array(style.markers) or nil,
+    colors = style.colors and copy_array(style.colors) or nil,
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
@@ -215,6 +216,10 @@ function M.from_figure(figure)
       shadow = figure._pie.shadow and true or false,
       edgecolor = figure._pie.edgecolor or "#ffffff",
       linewidth = figure._pie.linewidth or 1.5,
+      labelsize = figure._pie.labelsize or 12,
+      labelcolor = figure._pie.labelcolor or "#222222",
+      pctsize = figure._pie.pctsize or 12,
+      pctcolor = figure._pie.pctcolor or "#ffffff",
       labeldistance = figure._pie.labeldistance or 1.08,
       pctdistance = figure._pie.pctdistance or 0.64,
       rotatelabels = figure._pie.rotatelabels and true or false,
@@ -294,6 +299,7 @@ function M.from_figure(figure)
           column = cell.column,
           count = cell.count,
           value = cell.value,
+          color_value = cell.color_value or cell.value,
           x0 = cell.x0,
           x1 = cell.x1,
           y0 = cell.y0,
@@ -312,6 +318,9 @@ function M.from_figure(figure)
       copy.show_empty = series.show_empty and true or false
       copy.vmin = series.vmin
       copy.vmax = series.vmax
+      copy.color_norm = series.color_norm or "linear"
+      copy.color_vmin = series.color_vmin or series.vmin
+      copy.color_vmax = series.color_vmax or series.vmax
       copy.colorbar = series.colorbar and true or false
       copy.colorbar_label = series.colorbar_label
       copy.colorbar_ticks = series.colorbar_ticks
@@ -498,6 +507,9 @@ function M.from_figure(figure)
       for row = 1, #series.rows do
         copy.rows[row] = copy_array(series.rows[row])
       end
+      if series.eventcolors ~= nil then
+        copy.eventcolors = copy_array(series.eventcolors)
+      end
       copy.lineoffsets = copy_array(series.lineoffsets)
       copy.linelengths = copy_array(series.linelengths)
       copy.colors = series.colors and copy_array(series.colors) or nil
@@ -681,6 +693,9 @@ function M.from_figure(figure)
       copy.q1 = series.q1
       copy.median = series.median
       copy.q3 = series.q3
+      copy.notch = series.notch and true or false
+      copy.notch_low = series.notch_low
+      copy.notch_high = series.notch_high
       copy.low = series.low
       copy.high = series.high
       copy.outliers = copy_array(series.outliers)

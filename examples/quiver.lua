@@ -34,6 +34,7 @@ if mkdir_status == nil or mkdir_status == false
 end
 
 local x, y, u, v = {}, {}, {}, {}
+local arrow_colors = {}
 local index = 0
 for row = 0, 6 do
   for column = 0, 8 do
@@ -44,13 +45,15 @@ for row = 0, 6 do
     y[index] = py
     u[index] = -py
     v[index] = px
+    arrow_colors[index] = (row + column) % 2 == 0 and
+      "#1f77b4" or "#f28e2b"
   end
 end
 
 local fig = plt.figure({ width = 820, height = 560 })
 fig:quiver(x, y, u, v, {
   label = "rotation field",
-  color = "#1f77b4",
+  color = arrow_colors,
   pivot = "middle",
   head = 6,
   max_arrows = 128,

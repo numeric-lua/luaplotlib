@@ -29,6 +29,10 @@ fig:pie({ 31, 24, 21, 14, 10 }, {
   labeldistance = 1.16,
   edgecolor = "#1f2937",
   linewidth = 1.2,
+  labelsize = 14,
+  labelcolor = "#1f2937",
+  pctsize = 11,
+  pctcolor = "#f8fafc",
   rotatelabels = true,
   autopct = true,
 })

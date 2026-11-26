@@ -79,16 +79,30 @@
   exported as `style.linewidths`;
 - `fig:hexbin` accepts `norm = "linear" | "log"`. Log norm colors by
   `log(1 + count)` while vmin/vmax and colorbar labels stay in count units;
-  scenes export `norm`, `color_vmin`, and `color_vmax`.
+  scenes export `norm`, `color_vmin`, and `color_vmax`;
+- `fig:hist2d` accepts `color_norm = "linear" | "log"`. Log color norm maps
+  cell values through `log(1 + value)` while colorbar labels remain values;
+  scenes export `color_norm`, `color_vmin`, and `color_vmax`;
+- `fig:pie`/`fig:donut` accept `labelsize`/`labelcolor` and
+  `pctsize`/`pctcolor` for independent slice-label and percentage styling.
+  Pie scenes export all four values;
+- `fig:quiver` accepts one `color` per vector. The resolved array is exported
+  through the series style and used for both shaft and head;
+- `fig:eventplot` accepts `eventcolors` with one color per event across all
+  rows, overriding row colors. Scenes export the array;
+- `fig:boxplot` accepts `notch = true`, drawing a notched polygon around the
+  median and exporting `notch`, `notch_low`, and `notch_high`.
   Existing examples and visual QA cover per-bar colors, annotation
-  backgrounds/rotation, label padding, pie distances/rotation/edges, complete
-  hist2d grids, per-point markers/alpha/edges/widths, axis-label typography,
-  legend spacing, errorbar/stem marker styling and x/y limits, horizontal
-  stems/violins, quiver angle modes, tick/title styling, event line styles,
-  filled steps, explicit histogram edges, log hexbin colors, and
-  fill/span/histogram hatches. The dependency-free suite grows from 410 to 506
-  tests. Existing Cartesian APIs remain compatible, polar rendering is
-  unchanged, and there are no new runtime dependencies.
+  backgrounds/rotation, label padding, pie distances/rotation/edges/text,
+  complete hist2d grids, log hist2d colors, per-point
+  markers/alpha/edges/widths, axis-label typography, legend spacing,
+  errorbar/stem marker styling and x/y limits, horizontal stems/violins,
+  notched boxes, quiver angle modes and per-vector colors, tick/title styling,
+  event line styles and per-event colors, filled steps, explicit histogram
+  edges, log hexbin colors, and fill/span/histogram hatches. The
+  dependency-free suite grows from 410 to 520 tests. Existing Cartesian APIs
+  remain compatible, polar rendering is unchanged, and there are no new
+  runtime dependencies.
 
 ## 4.28.0
 

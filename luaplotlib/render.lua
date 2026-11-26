@@ -1083,6 +1083,7 @@ local function render_quiver(series, map_x, map_y, buf)
     series.normalize and "true" or "false", series.angles or "xy", label)
 
   for _, entry in ipairs(entries) do
+    local color = style.colors and style.colors[entry.index] or style.color
     local length = entry.length * scale
     local base_length = entry.length
     local ux, uy = entry.dx / base_length, entry.dy / base_length
@@ -1103,7 +1104,7 @@ local function render_quiver(series, map_x, map_y, buf)
       buf[#buf + 1] = string.format(
         '    <line class="quiver-shaft" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s" stroke-linecap="round"%s/>',
         util.fmt(tail_x), util.fmt(tail_y), util.fmt(neck_x),
-        util.fmt(neck_y), style.color, util.fmt(style.linewidth),
+        util.fmt(neck_y), color, util.fmt(style.linewidth),
         stroke_opacity)
     end
     if head > 1e-9 then
@@ -1114,7 +1115,7 @@ local function render_quiver(series, map_x, map_y, buf)
         util.fmt(tip_x), util.fmt(tip_y),
         util.fmt(neck_x + px), util.fmt(neck_y + py),
         util.fmt(neck_x - px), util.fmt(neck_y - py),
-        style.color, fill_opacity)
+        color, fill_opacity)
     end
     buf[#buf + 1] = '   </g>'
   end
@@ -1170,7 +1171,7 @@ local function colorbar_values(series)
   local values = {}
   for index = 1, count do
     local fraction = (index - 1) / (count - 1)
-    if series.norm == "log" then
+    if (series.color_norm or series.norm) == "log" then
       values[index] = math.exp(math.log(1 + series.vmin) +
         (math.log(1 + series.vmax) - math.log(1 + series.vmin)) * fraction) - 1
     else
@@ -1196,7 +1197,9 @@ local function render_value_colorbar(series, geom, buf, class_name,
   local color_vmax = series.color_vmax or series.vmax
   local span = color_vmax - color_vmin
   local function transform(value)
-    if series.norm == "log" then return math.log(1 + value) end
+    if (series.color_norm or series.norm) == "log" then
+      return math.log(1 + value)
+    end
     return value
   end
   buf[#buf + 1] = string.format(
@@ -1262,10 +1265,10 @@ local function render_hist2d(series, map_x, map_y, buf)
   end
   local norm = series.density and "density" or "count"
   buf[#buf + 1] = string.format(
-    '  <g class="series series-hist2d" data-points="%d" data-inside="%d" data-bins-x="%d" data-bins-y="%d" data-norm="%s" data-show-empty="%s" data-vmin="%s" data-vmax="%s"%s>',
+    '  <g class="series series-hist2d" data-points="%d" data-inside="%d" data-bins-x="%d" data-bins-y="%d" data-norm="%s" data-color-norm="%s" data-show-empty="%s" data-vmin="%s" data-vmax="%s"%s>',
     series.point_count, series.inside_count, series.bins_x, series.bins_y, norm,
-    series.show_empty and "true" or "false", util.fmt(series.vmin),
-    util.fmt(series.vmax), label)
+    series.color_norm or "linear", series.show_empty and "true" or "false",
+    util.fmt(series.vmin), util.fmt(series.vmax), label)
   for _, cell in ipairs(series.cells) do
     local x0 = map_x(cell.x0)
     local x1 = map_x(cell.x1)
@@ -1279,8 +1282,9 @@ local function render_hist2d(series, map_x, map_y, buf)
       util.fmt(cell.x0), util.fmt(cell.x1), util.fmt(cell.y0),
       util.fmt(cell.y1), util.fmt(left), util.fmt(top),
       util.fmt(math.abs(x1 - x0)), util.fmt(math.abs(y1 - y0)),
-      colors.heat(cell.value, series.vmin, series.vmax), series.edgecolor,
-      util.fmt(series.linewidth), opacity)
+      colors.heat(cell.color_value or cell.value,
+        series.color_vmin or series.vmin, series.color_vmax or series.vmax),
+      series.edgecolor, util.fmt(series.linewidth), opacity)
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -1951,14 +1955,40 @@ local function render_box(series, map_x, map_y, buf)
     (q3_screen - q1_screen))
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s">',
+    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s">',
     util.fmt(series.position), horizontal and "horizontal" or "vertical",
     util.fmt(series.mean), series.showmeans and "true" or "false",
-    series.meanline and "true" or "false")
-  buf[#buf + 1] = string.format(
-    '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
-    util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
-    util.fmt(rect_height), color, color)
+    series.meanline and "true" or "false", series.notch and "true" or "false")
+  if series.notch then
+    local function point(position, value)
+      if horizontal then
+        return util.fmt(map_x(value)) .. "," .. util.fmt(map_y(position))
+      end
+      return util.fmt(map_x(position)) .. "," .. util.fmt(map_y(value))
+    end
+    local low_position = series.position - half
+    local high_position = series.position + half
+    local notch_points = {
+      point(low_position, series.q3),
+      point(high_position, series.q3),
+      point(high_position, series.notch_high),
+      point(series.position, series.median),
+      point(high_position, series.notch_low),
+      point(high_position, series.q1),
+      point(low_position, series.q1),
+      point(low_position, series.notch_low),
+      point(series.position, series.median),
+      point(low_position, series.notch_high),
+    }
+    buf[#buf + 1] = string.format(
+      '   <polygon class="box box-notch" points="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+      table.concat(notch_points, " "), color, color)
+  else
+    buf[#buf + 1] = string.format(
+      '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+      util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
+      util.fmt(rect_height), color, color)
+  end
   if horizontal then
     buf[#buf + 1] = string.format(
       '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
@@ -2290,10 +2320,12 @@ function M.to_pie_svg(fig)
   local buf = {}
   local function add(line) buf[#buf + 1] = line end
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-rotatelabels="%s">',
+  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-rotatelabels="%s">',
     util.fmt(width), util.fmt(height), util.fmt(width), util.fmt(height),
     util.fmt(fig.dpi), util.fmt(pie.labeldistance or 1.08),
-    util.fmt(pie.pctdistance or 0.64),
+    util.fmt(pie.pctdistance or 0.64), util.fmt(pie.labelsize or 12),
+    pie.labelcolor or "#222222", util.fmt(pie.pctsize or 12),
+    pie.pctcolor or "#ffffff",
     pie.rotatelabels and "true" or "false"))
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   add(' <rect class="background" width="' .. util.fmt(width) .. '" height="' ..
@@ -2336,8 +2368,9 @@ function M.to_pie_svg(fig)
         local format_string = pie.autopct == true and "%.1f%%" or pie.autopct
         local ok, text = pcall(string.format, format_string, slice.percent)
         if not ok then text = string.format("%.1f%%", slice.percent) end
-        add(string.format('  <text class="pie-percent" x="%s" y="%s" font-size="12" fill="#ffffff" text-anchor="middle">%s</text>',
-          util.fmt(tx), util.fmt(ty + 4), util.escape_xml(text)))
+        add(string.format('  <text class="pie-percent" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle">%s</text>',
+          util.fmt(tx), util.fmt(ty + 4), util.fmt(pie.pctsize or 12),
+          pie.pctcolor or "#ffffff", util.escape_xml(text)))
       end
       local lx, ly = pie_point(slice_cx, slice_cy, radius * (pie.labeldistance or 1.08), middle)
       local edge_x, edge_y = pie_point(slice_cx, slice_cy, radius, middle)
@@ -2358,8 +2391,9 @@ function M.to_pie_svg(fig)
         transform = string.format(' transform="rotate(%s %s %s)"',
           util.fmt(rotation), util.fmt(lx), util.fmt(ly + 4))
       end
-      add(string.format('  <text class="pie-label" x="%s" y="%s" font-size="12" fill="#222222" text-anchor="%s"%s>%s</text>',
-        util.fmt(lx), util.fmt(ly + 4), anchor, transform,
+      add(string.format('  <text class="pie-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
+        util.fmt(lx), util.fmt(ly + 4), util.fmt(pie.labelsize or 12),
+        pie.labelcolor or "#222222", anchor, transform,
         util.escape_xml(slice.label)))
     end
   end
@@ -2779,16 +2813,21 @@ function M.to_svg(fig)
         dash = ' stroke-dasharray="1.5 3"'
       end
       buf[#buf + 1] = string.format(
-        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-labels="%s" data-linestyle="%s"%s>',
+        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-eventcolors="%s" data-labels="%s" data-linestyle="%s"%s>',
         horizontal and "horizontal" or "vertical", #series.rows,
         row_colors ~= nil and "true" or "false",
+        series.eventcolors ~= nil and "true" or "false",
         series.labels ~= nil and "true" or "false",
         style.linestyle or "solid", label)
+      local event_index = 0
       for row, events in ipairs(series.rows) do
         local offset = series.lineoffsets[row]
         local half = series.linelengths[row] / 2
         local row_color = row_colors and row_colors[row] or style.color
         for _, value in ipairs(events) do
+          event_index = event_index + 1
+          local event_color = series.eventcolors and
+            series.eventcolors[event_index] or row_color
           local line
           if horizontal then
             local y = map_y(value)
@@ -2797,7 +2836,7 @@ function M.to_svg(fig)
               '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x1), util.fmt(y), util.fmt(x2), util.fmt(y),
-              row_color, util.fmt(style.linewidth), dash, opacity)
+              event_color, util.fmt(style.linewidth), dash, opacity)
           else
             local x = map_x(value)
             local y1, y2 = map_y(offset - half), map_y(offset + half)
@@ -2805,7 +2844,7 @@ function M.to_svg(fig)
               '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
-              row_color, util.fmt(style.linewidth), dash, opacity)
+              event_color, util.fmt(style.linewidth), dash, opacity)
           end
           if style.linestyle ~= "none" then buf[#buf + 1] = line end
         end

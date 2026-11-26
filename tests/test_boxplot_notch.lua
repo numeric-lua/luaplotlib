@@ -1,0 +1,37 @@
+local plt = require("luaplotlib")
+
+test("boxplot is un-notched by default", function()
+  local fig = plt.figure()
+  fig:boxplot({ 1, 2, 3, 4, 5 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-notch="false"')
+  assert_contains(svg, '<rect class="box"')
+  local scene = fig:to_scene().series[1]
+  assert_equal(scene.notch, false)
+  assert_equal(scene.notch_low, nil)
+end)
+
+test("boxplot notch renders a notched polygon and exports bounds", function()
+  local fig = plt.figure()
+  fig:boxplot({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, { notch = true })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-notch="true"')
+  assert_contains(svg, '<polygon class="box box-notch"')
+  local scene = fig:to_scene().series[1]
+  assert_equal(scene.notch, true)
+  assert_true(scene.notch_low >= scene.q1)
+  assert_true(scene.notch_high <= scene.q3)
+  assert_true(scene.notch_low <= scene.median)
+  assert_true(scene.notch_high >= scene.median)
+end)
+
+test("horizontal boxplot notches work and validate booleans", function()
+  local fig = plt.figure()
+  fig:boxplot({ { 1, 2, 3, 4 }, { 2, 3, 4, 5 } },
+    { orientation = "horizontal", notch = true })
+  assert_match(fig:to_svg(), 'class="series series%-box"[^>]*data%-orientation="horizontal"')
+  assert_contains(fig:to_svg(), 'class="box box-notch"')
+  assert_error("notch must be a boolean", function()
+    fig:boxplot({ 1, 2 }, { notch = "yes" })
+  end)
+end)

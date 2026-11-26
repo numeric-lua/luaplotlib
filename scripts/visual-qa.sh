@@ -447,6 +447,12 @@ grep -o '<line class="event"[^>]*/>' "$EVENT" | awk '
     if (y1 != y2) exit 1
   }
 ' || fail "$EVENT contains a non-horizontal event mark"
+grep -q 'data-eventcolors="true"' "$EVENT" ||
+  fail "$EVENT should advertise per-event colors"
+event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$event_colors" -ge 2 ] ||
+  fail "$EVENT should vary colors per event"
 grep -q 'data-colors="true"' "$EVENT" ||
   fail "$EVENT should use per-row event colors"
 grep -q 'data-labels="true"' "$EVENT" ||
@@ -460,8 +466,8 @@ grep -q 'stroke-dasharray="6 4"' "$EVENT" ||
   fail "$EVENT is missing its dashed event pattern"
 event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
-[ "$event_colors" -eq 3 ] ||
-  fail "$EVENT should use three distinct row colors"
+[ "$event_colors" -ge 3 ] ||
+  fail "$EVENT should use at least three distinct event colors"
 
 # Histogram step styles must render the outline and filled staircase variants.
 HIST_STYLES=examples/output/hist-styles.svg
@@ -516,6 +522,11 @@ box_means=$(grep -o 'class="box-mean-marker"' "$BOX_H" | wc -l | tr -d ' ')
   fail "$BOX_H should draw one mean marker per box"
 grep -q 'data-showmeans="true"' "$BOX_H" ||
   fail "$BOX_H should advertise its mean markers"
+grep -q 'data-notch="true"' "$BOX_H" ||
+  fail "$BOX_H should advertise notched boxes"
+box_notches=$(grep -o 'class="box box-notch"' "$BOX_H" | wc -l | tr -d ' ')
+[ "$box_notches" -eq 3 ] ||
+  fail "$BOX_H should draw three notched box polygons"
 
 # Image colorbars accept a title and explicit tick values.
 IMSHOW=examples/output/imshow-colorbar.svg
@@ -719,6 +730,10 @@ grep -q 'data-scale-mode="auto"' "$QUIVER_CART" ||
   fail "$QUIVER_CART should advertise its automatic scale"
 grep -q 'data-pivot="middle"' "$QUIVER_CART" ||
   fail "$QUIVER_CART should advertise its middle pivot"
+quiver_colors=$(grep -o 'class="quiver-shaft"[^>]*stroke="[^"]*"' "$QUIVER_CART" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$quiver_colors" -ge 2 ] ||
+  fail "$QUIVER_CART should vary colors per arrow"
 grep -q 'class="legend"' "$QUIVER_CART" ||
   fail "$QUIVER_CART has no legend"
 angled=$(grep -o 'class="quiver-arrow"[^>]*data-angle="[^"]*"' "$QUIVER_CART" |
@@ -822,6 +837,10 @@ hist2d_cells=$(grep -o 'class="hist2d-cell"' "$HIST2D" | wc -l |
   fail "$HIST2D draws more cells than its grid"
 grep -q 'data-show-empty="true"' "$HIST2D" ||
   fail "$HIST2D should include empty cells"
+grep -q 'data-color-norm="log"' "$HIST2D" ||
+  fail "$HIST2D should use log color normalization"
+grep -q 'class="colorbar hist2d-colorbar"' "$HIST2D" ||
+  fail "$HIST2D should keep its colorbar"
 [ "$hist2d_cells" -eq $((hist2d_bins_x * hist2d_bins_y)) ] ||
   fail "$HIST2D should draw the complete hist2d grid"
 hist2d_sum=$(grep -o 'class="hist2d-cell"[^>]*data-count="[0-9]*"' "$HIST2D" |
@@ -1019,6 +1038,12 @@ pie_rotated_labels=$(grep -o 'class="pie-label"[^>]*transform="rotate(' \
   fail "$PIE_ROTATED should rotate all five pie labels"
 grep -q 'class="pie-slice"[^>]*stroke="#1f2937" stroke-width="1.2"' \
   "$PIE_ROTATED" || fail "$PIE_ROTATED should style its wedge edges"
+grep -q 'data-labelsize="14" data-labelcolor="#1f2937" data-pctsize="11" data-pctcolor="#f8fafc"' \
+  "$PIE_ROTATED" || fail "$PIE_ROTATED should expose styled slice text"
+grep -q 'class="pie-label"[^>]*font-size="14" fill="#1f2937"' "$PIE_ROTATED" ||
+  fail "$PIE_ROTATED should style its slice labels"
+grep -q 'class="pie-percent"[^>]*font-size="11" fill="#f8fafc"' "$PIE_ROTATED" ||
+  fail "$PIE_ROTATED should style its percentage labels"
 grep -q 'data-labeldistance="1.14" data-pctdistance="0.55"' "$PIE_EXPLODE" ||
   fail "$PIE_EXPLODE should expose its label and percentage distances"
 

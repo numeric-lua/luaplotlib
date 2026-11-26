@@ -112,6 +112,8 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `shadow` | boolean | `false` |
 | `edgecolor` | color string | `#ffffff` |
 | `linewidth` | number ≥ 0 | `1.5` |
+| `labelsize` / `pctsize` | number > 0 | `12` |
+| `labelcolor` / `pctcolor` | color string | `#222222` / `#ffffff` |
 | `labeldistance` | number in [0.01, 2], radius multiplier | `1.08` |
 | `pctdistance` | number in [0.01, 2], radius multiplier | `0.64` |
 | `rotatelabels` | boolean | `false` |
@@ -122,9 +124,10 @@ Pie and donut charts. Values must be non-negative with a positive total.
 mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
 wedges keep their labels, leader lines, and percentage text attached to the
 shifted slice. `edgecolor`/`linewidth` style each wedge outline, defaulting to
-the existing white 1.5-pixel stroke. `labeldistance`/`pctdistance` place the
-slice labels and
-percentage text as radius multipliers. `rotatelabels = true` rotates each label
+the existing white 1.5-pixel stroke. `labelsize`/`labelcolor` style slice
+labels, while `pctsize`/`pctcolor` style percentage annotations independently.
+`labeldistance`/`pctdistance` place the slice labels and percentage text as
+radius multipliers. `rotatelabels = true` rotates each label
 to its slice angle while keeping left-half labels upright. `to_scene()` exports
 `pie.shadow`, the two distances, `rotatelabels`, and each slice's `explode`
 value.
@@ -281,7 +284,7 @@ circle around the data point. `capsize = 0` suppresses the end caps.
 | --- | --- | --- |
 | `rerr` | number ≥ 0 or array (required) | — |
 | `thetaerr` | number ≥ 0 or array, ≤ `2*pi` radians | no angular error |
-| `color` | color string | next palette color |
+| `color` | color string or per-vector array | next palette color |
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `1.5` |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
@@ -594,7 +597,8 @@ is larger than `max_arrows`, indices are decimated deterministically with
 
 The series group exposes `data-count`, `data-drawn`, `data-stride`,
 `data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`,
-`data-normalize`, and `data-angles`. Scenes export `angles`. Each `quiver-arrow` group carries `data-index`,
+`data-normalize`, and `data-angles`. Per-vector `color` arrays are exported as
+`style.colors`. Scenes export `angles`. Each `quiver-arrow` group carries `data-index`,
 `data-magnitude`, `data-x`, `data-y`, and `data-angle`, with `quiver-shaft`
 and `quiver-head` children. Labelled quivers join the regular legend with an
 arrow swatch. `to_scene()` exports the component arrays, scale mode, pivot,
@@ -655,6 +659,7 @@ the shared heat palette.
 | `range` | `{ xmin, xmax, ymin, ymax }` with ordered limits | data min/max |
 | `density` | boolean | `false` |
 | `vmin` / `vmax` | finite numbers with `vmax > vmin` | value range |
+| `color_norm` | `"linear"` or `"log"` | `"linear"` |
 | `colorbar` | boolean | `true` |
 | `colorbar_label` | string | no title |
 | `colorbar_ticks` | integer in [2, 10] | `3` |
@@ -668,20 +673,21 @@ the shared heat palette.
 `range` clips samples outside the rectangle and fixes the cell edges; the
 default range uses the sample extrema, padded when an axis is degenerate.
 `density = true` divides each cell count by the in-range sample count and the
-cell area. Empty bins are omitted from the SVG and scene cell lists by default;
+cell area. `color_norm = "log"` colors by `log(1 + value)` while vmin/vmax and
+colorbar labels remain counts; log color norm requires `vmin >= 0`. Empty bins are omitted from the SVG and scene cell lists by default;
 `show_empty = true` emits every cell in the grid with count/value zero so the
 full rectangular field is visible. Grid edges and bin counts are always
 preserved. `colorbar_ticks` and
 `colorbar_tick_values` are mutually exclusive.
 
 The series group exposes `data-points`, `data-inside`, `data-bins-x`,
-`data-bins-y`, `data-norm` (`count` or `density`), `data-show-empty`,
-`data-vmin`, and `data-vmax`.
+`data-bins-y`, `data-norm` (`count` or `density`),
+`data-color-norm`, `data-show-empty`, `data-vmin`, and `data-vmax`.
 Each `hist2d-cell` rectangle carries `data-row`, `data-col`, `data-count`,
 `data-value`, and its source cell bounds. The colorbar group
 (`colorbar hist2d-colorbar`) reports the same norm and value range. Scene export
 includes the input arrays, edges, cells, counts, values, density flag, limits,
-and colorbar settings plus `norm`, `color_vmin`, and `color_vmax`.
+and colorbar settings plus `color_norm`, `color_vmin`, and `color_vmax`.
 
 ### `fig:hexbin(x, y, opts)`
 
@@ -728,6 +734,7 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `lineoffsets` | number or array, one offset per row | row index |
 | `linelengths` | positive number or array, one length per row | `0.8` |
 | `colors` | array with one color per row | series `color` |
+| `eventcolors` | array with one color per event | row colors |
 | `labels` | array with one axis label per row | no labels |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
 | `color`, `label`, `linewidth`, `alpha` | normal series style | palette / `2` / `1` |
@@ -737,12 +744,14 @@ is a vertical line centered on its row's offset. With `orientation =
 "horizontal"` each value is a y coordinate and the mark is a horizontal line
 centered on its row's x offset. `lineoffsets` place the lane centers and
 `linelengths` set each lane's span in data units. `colors` gives one stroke
-color per row and cannot be combined with `color`. Offsets and
+color per row and cannot be combined with `color`; `eventcolors` overrides row
+colors with one entry per event across all rows. Offsets and
 lengths participate in automatic ranging, and a row's length may differ from
 its neighbors'. Setting `linestyle = "none"` hides event marks while keeping
 the lane group and axis labels. `to_scene()` exports `orientation`, `rows`,
-`lineoffsets`, `linelengths`, `colors` when row colors were supplied, and
-`labels` when lane labels were supplied.
+`lineoffsets`, `linelengths`, `colors` when row colors were supplied,
+`eventcolors` when per-event colors were supplied, and `labels` when lane
+labels were supplied.
 
 ### `fig:ecdf(values[, opts])`
 
@@ -905,6 +914,7 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `width` | number in [0.01, 1] | `0.6` |
 | `showmeans` | boolean, draw the sample mean | `false` |
 | `meanline` | boolean, draw a dashed mean line instead of a marker | `false` |
+| `notch` | boolean | `false` |
 | `color`, `label` | series style | palette / no legend entry |
 
 Vertical boxes place categories on x and values on y. Horizontal boxes swap
@@ -913,11 +923,13 @@ that mapping, put the category labels on the y axis, and carry
 use the same 1.5×IQR rule: the lower whisker reaches the smallest sample value
 at or above the lower fence and the upper whisker reaches the largest value at
 or below the upper fence; values outside the fences become `box-outlier`
-circles. `showmeans = true` adds a `box-mean-marker` circle at the sample mean;
+circles. `notch = true` replaces the box with a `box-notch` polygon narrowed
+around the median by `1.57 * IQR / sqrt(n)`, clamped to the quartiles.
+`showmeans = true` adds a `box-mean-marker` circle at the sample mean;
 combining it with `meanline = true` draws a dashed `box-mean-line` across the
 box instead. The group exposes `data-mean`, `data-showmeans`, and
-`data-meanline`. `to_scene()` exports `orientation`, `mean`, `showmeans`, and
-`meanline`, and the scene root reports `category_axis = "x"` or `"y"`.
+`data-meanline`, and `data-notch`. `to_scene()` exports `orientation`, `mean`,
+`showmeans`, `meanline`, `notch`, `notch_low`, and `notch_high`, and the scene root reports `category_axis = "x"` or `"y"`.
 
 ### `fig:violinplot(samples, opts)`
 
@@ -1400,7 +1412,7 @@ match these forms raise errors.
   `hist-step`, `hist-step-filled`, `step-fill`, `event`,
   `errorbar-limit-lower`, `errorbar-limit-upper`, `errorbar-limit-left`,
   `errorbar-limit-right`, `box-mean-marker`,
-  `box-mean-line`, `violin-mean-marker`, `violin-mean-line`,
+  `box-mean-line`, `box-notch`, `violin-mean-marker`, `violin-mean-line`,
   `annotation-layer`, `annotation`,
   `annotation-text`, `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`,
   `xlabel`, `ylabel`, `title`, and `legend`
@@ -1452,12 +1464,16 @@ includes, but is not limited to:
 - negative or malformed legend border padding/handle lengths
 - pie label/percentage distances outside [0.01, 2]
 - invalid pie wedge edge colors or negative line widths
+- non-positive pie label/percentage sizes or invalid text colors
+- quiver color arrays with wrong lengths or invalid colors
+- eventplot event color arrays with wrong lengths or invalid colors
+- non-boolean boxplot notch flags
 - scatter edgecolor arrays whose length does not match the points
 - malformed errorbar y or x limit flags
 - non-boolean step fill flags or alpha values outside [0, 1]
 - non-increasing or too-short explicit histogram bin edges, or bins combined with range
 - per-point scatter linewidth arrays with wrong lengths or negative values
-- unsupported hexbin count norms or log norm with negative vmin
+- unsupported hexbin/hist2d color norms or log norm with negative vmin
 - non-boolean hist2d show_empty values
 - scatter alpha arrays whose length does not match the points
 - stem orientations outside vertical/horizontal
@@ -1618,6 +1634,7 @@ Returns a renderer-agnostic scene table:
       rows = { { 0.4, 1.1 }, { 0.8, 1.4 } },
       lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 },
       colors = { "#2ca02c", "#d62728" },
+      eventcolors = { "#166534", "#4ade80", "#991b1b", "#f87171" },
       labels = { "fast", "slow" }, style = {...} },
     { kind = "broken_barh",
       ranges = { { 0, 3 }, { 5, 2 } }, y = 2, height = 0.6,
@@ -1628,7 +1645,8 @@ Returns a renderer-agnostic scene table:
       style = {...} },
     { kind = "violin", position = 1, width = 0.5, mean = 3,
       orientation = "vertical", showmeans = true, meanline = false,
-      q1 = 2, median = 3, q3 = 4, style = {...} },
+      q1 = 2, median = 3, q3 = 4, notch = false,
+      notch_low = nil, notch_high = nil, style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8,
       bar_colors = { "#9ecae1", ... } },
     -- Grouped bars keep category centers in x and add a per-series offset:
@@ -1668,7 +1686,8 @@ when enabled, `minor_grid_style`. `axhline`/`axvline` scenes carry their data
 coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `where`, `interpolate`, and resolved `segments`; histogram scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
-`lineoffsets`, `linelengths`, and optional `colors`/`labels`; broken-bar scenes
+`lineoffsets`, `linelengths`, and optional `colors`/`eventcolors`/`labels`;
+broken-bar scenes
 carry their `ranges`, `y`, and `height`; box scenes carry `mean`, `showmeans`,
 and `meanline`; violin scenes also carry `orientation`; stem scenes carry
 `base` and `orientation`; and
@@ -1682,7 +1701,8 @@ marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markers`, `alphas`, `edgecolors`, and `linewidths` arrays, and
 bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
-export `rotatelabels`, `edgecolor`, and `linewidth`. Bar series always keep category centers in `x`. The scene
+export `rotatelabels`, `edgecolor`, `linewidth`, and the slice text sizes/colors.
+Hist2d scenes export `color_norm`, `color_vmin`, and `color_vmax`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked

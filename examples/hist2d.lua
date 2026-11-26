@@ -48,6 +48,7 @@ fig:hist2d(x, y, {
   colorbar = true,
   colorbar_label = "samples per bin",
   colorbar_ticks = 5,
+  color_norm = "log",
   show_empty = true,
   edgecolor = "#f8fafc",
   linewidth = 0.45,

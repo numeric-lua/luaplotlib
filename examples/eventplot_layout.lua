@@ -32,6 +32,11 @@ fig:eventplot({
   linelengths = { 0.7, 1.0, 0.55 },
   labels = { "fast", "nominal", "slow" },
   colors = { "#2ca02c", "#d62728", "#9467bd" },
+  eventcolors = {
+    "#166534", "#4ade80", "#166534", "#4ade80",
+    "#991b1b", "#f87171", "#991b1b", "#f87171",
+    "#5b21b6", "#a78bfa", "#5b21b6", "#a78bfa",
+  },
   linewidth = 2.5,
   linestyle = "dashed",
   label = "events",

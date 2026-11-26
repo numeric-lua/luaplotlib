@@ -204,6 +204,7 @@ local HIST2D_OPTIONS = {
   density = true,
   vmin = true,
   vmax = true,
+  color_norm = true,
   colorbar = true,
   colorbar_label = true,
   colorbar_ticks = true,
@@ -322,6 +323,10 @@ local PIE_OPTIONS = {
   shadow = true,
   edgecolor = true,
   linewidth = true,
+  labelsize = true,
+  labelcolor = true,
+  pctsize = true,
+  pctcolor = true,
   labeldistance = true,
   pctdistance = true,
   rotatelabels = true,
@@ -411,6 +416,7 @@ local BOX_OPTIONS = {
   orientation = true,
   showmeans = true,
   meanline = true,
+  notch = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -1078,9 +1084,25 @@ function Figure:quiver(x, y, u, v, opts)
     fail("quiver angles must be 'xy' or 'uv'")
   end
 
-  local style = checked_style(self, opts, "quiver")
+  local style_opts = opts
+  local point_colors
+  if type(opts.color) == "table" then
+    if #opts.color ~= count then
+      fail("quiver color array must match the number of vectors")
+    end
+    point_colors = {}
+    for index = 1, count do
+      point_colors[index] = util.check_color(opts.color[index],
+        "quiver color[" .. index .. "]")
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.color = point_colors[1]
+  end
+  local style = checked_style(self, style_opts, "quiver")
   style.linewidth = linewidth
   style.head = head
+  style.colors = point_colors
 
   self._series[#self._series + 1] = {
     kind = "quiver",
@@ -2212,7 +2234,8 @@ function Figure:scatter(x, y, opts)
 end
 
 local EVENT_OPTIONS = {
-  color = true, colors = true, label = true, labels = true,
+  color = true, colors = true, eventcolors = true,
+  label = true, labels = true,
   linewidth = true, linestyle = true, alpha = true,
   orientation = true, lineoffsets = true, linelengths = true,
 }
@@ -2284,6 +2307,20 @@ function Figure:eventplot(positions, opts)
         "eventplot colors[" .. index .. "]")
     end
   end
+  local event_colors = nil
+  if opts.eventcolors ~= nil then
+    local total_events = 0
+    for index = 1, #rows do total_events = total_events + #rows[index] end
+    if type(opts.eventcolors) ~= "table" or
+        #opts.eventcolors ~= total_events then
+      fail("eventplot eventcolors must have one entry per event")
+    end
+    event_colors = {}
+    for index = 1, total_events do
+      event_colors[index] = util.check_color(opts.eventcolors[index],
+        "eventplot eventcolors[" .. index .. "]")
+    end
+  end
   local linewidth = opts.linewidth
   if linewidth == nil then linewidth = 2 end
   linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
@@ -2298,7 +2335,8 @@ function Figure:eventplot(positions, opts)
   self._series[#self._series + 1] = {
     kind = "eventplot", rows = rows, orientation = orientation,
     lineoffsets = lineoffsets, linelengths = linelengths,
-    colors = row_colors, labels = row_labels, style = style,
+    colors = row_colors, eventcolors = event_colors,
+    labels = row_labels, style = style,
   }
   if row_labels ~= nil then
     local ticks = {}
@@ -2607,8 +2645,31 @@ function Figure:hist2d(x, y, opts)
 
   if maximum_value == 0 then maximum_value = 1 end
   local vmin, vmax = checked_value_range(opts, 0, maximum_value, "hist2d")
+  local color_norm = opts.color_norm or "linear"
+  if color_norm ~= "linear" and color_norm ~= "log" then
+    fail("hist2d color_norm must be 'linear' or 'log'")
+  end
+  if color_norm == "log" and vmin < 0 then
+    fail("hist2d log color_norm requires vmin >= 0")
+  end
+  local color_vmin = color_norm == "log" and math.log(1 + vmin) or vmin
+  local color_vmax = color_norm == "log" and math.log(1 + vmax) or vmax
+  if color_vmax <= color_vmin then
+    fail("hist2d color range must be positive")
+  end
+  for _, cell in ipairs(cells) do
+    cell.color_value = color_norm == "log" and math.log(1 + cell.value) or
+      cell.value
+  end
   local colorbar, colorbar_label, colorbar_ticks, colorbar_tick_values =
     checked_colorbar_options(opts, "hist2d", true)
+  if color_norm == "log" and colorbar_tick_values ~= nil then
+    for _, value in ipairs(colorbar_tick_values) do
+      if value < 0 then
+        fail("hist2d log color_norm requires non-negative colorbar tick values")
+      end
+    end
+  end
 
   local style = checked_style(self, opts, "hist2d")
   local edgecolor = opts.edgecolor
@@ -2638,6 +2699,9 @@ function Figure:hist2d(x, y, opts)
     show_empty = show_empty,
     vmin = vmin,
     vmax = vmax,
+    color_norm = color_norm,
+    color_vmin = color_vmin,
+    color_vmax = color_vmax,
     colorbar = colorbar,
     colorbar_label = colorbar_label,
     colorbar_ticks = colorbar_ticks,
@@ -3813,6 +3877,18 @@ function Figure:pie(values, opts)
   if opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "pie linewidth", 0)
   end
+  local labelsize = 12
+  if opts.labelsize ~= nil then
+    labelsize = util.check_number(opts.labelsize, "pie labelsize", 0.1)
+  end
+  local labelcolor = opts.labelcolor and
+    util.check_color(opts.labelcolor, "pie labelcolor") or "#222222"
+  local pctsize = 12
+  if opts.pctsize ~= nil then
+    pctsize = util.check_number(opts.pctsize, "pie pctsize", 0.1)
+  end
+  local pctcolor = opts.pctcolor and
+    util.check_color(opts.pctcolor, "pie pctcolor") or "#ffffff"
   local labeldistance = 1.08
   if opts.labeldistance ~= nil then
     labeldistance = util.check_number(opts.labeldistance,
@@ -3846,6 +3922,8 @@ function Figure:pie(values, opts)
     slices = slices, radius = radius, inner_radius = inner,
     autopct = autopct, shadow = shadow, legend = legend,
     edgecolor = edgecolor, linewidth = linewidth,
+    labelsize = labelsize, labelcolor = labelcolor,
+    pctsize = pctsize, pctcolor = pctcolor,
     labeldistance = labeldistance, pctdistance = pctdistance,
     rotatelabels = rotatelabels,
   }
@@ -4169,6 +4247,10 @@ function Figure:boxplot(values, opts)
   if opts.meanline ~= nil then
     util.check_boolean(opts.meanline, "boxplot meanline")
   end
+  local notch = opts.notch == true
+  if opts.notch ~= nil then
+    util.check_boolean(opts.notch, "boxplot notch")
+  end
   local labels = opts.labels
   if labels ~= nil then
     if type(labels) ~= "table" or #labels ~= #samples then
@@ -4220,10 +4302,20 @@ function Figure:boxplot(values, opts)
         outliers[#outliers + 1] = value
       end
     end
+    local notch_low, notch_high
+    if notch then
+      local delta = 1.57 * iqr / math.sqrt(#sorted)
+      notch_low = math.max(q1, median - delta)
+      notch_high = math.min(q3, median + delta)
+      if notch_low > notch_high then
+        notch_low, notch_high = q1, q3
+      end
+    end
     self._series[#self._series + 1] = {
       kind = "box", position = index, width = width,
       orientation = orientation, mean = mean,
       showmeans = showmeans, meanline = meanline,
+      notch = notch, notch_low = notch_low, notch_high = notch_high,
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
       style = { color = color, label = opts.label, alpha = 1 },

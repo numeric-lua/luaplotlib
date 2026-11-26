@@ -282,6 +282,11 @@ local test_files = {
   "test_errorbar_xlimits.lua",
   "test_scatter_linewidths.lua",
   "test_hexbin_norm.lua",
+  "test_hist2d_lognorm.lua",
+  "test_pie_label_style.lua",
+  "test_quiver_colors.lua",
+  "test_boxplot_notch.lua",
+  "test_eventplot_eventcolors.lua",
   "test_export.lua",
 }
 
