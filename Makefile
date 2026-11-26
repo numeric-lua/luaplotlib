@@ -35,6 +35,7 @@ examples:
 	@$(LUA) examples/broken_barh.lua
 	@$(LUA) examples/pie_explode.lua
 	@$(LUA) examples/pie_rotated.lua
+	@$(LUA) examples/pie_counterclock.lua
 	@$(LUA) examples/field_coordinates.lua
 	@$(LUA) examples/aspect.lua
 	@$(LUA) examples/minor_subdivisions.lua

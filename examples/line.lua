@@ -81,6 +81,7 @@ fig:legend({
   edgecolor = "#94a3b8",
   borderpad = 11,
   handlelength = 26,
+  fontsize = 13,
 })
 
 local path = outdir .. "/line.svg"

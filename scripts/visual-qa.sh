@@ -358,6 +358,7 @@ for svg in \
   examples/output/broken-barh.svg \
   examples/output/pie-explode.svg \
   examples/output/pie-rotated.svg \
+  examples/output/pie-counterclock.svg \
   examples/output/heatmap-extent.svg \
   examples/output/contour-coords.svg \
   examples/output/aspect.svg \
@@ -416,6 +417,10 @@ grep -q 'class="ylabel"[^>]*font-size="15" fill="#334155"' "$LINE" ||
   fail "$LINE should render a styled y label"
 grep -q 'data-borderpad="11" data-handlelength="26"' "$LINE" ||
   fail "$LINE should render legend spacing controls"
+grep -q 'data-fontsize="13"' "$LINE" ||
+  fail "$LINE should render the legend font size"
+grep -q 'class="legend"[^>]*' "$LINE" ||
+  fail "$LINE has no legend"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg
@@ -527,6 +532,11 @@ grep -q 'data-notch="true"' "$BOX_H" ||
 box_notches=$(grep -o 'class="box box-notch"' "$BOX_H" | wc -l | tr -d ' ')
 [ "$box_notches" -eq 3 ] ||
   fail "$BOX_H should draw three notched box polygons"
+grep -q 'data-whis="1" data-showfliers="false"' "$BOX_H" ||
+  fail "$BOX_H should expose whisker and flier controls"
+box_fliers=$(grep -o 'class="box-outlier"' "$BOX_H" | wc -l | tr -d ' ' || true)
+[ "$box_fliers" -eq 0 ] ||
+  fail "$BOX_H should hide its outliers"
 
 # Image colorbars accept a title and explicit tick values.
 IMSHOW=examples/output/imshow-colorbar.svg
@@ -578,6 +588,10 @@ errorbar_caps=$(grep -o 'class="errorbar-cap"' "$ERRORBAR" | wc -l |
   fail "$ERRORBAR should draw seven ordinary caps after limits"
 grep -q 'data-xlolims="true" data-xuplims="true"' "$ERRORBAR" ||
   fail "$ERRORBAR should expose x limit flags"
+errorbar_colors=$(grep -o 'class="errorbar"[^>]*stroke="[^"]*"' "$ERRORBAR" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$errorbar_colors" -ge 2 ] ||
+  fail "$ERRORBAR should vary error colors per point"
 errorbar_xlimits=$(grep -o 'class="errorbar-limit-\(left\|right\)"' "$ERRORBAR" |
   wc -l | tr -d ' ')
 [ "$errorbar_xlimits" -eq 2 ] ||
@@ -839,6 +853,8 @@ grep -q 'data-show-empty="true"' "$HIST2D" ||
   fail "$HIST2D should include empty cells"
 grep -q 'data-color-norm="log"' "$HIST2D" ||
   fail "$HIST2D should use log color normalization"
+grep -q 'data-explicit-bins="true"' "$HIST2D" ||
+  fail "$HIST2D should use explicit bin edges"
 grep -q 'class="colorbar hist2d-colorbar"' "$HIST2D" ||
   fail "$HIST2D should keep its colorbar"
 [ "$hist2d_cells" -eq $((hist2d_bins_x * hist2d_bins_y)) ] ||
@@ -1044,6 +1060,15 @@ grep -q 'class="pie-label"[^>]*font-size="14" fill="#1f2937"' "$PIE_ROTATED" ||
   fail "$PIE_ROTATED should style its slice labels"
 grep -q 'class="pie-percent"[^>]*font-size="11" fill="#f8fafc"' "$PIE_ROTATED" ||
   fail "$PIE_ROTATED should style its percentage labels"
+
+# Counterclockwise pies keep every slice and advance angles upward.
+PIE_COUNTER=examples/output/pie-counterclock.svg
+grep -q 'data-counterclock="true"' "$PIE_COUNTER" ||
+  fail "$PIE_COUNTER should run counterclockwise"
+pie_counter_slices=$(grep -o 'class="pie-slice"' "$PIE_COUNTER" | wc -l |
+  tr -d ' ')
+[ "$pie_counter_slices" -eq 5 ] ||
+  fail "$PIE_COUNTER should draw all five slices"
 grep -q 'data-labeldistance="1.14" data-pctdistance="0.55"' "$PIE_EXPLODE" ||
   fail "$PIE_EXPLODE should expose its label and percentage distances"
 
@@ -1081,7 +1106,8 @@ for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" \
   "$SCATTER_COLORS" "$VIOLIN" "$VIOLIN_H" "$STACK_BASELINE" "$BAR_ERRORS" \
   "$STEP_FILL" "$HIST_EDGES" \
   "$BAR_WIDTH" "$BARS_GROUPED" "$BARH_HATCH" "$ANNOTATIONS" "$BROKEN_BARH" \
-  "$PIE_EXPLODE" "$PIE_ROTATED" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" \
+  "$PIE_EXPLODE" "$PIE_ROTATED" "$PIE_COUNTER" "$HEATMAP_EXTENT" \
+  "$CONTOUR_COORDS" \
   "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do
   png="${svg%.svg}.png"
   rsvg-convert -z 2 "$svg" -o "$png"

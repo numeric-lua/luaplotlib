@@ -91,18 +91,28 @@
 - `fig:eventplot` accepts `eventcolors` with one color per event across all
   rows, overriding row colors. Scenes export the array;
 - `fig:boxplot` accepts `notch = true`, drawing a notched polygon around the
-  median and exporting `notch`, `notch_low`, and `notch_high`.
+  median and exporting `notch`, `notch_low`, and `notch_high`;
+- `fig:boxplot` accepts `whis` to scale the IQR whisker fences and
+  `showfliers = false` to hide outliers and exclude them from automatic ranges;
+- `fig:pie`/`fig:donut` accept `counterclock = true`, laying slices out in
+  increasing-angle order. Pie scenes and SVG roots export the direction;
+- `fig:hist2d` accepts explicit x/y edge tables in `bins` (or one edge table
+  plus one count). Density uses each cell's actual area, and scenes export
+  `explicit_edges`;
+- `fig:errorbar` accepts per-point `ecolor` arrays, exported as `style.ecolors`;
+- `fig:legend` accepts `fontsize`, scaling labels, title, and frame geometry on
+  Cartesian and polar figures; scenes export it.
   Existing examples and visual QA cover per-bar colors, annotation
-  backgrounds/rotation, label padding, pie distances/rotation/edges/text,
-  complete hist2d grids, log hist2d colors, per-point
-  markers/alpha/edges/widths, axis-label typography, legend spacing,
-  errorbar/stem marker styling and x/y limits, horizontal stems/violins,
-  notched boxes, quiver angle modes and per-vector colors, tick/title styling,
-  event line styles and per-event colors, filled steps, explicit histogram
-  edges, log hexbin colors, and fill/span/histogram hatches. The
-  dependency-free suite grows from 410 to 520 tests. Existing Cartesian APIs
-  remain compatible, polar rendering is unchanged, and there are no new
-  runtime dependencies.
+  backgrounds/rotation, label padding, pie distances/rotation/edges/text and
+  direction, complete hist2d grids, explicit 2-D edges, log hist2d colors,
+  per-point markers/alpha/edges/widths/error colors, axis-label/legend
+  typography, legend spacing, errorbar/stem marker styling and x/y limits,
+  horizontal stems/violins, notched/whisker boxplots, quiver angle modes and
+  per-vector colors, tick/title styling, event line styles and per-event
+  colors, filled steps, explicit histogram edges, log hexbin colors, and
+  fill/span/histogram hatches. The dependency-free suite grows from 410 to 534
+  tests. Existing Cartesian APIs remain compatible, polar rendering is
+  unchanged, and there are no new runtime dependencies.
 
 ## 4.28.0
 

@@ -287,6 +287,11 @@ local test_files = {
   "test_quiver_colors.lua",
   "test_boxplot_notch.lua",
   "test_eventplot_eventcolors.lua",
+  "test_boxplot_whis.lua",
+  "test_pie_counterclock.lua",
+  "test_hist2d_edges.lua",
+  "test_errorbar_ecolors.lua",
+  "test_legend_fontsize.lua",
   "test_export.lua",
 }
 

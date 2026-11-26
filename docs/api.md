@@ -106,6 +106,7 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `labels` | one label per value | `slice N` |
 | `colors` | one color per value | palette |
 | `startangle` | finite number, degrees | `90` |
+| `counterclock` | boolean | `false` |
 | `radius` | number in [0.05, 0.5] | `0.34` |
 | `inner_radius` | number in [0, 0.95] | `0` (`0.55` for donut) |
 | `explode` | number or per-slice array in [0, 0.5] | `0` |
@@ -120,8 +121,9 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `autopct` | `false`, `true`, or a format string | `false` |
 | `legend` | boolean | `true` |
 
-`explode` shifts each wedge outward by that fraction of the radius along its
-mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
+`counterclock = true` lays slices out in increasing-angle order; the default
+keeps the existing clockwise order. `explode` shifts each wedge outward by that
+fraction of the radius along its mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
 wedges keep their labels, leader lines, and percentage text attached to the
 shifted slice. `edgecolor`/`linewidth` style each wedge outline, defaulting to
 the existing white 1.5-pixel stroke. `labelsize`/`labelcolor` style slice
@@ -129,8 +131,8 @@ labels, while `pctsize`/`pctcolor` style percentage annotations independently.
 `labeldistance`/`pctdistance` place the slice labels and percentage text as
 radius multipliers. `rotatelabels = true` rotates each label
 to its slice angle while keeping left-half labels upright. `to_scene()` exports
-`pie.shadow`, the two distances, `rotatelabels`, and each slice's `explode`
-value.
+`pie.shadow`, the two distances, `rotatelabels`, `counterclock`, and each
+slice's `explode` value.
 
 ### `plt.polar(theta, r[, opts])` / `fig:polar(theta, r[, opts])`
 
@@ -293,7 +295,7 @@ circle around the data point. `capsize = 0` suppresses the end caps.
 | `alpha` | number in [0, 1] | `1` |
 | `capsize` | number ≥ 0 | `4` |
 | `elinewidth` | number ≥ 0 | `1` |
-| `ecolor` | color string | same as `color` |
+| `ecolor` | color string or per-point array | same as `color` |
 | `lolims` / `uplims` | boolean or one boolean per point | `false` |
 | `xlolims` / `xuplims` | boolean or one boolean per point | `false` |
 | `errorevery` | positive integer | `1` (every point) |
@@ -520,8 +522,8 @@ Errorbar markers accept the same `markerfacecolor`, `markeredgecolor`, and
 vertex and marker but draws error bars only at
 the first point and every nth point after it. The group exposes
 `data-errorevery`, `data-error-points`, and limit flags; scenes export
-`errorevery` plus the four limit arrays. `lolims`/`uplims` replace vertical
-caps with down/up arrowheads; `xlolims`/`xuplims` replace horizontal caps with
+`errorevery` plus the four limit arrays. `ecolor` may contain one error-line/cap color per point. `lolims`/`uplims`
+replace vertical caps with down/up arrowheads; `xlolims`/`xuplims` replace horizontal caps with
 left/right arrowheads. Automatic limits cover the drawn error extents plus
 every point position.
 
@@ -655,7 +657,7 @@ the shared heat palette.
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `bins` | integer in [1, 200] or `{ nx, ny }` | `10` |
+| `bins` | count, `{ nx, ny }`, or explicit edge tables | `10` |
 | `range` | `{ xmin, xmax, ymin, ymax }` with ordered limits | data min/max |
 | `density` | boolean | `false` |
 | `vmin` / `vmax` | finite numbers with `vmax > vmin` | value range |
@@ -669,11 +671,14 @@ the shared heat palette.
 | `show_empty` | boolean | `false` |
 | `color`, `label`, `alpha` | normal series style | palette/`1` |
 
-`bins = { nx, ny }` controls the x and y cell counts independently. An explicit
+`bins = { nx, ny }` controls the x and y cell counts independently. Either
+entry may instead be an increasing edge table, so `{ x_edges, y_edges }` and
+`{ x_edges, ny }` are accepted; explicit edges cannot be combined with
+`range`. An explicit
 `range` clips samples outside the rectangle and fixes the cell edges; the
 default range uses the sample extrema, padded when an axis is degenerate.
-`density = true` divides each cell count by the in-range sample count and the
-cell area. `color_norm = "log"` colors by `log(1 + value)` while vmin/vmax and
+`density = true` divides each cell count by the in-range sample count and that
+cell's actual area. `color_norm = "log"` colors by `log(1 + value)` while vmin/vmax and
 colorbar labels remain counts; log color norm requires `vmin >= 0`. Empty bins are omitted from the SVG and scene cell lists by default;
 `show_empty = true` emits every cell in the grid with count/value zero so the
 full rectangular field is visible. Grid edges and bin counts are always
@@ -681,13 +686,14 @@ preserved. `colorbar_ticks` and
 `colorbar_tick_values` are mutually exclusive.
 
 The series group exposes `data-points`, `data-inside`, `data-bins-x`,
-`data-bins-y`, `data-norm` (`count` or `density`),
+`data-bins-y`, `data-explicit-bins`, `data-norm` (`count` or `density`),
 `data-color-norm`, `data-show-empty`, `data-vmin`, and `data-vmax`.
 Each `hist2d-cell` rectangle carries `data-row`, `data-col`, `data-count`,
 `data-value`, and its source cell bounds. The colorbar group
 (`colorbar hist2d-colorbar`) reports the same norm and value range. Scene export
 includes the input arrays, edges, cells, counts, values, density flag, limits,
-and colorbar settings plus `color_norm`, `color_vmin`, and `color_vmax`.
+and colorbar settings plus `explicit_edges`, `color_norm`, `color_vmin`, and
+`color_vmax`.
 
 ### `fig:hexbin(x, y, opts)`
 
@@ -915,21 +921,26 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `showmeans` | boolean, draw the sample mean | `false` |
 | `meanline` | boolean, draw a dashed mean line instead of a marker | `false` |
 | `notch` | boolean | `false` |
+| `whis` | number ≥ 0, IQR fence multiplier | `1.5` |
+| `showfliers` | boolean | `true` |
 | `color`, `label` | series style | palette / no legend entry |
 
 Vertical boxes place categories on x and values on y. Horizontal boxes swap
 that mapping, put the category labels on the y axis, and carry
 `data-orientation="horizontal"` on each `series-box` group. Both orientations
-use the same 1.5×IQR rule: the lower whisker reaches the smallest sample value
+use `whis` (default 1.5×IQR): the lower whisker reaches the smallest sample value
 at or above the lower fence and the upper whisker reaches the largest value at
 or below the upper fence; values outside the fences become `box-outlier`
-circles. `notch = true` replaces the box with a `box-notch` polygon narrowed
+circles. `showfliers = false` hides outlier markers and excludes them from
+automatic ranges while keeping the outlier array in scenes. `notch = true`
+replaces the box with a `box-notch` polygon narrowed
 around the median by `1.57 * IQR / sqrt(n)`, clamped to the quartiles.
 `showmeans = true` adds a `box-mean-marker` circle at the sample mean;
 combining it with `meanline = true` draws a dashed `box-mean-line` across the
 box instead. The group exposes `data-mean`, `data-showmeans`, and
-`data-meanline`, and `data-notch`. `to_scene()` exports `orientation`, `mean`,
-`showmeans`, `meanline`, `notch`, `notch_low`, and `notch_high`, and the scene root reports `category_axis = "x"` or `"y"`.
+`data-meanline`, `data-notch`, `data-whis`, and `data-showfliers`. `to_scene()` exports `orientation`, `mean`,
+`showmeans`, `meanline`, `notch`, `notch_low`, `notch_high`, `whis`, and
+`showfliers`, and the scene root reports `category_axis = "x"` or `"y"`.
 
 ### `fig:violinplot(samples, opts)`
 
@@ -1323,14 +1334,16 @@ No options are required.
 | `edgecolor` | color string | `#bbbbbb` |
 | `borderpad` | number ≥ 0 | `8` |
 | `handlelength` | number ≥ 0 | `20` |
+| `fontsize` | number > 0 | `11` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
 
 The accepted locations are the four corners, `"upper center"`,
 `"lower center"`, `"center left"`, `"center right"`, `"center"`, and `"best"`.
 `framealpha`, `facecolor`, and `edgecolor` style the frame independently.
-`borderpad` expands the frame around its contents and `handlelength` sets the
-swatch length on Cartesian and polar legends. Only series with a non-empty
+`borderpad` expands the frame around its contents, `handlelength` sets the
+swatch length, and `fontsize` scales labels and frame geometry on Cartesian and
+polar legends. Only series with a non-empty
 `label` appear. Swatches reflect the series type
 (line, point, bar, or error bar). Calling `legend()` with no labeled series
 produces no legend box. In polar figures `"best"` searches for the placement
@@ -1467,7 +1480,13 @@ includes, but is not limited to:
 - non-positive pie label/percentage sizes or invalid text colors
 - quiver color arrays with wrong lengths or invalid colors
 - eventplot event color arrays with wrong lengths or invalid colors
-- non-boolean boxplot notch flags
+- non-boolean boxplot notch flags, negative `whis`, or non-boolean
+  `showfliers`
+- non-boolean pie `counterclock` flags
+- hist2d edge tables that are too short, non-increasing, or combined with
+  `range`
+- errorbar `ecolor` arrays with wrong lengths or invalid colors
+- non-positive legend font sizes
 - scatter edgecolor arrays whose length does not match the points
 - malformed errorbar y or x limit flags
 - non-boolean step fill flags or alpha values outside [0, 1]
@@ -1585,7 +1604,7 @@ Returns a renderer-agnostic scene table:
   grid = false, legend = false,
   legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
                    facecolor = "#ffffff", edgecolor = "#bbbbbb",
-                   borderpad = 8, handlelength = 20,
+                   borderpad = 8, handlelength = 20, fontsize = 11,
                    ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
@@ -1646,7 +1665,8 @@ Returns a renderer-agnostic scene table:
     { kind = "violin", position = 1, width = 0.5, mean = 3,
       orientation = "vertical", showmeans = true, meanline = false,
       q1 = 2, median = 3, q3 = 4, notch = false,
-      notch_low = nil, notch_high = nil, style = {...} },
+      notch_low = nil, notch_high = nil,
+      whis = 1.5, showfliers = true, style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8,
       bar_colors = { "#9ecae1", ... } },
     -- Grouped bars keep category centers in x and add a per-series offset:
@@ -1698,11 +1718,12 @@ and, when requested, `legend_style`. Error-bar scenes always carry
 carry `angles`;
 marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markeredgecolor`, and `markeredgewidth`. Scatter styles may include per-point
-`markers`, `alphas`, `edgecolors`, and `linewidths` arrays, and
-bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
+`markers`, `alphas`, `edgecolors`, and `linewidths` arrays. Errorbar styles may
+include per-point `ecolors`, and bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
 export `rotatelabels`, `edgecolor`, `linewidth`, and the slice text sizes/colors.
-Hist2d scenes export `color_norm`, `color_vmin`, and `color_vmax`. Bar series always keep category centers in `x`. The scene
+Hist2d scenes export `explicit_edges`, `color_norm`, `color_vmin`, and
+`color_vmax`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked
@@ -1722,8 +1743,9 @@ input points, filtered cell records, counts, regular-cell width/radius, value
 limits, and colorbar settings. Image scenes add `extent` and `origin` when the
 image uses explicit field coordinates, plus `colorbar_label`, `colorbar_ticks`,
 and `colorbar_tick_values` when the extended colorbar is active. Pie scenes use
-a separate `pie` block with `radius`, `inner_radius`, `shadow`, and per-slice
-`value`, `percent`, `start_angle`, `end_angle`, `color`, `label`, and
+a separate `pie` block with `radius`, `inner_radius`, `shadow`, `rotatelabels`,
+`counterclock`, `edgecolor`, `linewidth`, the slice text sizes/colors, and
+per-slice `value`, `percent`, `start_angle`, `end_angle`, `color`, `label`, and
 `explode` fields. Contour scenes export `x`/`y` coordinate
 arrays when the figure supplied them and keep the per-level `segments`. Aspect
 constraints appear at the root as `aspect`, `aspect_mode`, and

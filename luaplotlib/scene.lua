@@ -34,6 +34,7 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    ecolors = style.ecolors and copy_array(style.ecolors) or nil,
     hatch = style.hatch,
     markevery = style.markevery and copy_array(style.markevery) or nil,
     markerfacecolor = style.markerfacecolor,
@@ -204,6 +205,7 @@ function M.from_figure(figure)
       edgecolor = opts.edgecolor or "#bbbbbb",
       borderpad = opts.borderpad or 8,
       handlelength = opts.handlelength or 20,
+      fontsize = opts.fontsize or 11,
       ncol = opts.ncol or 1,
       title = opts.title,
     }
@@ -220,6 +222,7 @@ function M.from_figure(figure)
       labelcolor = figure._pie.labelcolor or "#222222",
       pctsize = figure._pie.pctsize or 12,
       pctcolor = figure._pie.pctcolor or "#ffffff",
+      counterclock = figure._pie.counterclock and true or false,
       labeldistance = figure._pie.labeldistance or 1.08,
       pctdistance = figure._pie.pctdistance or 0.64,
       rotatelabels = figure._pie.rotatelabels and true or false,
@@ -316,6 +319,7 @@ function M.from_figure(figure)
       copy.inside_count = series.inside_count
       copy.density = series.density and true or false
       copy.show_empty = series.show_empty and true or false
+      copy.explicit_edges = series.explicit_edges and true or false
       copy.vmin = series.vmin
       copy.vmax = series.vmax
       copy.color_norm = series.color_norm or "linear"
@@ -696,6 +700,8 @@ function M.from_figure(figure)
       copy.notch = series.notch and true or false
       copy.notch_low = series.notch_low
       copy.notch_high = series.notch_high
+      copy.whis = series.whis or 1.5
+      copy.showfliers = series.showfliers ~= false
       copy.low = series.low
       copy.high = series.high
       copy.outliers = copy_array(series.outliers)
@@ -707,18 +713,22 @@ function M.from_figure(figure)
         if state.ymax == nil or high_edge > state.ymax then state.ymax = high_edge end
         if state.xmin == nil or series.low < state.xmin then state.xmin = series.low end
         if state.xmax == nil or series.high > state.xmax then state.xmax = series.high end
-        for _, value in ipairs(copy.outliers) do
-          if value < state.xmin then state.xmin = value end
-          if value > state.xmax then state.xmax = value end
+        if copy.showfliers then
+          for _, value in ipairs(copy.outliers) do
+            if value < state.xmin then state.xmin = value end
+            if value > state.xmax then state.xmax = value end
+          end
         end
       else
         if state.xmin == nil or low_edge < state.xmin then state.xmin = low_edge end
         if state.xmax == nil or high_edge > state.xmax then state.xmax = high_edge end
         if state.ymin == nil or series.low < state.ymin then state.ymin = series.low end
         if state.ymax == nil or series.high > state.ymax then state.ymax = series.high end
-        for _, value in ipairs(copy.outliers) do
-          if value < state.ymin then state.ymin = value end
-          if value > state.ymax then state.ymax = value end
+        if copy.showfliers then
+          for _, value in ipairs(copy.outliers) do
+            if value < state.ymin then state.ymin = value end
+            if value > state.ymax then state.ymax = value end
+          end
         end
       end
     elseif series.kind == "contour" then

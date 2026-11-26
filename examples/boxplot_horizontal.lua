@@ -32,6 +32,8 @@ fig:boxplot({
   width = 0.55,
   showmeans = true,
   notch = true,
+  whis = 1.0,
+  showfliers = false,
 })
 fig:title("Horizontal box-and-whisker summary")
 fig:xlabel("measured value")

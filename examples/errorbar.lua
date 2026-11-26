@@ -47,7 +47,9 @@ local fig = plt.figure({ width = 800, height = 500 })
 fig:errorbar(x, y, yerr, xerr, {
   label = "measurement",
   color = "#1f77b4",
-  ecolor = "#d62728",
+  ecolor = {
+    "#d62728", "#d62728", "#7c3aed", "#7c3aed", "#d62728", "#d62728",
+  },
   capsize = 6,
   markersize = 5,
   markerfacecolor = "#ffffff",

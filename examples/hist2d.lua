@@ -41,9 +41,13 @@ for index = 1, 2400 do
   y[index] = 0.55 * radius * math.sin(angle) + 0.25 * cluster
 end
 
+local x_edges, y_edges = {}, {}
+for index = 0, 26 do x_edges[index + 1] = -3.5 + 7 * index / 26 end
+for index = 0, 18 do y_edges[index + 1] = -2.5 + 5 * index / 18 end
+
 local fig = plt.figure({ width = 840, height = 540 })
 fig:hist2d(x, y, {
-  bins = { 26, 18 },
+  bins = { x_edges, y_edges },
   label = "sample density",
   colorbar = true,
   colorbar_label = "samples per bin",

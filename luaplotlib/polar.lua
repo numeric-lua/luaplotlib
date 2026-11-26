@@ -2012,7 +2012,7 @@ local LEGEND_PAD = 12
 local function legend_dimensions(figure, geom, entries)
   local max_text = 0
   for _, entry in ipairs(entries) do
-    local width = text.measure(entry.label, LEGEND_FONT_SIZE)
+    local width = text.measure(entry.label, fontsize)
     if width > max_text then max_text = width end
   end
 
@@ -2021,12 +2021,14 @@ local function legend_dimensions(figure, geom, entries)
   }
   local border = opts.borderpad or 8
   local handle = opts.handlelength or 20
+  local fontsize = opts.fontsize or LEGEND_FONT_SIZE
+  local row_height = fontsize + 9
   local requested_ncol = math.max(1, math.min(opts.ncol or 1, #entries))
   local title_width = 0
   local title_height = 0
   if opts.title ~= nil and opts.title ~= "" then
-    title_width = text.measure(opts.title, LEGEND_FONT_SIZE) + 2 * border
-    title_height = 22
+    title_width = text.measure(opts.title, fontsize) + 2 * border
+    title_height = fontsize + 11
   end
 
   local max_width = math.max(40, geom.width - 16)
@@ -2045,11 +2047,13 @@ local function legend_dimensions(figure, geom, entries)
   col_width = math.max(30,
     math.floor((box_width - (ncol - 1) * border) / ncol))
 
-  local box_height = 2 * border - 4 + title_height + rows * 20
+  local box_height = 2 * border - 4 + title_height + rows * row_height
   return {
     opts = opts,
     borderpad = border,
     handlelength = handle,
+    fontsize = fontsize,
+    row_height = row_height,
     ncol = ncol,
     rows = rows,
     col_width = col_width,
@@ -2330,6 +2334,8 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
     text_width = dims.text_width,
     borderpad = dims.borderpad,
     handlelength = dims.handlelength,
+    fontsize = dims.fontsize,
+    row_height = dims.row_height,
     opts = opts,
     loc = opts.loc or "upper right",
     placement = best.inside and "inside" or "outside",
@@ -2410,11 +2416,12 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
     util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92),
-    util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20))
+    util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20),
+    util.fmt(plan.fontsize or 11))
   local framealpha = opts.framealpha or 0.92
   local facecolor = opts.facecolor or "#ffffff"
   local edgecolor = opts.edgecolor or "#bbbbbb"
@@ -2426,9 +2433,10 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   end
   if opts.title then
     buf[#buf + 1] = string.format(
-      '   <text class="legend-title" x="%s" y="%s" font-size="11" font-weight="bold" fill="%s">%s</text>',
+      '   <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s">%s</text>',
       util.fmt(x + (plan.borderpad or 8)),
-      util.fmt(y + (plan.borderpad or 8) + 6), TEXT_COLOR,
+      util.fmt(y + (plan.borderpad or 8) + (plan.fontsize or 11) + 3),
+      util.fmt(plan.fontsize or 11), TEXT_COLOR,
       util.escape_xml(opts.title))
   end
   for index, entry in ipairs(plan.entries) do
@@ -2438,11 +2446,13 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
     local handle = plan.handlelength or 20
     local entry_x = x + border + (column - 1) * (plan.col_width + border)
     local entry_y = y + (2 * border - 4) + plan.title_height +
-      (row - 1) * 20
+      (row - 1) * (plan.row_height or 20)
     polar_swatch(entry, entry_x, entry_y, buf, handle)
     buf[#buf + 1] = string.format(
-      '   <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
-      util.fmt(entry_x + handle + 8), util.fmt(entry_y + 4), TEXT_COLOR,
+      '   <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+      util.fmt(entry_x + handle + 8),
+      util.fmt(entry_y + (plan.fontsize or 11) * 0.36),
+      util.fmt(plan.fontsize or 11), TEXT_COLOR,
       util.escape_xml(entry.label))
   end
   buf[#buf + 1] = '  </g>'
@@ -2570,6 +2580,7 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    ecolors = style.ecolors and copy_array(style.ecolors) or nil,
     hatch = style.hatch,
     radius = style.radius,
     capsize = style.capsize,
@@ -2746,6 +2757,7 @@ function M.to_scene(figure)
       edgecolor = opts.edgecolor or "#bbbbbb",
       borderpad = opts.borderpad or 8,
       handlelength = opts.handlelength or 20,
+      fontsize = opts.fontsize or 11,
       title = opts.title,
       ncol = opts.ncol or 1,
       entries = {},

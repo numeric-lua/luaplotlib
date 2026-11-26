@@ -350,16 +350,20 @@ local function data_extents(fig, xscale, yscale)
         include_y(high_edge, series_index, 1, "box")
         include_x(series.low, series_index, 1, "box whisker")
         include_x(series.high, series_index, 1, "box whisker")
-        for _, value in ipairs(series.outliers) do
-          include_x(value, series_index, 1, "box outlier")
+        if series.showfliers ~= false then
+          for _, value in ipairs(series.outliers) do
+            include_x(value, series_index, 1, "box outlier")
+          end
         end
       else
         include_x(low_edge, series_index, 1, "box")
         include_x(high_edge, series_index, 1, "box")
         include_y(series.low, series_index, 1, "box whisker")
         include_y(series.high, series_index, 1, "box whisker")
-        for _, value in ipairs(series.outliers) do
-          include_y(value, series_index, 1, "box outlier")
+        if series.showfliers ~= false then
+          for _, value in ipairs(series.outliers) do
+            include_y(value, series_index, 1, "box outlier")
+          end
         end
       end
     elseif series.kind == "bar" then
@@ -615,14 +619,17 @@ local function render_legend(fig, geom, buf)
   local opts = fig._legend_opts or { loc = "upper right", frame = true, ncol = 1 }
   local border = opts.borderpad or 8
   local handle = opts.handlelength or 20
+  local fontsize = opts.fontsize or 11
+  local row_height = fontsize + 9
+  local char_width = fontsize * 6.5 / 11
   local ncol = math.max(1, math.min(opts.ncol or 1, #entries))
   local rows = math.ceil(#entries / ncol)
   local col_width = math.min(geom.plot_width - border,
-    math.max(88, border + handle + 8 + 16 + max_chars * 6.5))
+    math.max(88, border + handle + 8 + 16 + max_chars * char_width))
   local box_width = math.min(geom.plot_width - border,
     col_width * ncol + (ncol - 1) * border)
-  local title_height = opts.title and 20 or 0
-  local box_height = 2 * border - 4 + title_height + rows * 20
+  local title_height = opts.title and row_height or 0
+  local box_height = 2 * border - 4 + title_height + rows * row_height
   local loc = opts.loc or "upper right"
   local center_x = geom.left + (geom.plot_width - box_width) / 2
   local center_y = geom.top + (geom.plot_height - box_height) / 2
@@ -655,9 +662,9 @@ local function render_legend(fig, geom, buf)
   local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
   buf[#buf + 1] = string.format(
-    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s"/>',
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s"/>',
     util.escape_xml(loc), util.fmt(framealpha), util.fmt(border),
-    util.fmt(handle))
+    util.fmt(handle), util.fmt(fontsize))
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
@@ -666,20 +673,21 @@ local function render_legend(fig, geom, buf)
   end
   if opts.title then
     buf[#buf + 1] = string.format(
-      '  <text class="legend-title" x="%s" y="%s" font-size="11" font-weight="bold" fill="%s">%s</text>',
-      util.fmt(x + border), util.fmt(y + border + 6), TEXT_COLOR,
-      util.escape_xml(opts.title))
+      '  <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s">%s</text>',
+      util.fmt(x + border), util.fmt(y + border + fontsize + 3),
+      util.fmt(fontsize), TEXT_COLOR, util.escape_xml(opts.title))
   end
   for i, entry in ipairs(entries) do
     local column = math.floor((i - 1) / rows) + 1
     local row = (i - 1) % rows + 1
     local entry_x = x + border + (column - 1) * (col_width + border)
-    local entry_y = y + (2 * border - 4) + title_height + (row - 1) * 20
+    local entry_y = y + (2 * border - 4) + title_height +
+      (row - 1) * row_height
     swatch(buf, entry.kind, entry.color, entry_x, entry_y, handle)
     buf[#buf + 1] = string.format(
-      '  <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
-      util.fmt(entry_x + handle + 8), util.fmt(entry_y + 4), TEXT_COLOR,
-      util.escape_xml(entry.label))
+      '  <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+      util.fmt(entry_x + handle + 8), util.fmt(entry_y + fontsize * 0.36),
+      util.fmt(fontsize), TEXT_COLOR, util.escape_xml(entry.label))
   end
   buf[#buf + 1] = ' </g>'
 end
@@ -1265,10 +1273,11 @@ local function render_hist2d(series, map_x, map_y, buf)
   end
   local norm = series.density and "density" or "count"
   buf[#buf + 1] = string.format(
-    '  <g class="series series-hist2d" data-points="%d" data-inside="%d" data-bins-x="%d" data-bins-y="%d" data-norm="%s" data-color-norm="%s" data-show-empty="%s" data-vmin="%s" data-vmax="%s"%s>',
+    '  <g class="series series-hist2d" data-points="%d" data-inside="%d" data-bins-x="%d" data-bins-y="%d" data-norm="%s" data-color-norm="%s" data-show-empty="%s" data-vmin="%s" data-vmax="%s" data-explicit-bins="%s"%s>',
     series.point_count, series.inside_count, series.bins_x, series.bins_y, norm,
     series.color_norm or "linear", series.show_empty and "true" or "false",
-    util.fmt(series.vmin), util.fmt(series.vmax), label)
+    util.fmt(series.vmin), util.fmt(series.vmax),
+    series.explicit_edges and "true" or "false", label)
   for _, cell in ipairs(series.cells) do
     local x0 = map_x(cell.x0)
     local x1 = map_x(cell.x1)
@@ -1293,7 +1302,7 @@ local function render_errorbar(series, map_x, map_y, buf)
   local style = series.style
   local cap = style.capsize or 4
   local width = style.elinewidth or 1
-  local color = style.ecolor or style.color
+  local base_color = style.ecolor or style.color
   local label = ""
   if style.label ~= nil then
     label = string.format(' data-label="%s"', attribute(style.label))
@@ -1319,6 +1328,7 @@ local function render_errorbar(series, map_x, map_y, buf)
     label, metadata)
   for i = 1, #series.x do
     if (i - 1) % every == 0 then
+      local color = style.ecolors and style.ecolors[i] or base_color
       local x = map_x(series.x[i])
       local y = series.y[i]
       local yerr_lower = (series.yerr_lower or series.yerr)[i]
@@ -1955,10 +1965,11 @@ local function render_box(series, map_x, map_y, buf)
     (q3_screen - q1_screen))
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s">',
+    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s" data-whis="%s" data-showfliers="%s">',
     util.fmt(series.position), horizontal and "horizontal" or "vertical",
     util.fmt(series.mean), series.showmeans and "true" or "false",
-    series.meanline and "true" or "false", series.notch and "true" or "false")
+    series.meanline and "true" or "false", series.notch and "true" or "false",
+    util.fmt(series.whis or 1.5), series.showfliers == false and "false" or "true")
   if series.notch then
     local function point(position, value)
       if horizontal then
@@ -2057,15 +2068,17 @@ local function render_box(series, map_x, map_y, buf)
         util.fmt(center), util.fmt(mean_screen), color)
     end
   end
-  for _, value in ipairs(series.outliers) do
-    if horizontal then
+  if series.showfliers ~= false then
+    for _, value in ipairs(series.outliers) do
+      if horizontal then
       buf[#buf + 1] = string.format(
         '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
         util.fmt(map_x(value)), util.fmt(center), color)
     else
-      buf[#buf + 1] = string.format(
-        '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
-        util.fmt(center), util.fmt(map_y(value)), color)
+        buf[#buf + 1] = string.format(
+          '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
+          util.fmt(center), util.fmt(map_y(value)), color)
+      end
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -2320,13 +2333,14 @@ function M.to_pie_svg(fig)
   local buf = {}
   local function add(line) buf[#buf + 1] = line end
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-rotatelabels="%s">',
+  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-rotatelabels="%s" data-counterclock="%s">',
     util.fmt(width), util.fmt(height), util.fmt(width), util.fmt(height),
     util.fmt(fig.dpi), util.fmt(pie.labeldistance or 1.08),
     util.fmt(pie.pctdistance or 0.64), util.fmt(pie.labelsize or 12),
     pie.labelcolor or "#222222", util.fmt(pie.pctsize or 12),
     pie.pctcolor or "#ffffff",
-    pie.rotatelabels and "true" or "false"))
+    pie.rotatelabels and "true" or "false",
+    pie.counterclock and "true" or "false"))
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   add(' <rect class="background" width="' .. util.fmt(width) .. '" height="' ..
     util.fmt(height) .. '" fill="#ffffff"/>')
@@ -2344,24 +2358,26 @@ function M.to_pie_svg(fig)
   end
   add(' <g class="pie" font-family="Helvetica, Arial, sans-serif">')
   for index, slice in ipairs(pie.slices) do
-    if slice.end_angle < slice.start_angle then
-      local sweep = slice.start_angle - slice.end_angle
+    local sweep = math.abs(slice.end_angle - slice.start_angle)
+    if sweep > 0 then
       local middle = (slice.start_angle + slice.end_angle) / 2
+      local arc_sweep = slice.end_angle < slice.start_angle and 1 or 0
       local offset = radius * (slice.explode or 0)
       local slice_cx, slice_cy = pie_point(cx, cy, offset, middle)
       local x1, y1 = pie_point(slice_cx, slice_cy, radius, slice.start_angle)
       local x2, y2 = pie_point(slice_cx, slice_cy, radius, slice.end_angle)
       local large = sweep > 180 and 1 or 0
       if pie.shadow then
-        add(string.format('  <path class="pie-shadow" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="#000000" fill-opacity="0.18"/>',
+        add(string.format('  <path class="pie-shadow" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="#000000" fill-opacity="0.18"/>',
           util.fmt(slice_cx + 4), util.fmt(slice_cy + 4),
           util.fmt(x1 + 4), util.fmt(y1 + 4), util.fmt(radius),
-          util.fmt(radius), large, util.fmt(x2 + 4), util.fmt(y2 + 4)))
+          util.fmt(radius), large, arc_sweep, util.fmt(x2 + 4),
+          util.fmt(y2 + 4)))
       end
-      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="%s" stroke="%s" stroke-width="%s"/>',
+      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="%s"/>',
         util.fmt(slice.explode or 0), util.fmt(slice_cx), util.fmt(slice_cy),
         util.fmt(x1), util.fmt(y1), util.fmt(radius), util.fmt(radius),
-        large, util.fmt(x2), util.fmt(y2), slice.color,
+        large, arc_sweep, util.fmt(x2), util.fmt(y2), slice.color,
         pie.edgecolor or "#ffffff", util.fmt(pie.linewidth or 1.5)))
       if pie.autopct then
         local tx, ty = pie_point(slice_cx, slice_cy, radius * (pie.pctdistance or 0.64), middle)

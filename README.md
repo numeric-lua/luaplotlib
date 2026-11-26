@@ -64,6 +64,7 @@ luajit examples/barh_hatch.lua
 luajit examples/broken_barh.lua
 luajit examples/pie_explode.lua
 luajit examples/pie_rotated.lua
+luajit examples/pie_counterclock.lua
 luajit examples/heatmap.lua
 luajit examples/minor_subdivisions.lua
 luajit examples/eventplot_layout.lua
@@ -437,6 +438,23 @@ vector/event. Pie `labelsize`/`labelcolor` and `pctsize`/`pctcolor` style slice
 and percentage text independently. Hist2d `color_norm = "log"` colors cells by
 `log(1 + value)` while colorbar labels remain values.
 
+Whisker controls, pie direction, explicit 2-D bin edges, per-point error colors,
+and legend typography are additive:
+
+```lua
+fig:boxplot(samples, { whis = 1.0, showfliers = false })
+fig:pie(values, { counterclock = true, startangle = 0 })
+fig:hist2d(x, y, { bins = { x_edges, y_edges } })
+fig:errorbar(x, y, yerr, { ecolor = { "#d62728", "#7c3aed" } })
+fig:legend({ fontsize = 13 })
+```
+
+`whis` scales the IQR fences and `showfliers = false` hides outlier markers.
+`counterclock` reverses pie slice order. Hist2d `bins` accepts explicit x/y edge
+tables (or one edge table plus one count) and computes density with each cell's
+actual area. Errorbar `ecolor` may contain one color per point. Legend
+`fontsize` scales text and frame geometry on Cartesian and polar figures.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -660,8 +678,9 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Vertical and horizontal bars with numeric positions or categorical labels,
   including multi-series grouped and stacked bars, per-bar color lists,
   configurable outline widths and hatches, and symmetric/asymmetric error bars
-- Pie and donut charts with exploded slices, soft shadows, configurable wedge
-  outlines, styled/rotated labels, and distance-tuned percentage annotations
+- Pie and donut charts with exploded slices, soft shadows, configurable
+  clockwise/counterclockwise direction, wedge outlines, styled/rotated labels,
+  and distance-tuned percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional notches, mean
   markers, or mean lines
@@ -680,13 +699,14 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   at Cartesian or polar data coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
   and upper extents, optional `errorevery` decimation, configurable caps, and
-  lower/upper and left/right limit arrowheads
+  lower/upper and left/right limit arrowheads plus per-point error colors
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
   titles, label-padded/styled axis labels, and legends with nine locations,
-  frame alpha/colors, border padding, and configurable handle lengths
+  frame alpha/colors, border padding, configurable handle lengths, and font
+  size
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
@@ -698,8 +718,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   automatic/explicit scaling, pivots, normalization, deterministic arrow caps,
   and legend/scene metadata
 - Hexagonal and rectangular 2-D binning with minimum counts, value limits,
-  linear or log count colors, explicit or uniform colorbar ticks, and
-  renderer-agnostic cell/count export
+  explicit or count-based rectangular edges, linear or log count colors,
+  explicit or uniform colorbar ticks, and renderer-agnostic cell/count export
 - Image `extent`/`origin` mapping, image colorbar titles and explicit or
   uniform ticks, cell alpha, and explicit contour column/row coordinates
 - Optional equal or numeric data-unit aspect ratios that center the plot box
@@ -738,9 +758,10 @@ error-stem-marker, event-linestyle, barh-hatch, scatter-alpha, stem-horizontal,
 quiver-uv, tick-style, hist-hatch, violin-horizontal, pie-rotation,
 fill-hatch, span-hatch, title-style, pie-edge, scatter-edge, errorbar-limit,
 step-fill, hist-edges, label/legend styling, errorbar x limits, scatter
-outline widths, log hexbin/hist2d counts, notched boxes, per-arrow/event
-colors, pie text styling, image-alpha, and equal-aspect metadata, and confirms
-that Cartesian examples stay Cartesian.
+outline widths, log hexbin/hist2d counts, notched/whisker boxplots,
+counterclockwise pie direction, per-arrow/event/error colors, pie text styling,
+legend font sizing, image-alpha, and equal-aspect metadata, and confirms that
+Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -774,6 +795,7 @@ make examples
 # examples/output/broken-barh.svg
 # examples/output/pie-explode.svg
 # examples/output/pie-rotated.svg
+# examples/output/pie-counterclock.svg
 # examples/output/heatmap-extent.svg
 # examples/output/contour-coords.svg
 # examples/output/aspect.svg
@@ -817,8 +839,9 @@ face/edge styling, per-point scatter markers/alpha/edges, annotation
 rotation/backgrounds, horizontal stems, quiver uv angles, tick/title label
 styling, horizontal violins, rotated pie labels, pie wedge outlines,
 fill/span/step hatches and fills, errorbar x/y limit arrows, explicit
-histogram edges, log hexbin/hist2d colors, box notches, per-arrow/event
-colors, pie text styling, axis-label typography, legend spacing, per-point
+histogram edges, explicit 2-D edges, log hexbin/hist2d colors, box
+notches/whisker controls, counterclockwise pies, per-arrow/event/error colors,
+pie text styling, axis-label/legend typography, legend spacing, per-point
 scatter outline widths,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
@@ -884,6 +907,8 @@ See
   font sizes and legend padding/handle length alter layout, but very large
   values can still crowd or clip within a fixed canvas. Box notches use the
   normal-approximation interval and clamp to the quartiles for small samples.
+  Hidden fliers stay in scene `outliers` but no longer affect automatic
+  ranges.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

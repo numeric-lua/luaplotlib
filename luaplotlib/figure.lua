@@ -316,6 +316,7 @@ local PIE_OPTIONS = {
   colors = true,
   color = true,
   startangle = true,
+  counterclock = true,
   autopct = true,
   radius = true,
   inner_radius = true,
@@ -417,6 +418,8 @@ local BOX_OPTIONS = {
   showmeans = true,
   meanline = true,
   notch = true,
+  whis = true,
+  showfliers = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -975,7 +978,7 @@ function Figure.new(opts)
     _legend_opts = {
       loc = "upper right", frame = true, framealpha = 0.92,
       facecolor = "#ffffff", edgecolor = "#bbbbbb",
-      borderpad = 8, handlelength = 20,
+      borderpad = 8, handlelength = 20, fontsize = 11,
     },
     _category_ticks = nil,
     _category_axis = "x",
@@ -2529,17 +2532,47 @@ function Figure:hist2d(x, y, opts)
   end
 
   local bins_x, bins_y = 10, 10
+  local explicit_x_edges, explicit_y_edges
   if opts.bins ~= nil then
     if type(opts.bins) == "table" then
       if #opts.bins ~= 2 then
-        fail("hist2d bins must be a count or a {nx, ny} table")
+        fail("hist2d bins must be a count, {nx, ny}, or edge tables")
       end
-      bins_x = util.check_integer(opts.bins[1], "hist2d bins x", 1, 200)
-      bins_y = util.check_integer(opts.bins[2], "hist2d bins y", 1, 200)
+      local function read_edges(value, name)
+        if type(value) ~= "table" then return nil end
+        if #value < 2 then
+          fail(name .. " must have at least two explicit edges")
+        end
+        local edges = {}
+        for index = 1, #value do
+          edges[index] = util.check_number(value[index],
+            name .. "[" .. index .. "]")
+          if index > 1 and edges[index] <= edges[index - 1] then
+            fail(name .. " must be strictly increasing")
+          end
+        end
+        return edges
+      end
+      explicit_x_edges = read_edges(opts.bins[1], "hist2d x bin edges")
+      explicit_y_edges = read_edges(opts.bins[2], "hist2d y bin edges")
+      if explicit_x_edges ~= nil then
+        bins_x = #explicit_x_edges - 1
+      else
+        bins_x = util.check_integer(opts.bins[1], "hist2d bins x", 1, 200)
+      end
+      if explicit_y_edges ~= nil then
+        bins_y = #explicit_y_edges - 1
+      else
+        bins_y = util.check_integer(opts.bins[2], "hist2d bins y", 1, 200)
+      end
     else
       bins_x = util.check_integer(opts.bins, "hist2d bins", 1, 200)
       bins_y = bins_x
     end
+  end
+  if opts.range ~= nil and
+      (explicit_x_edges ~= nil or explicit_y_edges ~= nil) then
+    fail("hist2d range cannot be combined with explicit bin edges")
   end
 
   local minimum_x, maximum_x = xv[1], xv[1]
@@ -2587,13 +2620,34 @@ function Figure:hist2d(x, y, opts)
     util.check_boolean(opts.show_empty, "hist2d show_empty")
   end
 
-  local span_x = maximum_x - minimum_x
-  local span_y = maximum_y - minimum_y
-  local width_x = span_x / bins_x
-  local width_y = span_y / bins_y
   local edges_x, edges_y = {}, {}
-  for index = 0, bins_x do edges_x[index + 1] = minimum_x + index * width_x end
-  for index = 0, bins_y do edges_y[index + 1] = minimum_y + index * width_y end
+  if explicit_x_edges ~= nil then
+    for index = 1, #explicit_x_edges do edges_x[index] = explicit_x_edges[index] end
+    minimum_x, maximum_x = edges_x[1], edges_x[#edges_x]
+  else
+    local span_x = maximum_x - minimum_x
+    local width_x = span_x / bins_x
+    for index = 0, bins_x do
+      edges_x[index + 1] = minimum_x + index * width_x
+    end
+  end
+  if explicit_y_edges ~= nil then
+    for index = 1, #explicit_y_edges do edges_y[index] = explicit_y_edges[index] end
+    minimum_y, maximum_y = edges_y[1], edges_y[#edges_y]
+  else
+    local span_y = maximum_y - minimum_y
+    local width_y = span_y / bins_y
+    for index = 0, bins_y do
+      edges_y[index + 1] = minimum_y + index * width_y
+    end
+  end
+  local function bin_index(edges, value)
+    local index = 1
+    while index < #edges - 1 and value >= edges[index + 1] do
+      index = index + 1
+    end
+    return index
+  end
 
   local counts = {}
   for row = 1, bins_y do
@@ -2605,8 +2659,8 @@ function Figure:hist2d(x, y, opts)
     local px, py = xv[index], yv[index]
     if px >= minimum_x and px <= maximum_x and
         py >= minimum_y and py <= maximum_y then
-      local column = math.floor((px - minimum_x) / width_x) + 1
-      local row = math.floor((py - minimum_y) / width_y) + 1
+      local column = bin_index(edges_x, px)
+      local row = bin_index(edges_y, py)
       if column < 1 then column = 1 elseif column > bins_x then column = bins_x end
       if row < 1 then row = 1 elseif row > bins_y then row = bins_y end
       counts[row][column] = counts[row][column] + 1
@@ -2614,11 +2668,10 @@ function Figure:hist2d(x, y, opts)
     end
   end
 
-  local cell_area = width_x * width_y
-  local function cell_value(count)
+  local function cell_value(count, area)
     if not density then return count end
     if inside == 0 then return 0 end
-    return count / (inside * cell_area)
+    return count / (inside * area)
   end
 
   local cells = {}
@@ -2627,7 +2680,9 @@ function Figure:hist2d(x, y, opts)
     for column = 1, bins_x do
       local count = counts[row][column]
       if count > 0 or show_empty then
-        local value = cell_value(count)
+        local area = (edges_x[column + 1] - edges_x[column]) *
+          (edges_y[row + 1] - edges_y[row])
+        local value = cell_value(count, area)
         if value > maximum_value then maximum_value = value end
         cells[#cells + 1] = {
           row = row,
@@ -2697,6 +2752,7 @@ function Figure:hist2d(x, y, opts)
     inside_count = inside,
     density = density,
     show_empty = show_empty,
+    explicit_edges = explicit_x_edges ~= nil or explicit_y_edges ~= nil,
     vmin = vmin,
     vmax = vmax,
     color_norm = color_norm,
@@ -3436,7 +3492,7 @@ function Figure:twinx()
     _legend_opts = {
       loc = "upper right", frame = true, framealpha = 0.92,
       facecolor = "#ffffff", edgecolor = "#bbbbbb",
-      borderpad = 8, handlelength = 20,
+      borderpad = 8, handlelength = 20, fontsize = 11,
     },
   }, Figure)
   self._twin = twin
@@ -3903,6 +3959,11 @@ function Figure:pie(values, opts)
   if opts.rotatelabels ~= nil then
     util.check_boolean(opts.rotatelabels, "pie rotatelabels")
   end
+  local counterclock = opts.counterclock == true
+  if opts.counterclock ~= nil then
+    util.check_boolean(opts.counterclock, "pie counterclock")
+  end
+  local direction = counterclock and 1 or -1
   local slices = {}
   local angle = startangle
   for index, value in ipairs(values_v) do
@@ -3911,12 +3972,12 @@ function Figure:pie(values, opts)
       value = value,
       percent = 100 * value / total,
       start_angle = angle,
-      end_angle = angle - sweep,
+      end_angle = angle + direction * sweep,
       color = colors_list[index],
       label = labels and labels[index] or ("slice " .. index),
       explode = explode[index],
     }
-    angle = angle - sweep
+    angle = angle + direction * sweep
   end
   self._pie = {
     slices = slices, radius = radius, inner_radius = inner,
@@ -3925,7 +3986,7 @@ function Figure:pie(values, opts)
     labelsize = labelsize, labelcolor = labelcolor,
     pctsize = pctsize, pctcolor = pctcolor,
     labeldistance = labeldistance, pctdistance = pctdistance,
-    rotatelabels = rotatelabels,
+    rotatelabels = rotatelabels, counterclock = counterclock,
   }
   return self
 end
@@ -4251,6 +4312,13 @@ function Figure:boxplot(values, opts)
   if opts.notch ~= nil then
     util.check_boolean(opts.notch, "boxplot notch")
   end
+  local whis = 1.5
+  if opts.whis ~= nil then
+    whis = util.check_number(opts.whis, "boxplot whis", 0)
+  end
+  local showfliers = opts.showfliers
+  if showfliers == nil then showfliers = true end
+  util.check_boolean(showfliers, "boxplot showfliers")
   local labels = opts.labels
   if labels ~= nil then
     if type(labels) ~= "table" or #labels ~= #samples then
@@ -4281,7 +4349,7 @@ function Figure:boxplot(values, opts)
     mean = mean / #sorted
     local q1, median, q3 = quantile(0.25), quantile(0.5), quantile(0.75)
     local iqr = q3 - q1
-    local low_limit, high_limit = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    local low_limit, high_limit = q1 - whis * iqr, q3 + whis * iqr
     local whisker_low, whisker_high = q1, q3
     for _, value in ipairs(sorted) do
       if value >= low_limit then
@@ -4316,6 +4384,7 @@ function Figure:boxplot(values, opts)
       orientation = orientation, mean = mean,
       showmeans = showmeans, meanline = meanline,
       notch = notch, notch_low = notch_low, notch_high = notch_high,
+      whis = whis, showfliers = showfliers,
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
       style = { color = color, label = opts.label, alpha = 1 },
@@ -4647,19 +4716,35 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   local xuplims = checked_limit_flags(opts.xuplims, #xv,
     "errorbar xuplims")
 
-  local style = checked_style(self, opts, "errorbar")
+  local style_opts = opts
+  local point_ecolors
+  if type(opts.ecolor) == "table" then
+    if #opts.ecolor ~= #xv then
+      fail("errorbar ecolor array must match the number of points")
+    end
+    point_ecolors = {}
+    for index = 1, #opts.ecolor do
+      point_ecolors[index] = util.check_color(opts.ecolor[index],
+        "errorbar ecolor[" .. index .. "]")
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.ecolor = point_ecolors[1]
+  end
+  local style = checked_style(self, style_opts, "errorbar")
   style.linewidth = linewidth
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
-  checked_marker_style(opts, "errorbar", style)
+  checked_marker_style(style_opts, "errorbar", style)
   style.capsize = capsize
   style.elinewidth = elinewidth
-  if opts.ecolor ~= nil then
-    style.ecolor = util.check_color(opts.ecolor, "errorbar ecolor")
+  if style_opts.ecolor ~= nil then
+    style.ecolor = util.check_color(style_opts.ecolor, "errorbar ecolor")
   else
     style.ecolor = style.color
   end
+  style.ecolors = point_ecolors
 
   self._series[#self._series + 1] = {
     kind = "errorbar",
@@ -5142,6 +5227,7 @@ function Figure:legend(opts)
       edgecolor = true,
       borderpad = true,
       handlelength = true,
+      fontsize = true,
       ncol = true,
       title = true,
     }, "legend")
@@ -5182,6 +5268,10 @@ function Figure:legend(opts)
       handlelength = util.check_number(opts.handlelength,
         "legend handlelength", 0)
     end
+    local fontsize = self._legend_opts.fontsize or 11
+    if opts.fontsize ~= nil then
+      fontsize = util.check_number(opts.fontsize, "legend fontsize", 0.1)
+    end
     self._legend_opts = {
       loc = opts.loc or self._legend_opts.loc,
       frame = opts.frame == nil and self._legend_opts.frame or opts.frame,
@@ -5190,6 +5280,7 @@ function Figure:legend(opts)
       edgecolor = edgecolor,
       borderpad = borderpad,
       handlelength = handlelength,
+      fontsize = fontsize,
       ncol = ncol,
       title = opts.title == nil and self._legend_opts.title or opts.title,
     }
