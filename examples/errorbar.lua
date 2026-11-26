@@ -54,6 +54,8 @@ fig:errorbar(x, y, yerr, xerr, {
   markeredgecolor = "#1f77b4",
   markeredgewidth = 1.2,
   errorevery = 2,
+  lolims = { true, false, true, false, false, false },
+  uplims = { false, false, false, false, true, false },
 })
 fig:title("luaplotlib: error bars")
 fig:xlabel("sample")

@@ -1,0 +1,32 @@
+local plt = require("luaplotlib")
+
+test("step plots are unfilled by default", function()
+  local fig = plt.figure()
+  fig:step({ 1, 2, 3 }, { 1, 2, 1 })
+  assert_not_contains(fig:to_svg(), "step-fill")
+  local scene = fig:to_scene().series[1]
+  assert_equal(scene.fill, false)
+  assert_equal(scene.fillalpha, 0.2)
+end)
+
+test("step fill draws a baseline polygon", function()
+  local fig = plt.figure()
+  fig:step({ 1, 2, 3 }, { 1, 2, 1 }, { fill = true, fillalpha = 0.35 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-fill="true"')
+  assert_contains(svg, 'class="step-fill"')
+  assert_contains(svg, 'fill-opacity="0.35"')
+  local scene = fig:to_scene().series[1]
+  assert_equal(scene.fill, true)
+  assert_equal(scene.fillalpha, 0.35)
+end)
+
+test("step fill validates fill and alpha", function()
+  local fig = plt.figure()
+  assert_error("fill must be a boolean", function()
+    fig:step({ 1, 2 }, { 1, 2 }, { fill = "yes" })
+  end)
+  assert_error("fillalpha must be <= 1", function()
+    fig:step({ 1, 2 }, { 1, 2 }, { fill = true, fillalpha = 1.5 })
+  end)
+end)

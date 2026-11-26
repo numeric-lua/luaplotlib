@@ -253,6 +253,8 @@ local STEP_OPTIONS = {
   linestyle = true,
   where = true,
   alpha = true,
+  fill = true,
+  fillalpha = true,
 }
 
 local ECDF_OPTIONS = {
@@ -318,6 +320,8 @@ local PIE_OPTIONS = {
   inner_radius = true,
   explode = true,
   shadow = true,
+  edgecolor = true,
+  linewidth = true,
   labeldistance = true,
   pctdistance = true,
   rotatelabels = true,
@@ -423,6 +427,8 @@ local ERRORBAR_OPTIONS = {
   elinewidth = true,
   ecolor = true,
   errorevery = true,
+  lolims = true,
+  uplims = true,
 }
 
 local ANNOTATE_OPTIONS = {
@@ -751,6 +757,23 @@ local function checked_annotation_background(opts, context)
       context .. " backgroundpad", 0)
   end
   return { color = color, edgecolor = edgecolor, alpha = alpha, pad = pad }
+end
+
+local function checked_limit_flags(value, count, name)
+  if value == nil then return nil end
+  local flags = {}
+  if type(value) == "boolean" then
+    for index = 1, count do flags[index] = value end
+    return flags
+  end
+  if type(value) ~= "table" or #value ~= count then
+    fail(name .. " must be a boolean or one boolean per point")
+  end
+  for index = 1, count do
+    util.check_boolean(value[index], name .. "[" .. index .. "]")
+    flags[index] = value[index]
+  end
+  return flags
 end
 
 -- Normalize symmetric or asymmetric error input into one lower and one upper
@@ -1253,6 +1276,22 @@ function Figure:polar_scatter(theta, r, opts)
     style_opts.color = point_colors[1]
   end
 
+  local point_edgecolors
+  if type(opts.edgecolor) == "table" then
+    if #opts.edgecolor ~= #tv then
+      fail("polar scatter edgecolor array must match the number of points")
+    end
+    point_edgecolors = {}
+    for index = 1, #opts.edgecolor do
+      point_edgecolors[index] = util.check_color(opts.edgecolor[index],
+        "polar scatter edgecolor[" .. index .. "]")
+    end
+    if style_opts == opts then
+      style_opts = {}
+      for key, value in pairs(opts) do style_opts[key] = value end
+    end
+    style_opts.edgecolor = point_edgecolors[1]
+  end
   local point_alphas
   if type(opts.alpha) == "table" then
     if #opts.alpha ~= #tv then
@@ -1277,6 +1316,7 @@ function Figure:polar_scatter(theta, r, opts)
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
+  style.edgecolors = point_edgecolors
   style.alphas = point_alphas
   style.linewidth = linewidth
 
@@ -2079,6 +2119,22 @@ function Figure:scatter(x, y, opts)
     for key, value in pairs(opts) do style_opts[key] = value end
     style_opts.color = point_colors[1]
   end
+  local point_edgecolors
+  if type(opts.edgecolor) == "table" then
+    if #opts.edgecolor ~= #xv then
+      fail("scatter edgecolor array must match the number of points")
+    end
+    point_edgecolors = {}
+    for index = 1, #opts.edgecolor do
+      point_edgecolors[index] = util.check_color(opts.edgecolor[index],
+        "scatter edgecolor[" .. index .. "]")
+    end
+    if style_opts == opts then
+      style_opts = {}
+      for key, value in pairs(opts) do style_opts[key] = value end
+    end
+    style_opts.edgecolor = point_edgecolors[1]
+  end
   local point_alphas
   if type(opts.alpha) == "table" then
     if #opts.alpha ~= #xv then
@@ -2102,6 +2158,7 @@ function Figure:scatter(x, y, opts)
   style.radius = radius
   style.radii = radii
   style.colors = point_colors
+  style.edgecolors = point_edgecolors
   style.alphas = point_alphas
   style.linewidth = linewidth
 
@@ -2251,12 +2308,33 @@ function Figure:hist(values, opts)
   local values_v = data.sequence(values, "hist values")
 
   local bins = 10
+  local explicit_edges
   if opts.bins ~= nil then
-    bins = util.check_integer(opts.bins, "hist bins", 1, 1000)
+    if type(opts.bins) == "table" then
+      if #opts.bins < 2 then
+        fail("hist bins must be a count or at least two explicit edges")
+      end
+      explicit_edges = {}
+      for index = 1, #opts.bins do
+        explicit_edges[index] = util.check_number(opts.bins[index],
+          "hist bins[" .. index .. "]")
+        if index > 1 and explicit_edges[index] <= explicit_edges[index - 1] then
+          fail("hist bin edges must be strictly increasing")
+        end
+      end
+      bins = #explicit_edges - 1
+    else
+      bins = util.check_integer(opts.bins, "hist bins", 1, 1000)
+    end
   end
 
   local lo, hi
-  if opts.range ~= nil then
+  if explicit_edges ~= nil then
+    if opts.range ~= nil then
+      fail("hist range cannot be combined with explicit bin edges")
+    end
+    lo, hi = explicit_edges[1], explicit_edges[#explicit_edges]
+  elseif opts.range ~= nil then
     local range = opts.range
     if type(range) ~= "table" or #range ~= 2 then
       fail("hist range must be a {min, max} table")
@@ -2311,17 +2389,22 @@ function Figure:hist(values, opts)
       fail("hist hatch requires bar or stepfilled histtype")
     end
   end
-  local bin_width = (hi - lo) / bins
-  local counts = {}
-  for i = 1, bins do
-    counts[i] = 0
+  local edges = {}
+  if explicit_edges ~= nil then
+    for index = 1, #explicit_edges do edges[index] = explicit_edges[index] end
+  else
+    local bin_width = (hi - lo) / bins
+    for i = 0, bins do edges[i + 1] = lo + i * bin_width end
   end
+  local counts = {}
+  for i = 1, bins do counts[i] = 0 end
   for i = 1, #values_v do
     local value = values_v[i]
     if value >= lo and value <= hi then
-      local index = math.floor((value - lo) / bin_width) + 1
-      if index > bins then index = bins end
-      if index < 1 then index = 1 end
+      local index = 1
+      while index < bins and value >= edges[index + 1] do
+        index = index + 1
+      end
       counts[index] = counts[index] + 1
     end
   end
@@ -2330,16 +2413,14 @@ function Figure:hist(values, opts)
     local total = 0
     for i = 1, bins do total = total + counts[i] end
     if total > 0 then
-      for i = 1, bins do counts[i] = counts[i] / (total * bin_width) end
+      for i = 1, bins do
+        local width = edges[i + 1] - edges[i]
+        counts[i] = counts[i] / (total * width)
+      end
     end
   end
   if cumulative then
     for i = 2, bins do counts[i] = counts[i] + counts[i - 1] end
-  end
-
-  local edges = {}
-  for i = 0, bins do
-    edges[i + 1] = lo + i * bin_width
   end
 
   local style = checked_style(self, opts, "hist")
@@ -3473,11 +3554,18 @@ function Figure:step(x, y, opts)
   linewidth = util.check_number(linewidth, "step linewidth", 0)
   local linestyle = opts.linestyle or "solid"
   if not LINESTYLES[linestyle] then fail("invalid step linestyle") end
+  local fill = opts.fill == true
+  if opts.fill ~= nil then util.check_boolean(opts.fill, "step fill") end
+  local fillalpha = 0.2
+  if opts.fillalpha ~= nil then
+    fillalpha = util.check_alpha(opts.fillalpha, "step fillalpha")
+  end
   local style = checked_style(self, opts, "step")
   style.linewidth = linewidth
   style.linestyle = linestyle
   self._series[#self._series + 1] = {
-    kind = "step", x = xv, y = yv, where = where, style = style,
+    kind = "step", x = xv, y = yv, where = where,
+    fill = fill, fillalpha = fillalpha, style = style,
   }
   return self
 end
@@ -3665,6 +3753,12 @@ function Figure:pie(values, opts)
   if opts.shadow ~= nil then
     util.check_boolean(opts.shadow, "pie shadow")
   end
+  local edgecolor = opts.edgecolor and
+    util.check_color(opts.edgecolor, "pie edgecolor") or "#ffffff"
+  local linewidth = 1.5
+  if opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "pie linewidth", 0)
+  end
   local labeldistance = 1.08
   if opts.labeldistance ~= nil then
     labeldistance = util.check_number(opts.labeldistance,
@@ -3697,6 +3791,7 @@ function Figure:pie(values, opts)
   self._pie = {
     slices = slices, radius = radius, inner_radius = inner,
     autopct = autopct, shadow = shadow, legend = legend,
+    edgecolor = edgecolor, linewidth = linewidth,
     labeldistance = labeldistance, pctdistance = pctdistance,
     rotatelabels = rotatelabels,
   }
@@ -4399,6 +4494,8 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
     errorevery = util.check_integer(opts.errorevery,
       "errorbar errorevery", 1)
   end
+  local lolims = checked_limit_flags(opts.lolims, #xv, "errorbar lolims")
+  local uplims = checked_limit_flags(opts.uplims, #xv, "errorbar uplims")
 
   local style = checked_style(self, opts, "errorbar")
   style.linewidth = linewidth
@@ -4427,6 +4524,8 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
     xerr_upper = xerr_upper,
     xerr_asymmetric = xerr_asymmetric,
     errorevery = errorevery,
+    lolims = lolims,
+    uplims = uplims,
     style = style,
   }
   return self

@@ -14,6 +14,7 @@ examples:
 	@$(LUA) examples/histogram.lua
 	@$(LUA) examples/errorbar.lua
 	@$(LUA) examples/ecdf_complementary.lua
+	@$(LUA) examples/step_fill.lua
 	@$(LUA) examples/annotations.lua
 	@$(LUA) examples/axline.lua
 	@$(LUA) examples/cartesian_controls.lua
@@ -39,6 +40,7 @@ examples:
 	@$(LUA) examples/minor_subdivisions.lua
 	@$(LUA) examples/eventplot_layout.lua
 	@$(LUA) examples/hist_styles.lua
+	@$(LUA) examples/hist_edges.lua
 	@$(LUA) examples/boxplot_horizontal.lua
 	@$(LUA) examples/imshow_colorbar.lua
 	@$(LUA) examples/bars.lua

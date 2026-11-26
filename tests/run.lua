@@ -272,6 +272,11 @@ local test_files = {
   "test_fill_hatch.lua",
   "test_span_hatch.lua",
   "test_title_style.lua",
+  "test_pie_edge.lua",
+  "test_scatter_edgecolors.lua",
+  "test_errorbar_limits.lua",
+  "test_step_fill.lua",
+  "test_hist_edges.lua",
   "test_export.lua",
 }
 

@@ -110,6 +110,8 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `inner_radius` | number in [0, 0.95] | `0` (`0.55` for donut) |
 | `explode` | number or per-slice array in [0, 0.5] | `0` |
 | `shadow` | boolean | `false` |
+| `edgecolor` | color string | `#ffffff` |
+| `linewidth` | number ≥ 0 | `1.5` |
 | `labeldistance` | number in [0.01, 2], radius multiplier | `1.08` |
 | `pctdistance` | number in [0.01, 2], radius multiplier | `0.64` |
 | `rotatelabels` | boolean | `false` |
@@ -119,7 +121,9 @@ Pie and donut charts. Values must be non-negative with a positive total.
 `explode` shifts each wedge outward by that fraction of the radius along its
 mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
 wedges keep their labels, leader lines, and percentage text attached to the
-shifted slice. `labeldistance`/`pctdistance` place the slice labels and
+shifted slice. `edgecolor`/`linewidth` style each wedge outline, defaulting to
+the existing white 1.5-pixel stroke. `labeldistance`/`pctdistance` place the
+slice labels and
 percentage text as radius multipliers. `rotatelabels = true` rotates each label
 to its slice angle while keeping left-half labels upright. `to_scene()` exports
 `pie.shadow`, the two distances, `rotatelabels`, and each slice's `explode`
@@ -288,6 +292,8 @@ circle around the data point. `capsize = 0` suppresses the end caps.
 | `elinewidth` | number ≥ 0 | `1` |
 | `ecolor` | color string | same as `color` |
 | `errorevery` | positive integer | `1` (every point) |
+| `lolims` | boolean or one boolean per point | `false` |
+| `uplims` | boolean or one boolean per point | `false` |
 
 The connecting line is drawn unless `linestyle = "none"`. Automatic radial
 limits include `abs(r) + rerr`, so error bars are never clipped by the default
@@ -595,7 +601,7 @@ Draw a histogram as adjacent filled rectangles.
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `bins` | integer in [1, 1000] | `10` |
+| `bins` | integer in [1, 1000] or increasing edge table | `10` |
 | `range` | `{ min, max }` with `min < max` | data min/max |
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `histtype` | `"bar"`, `"step"`, or `"stepfilled"` | `"bar"` |
@@ -608,7 +614,9 @@ Draw a histogram as adjacent filled rectangles.
 | `density` | boolean | `false` |
 | `cumulative` | boolean | `false` |
 
-`density` normalizes bin heights by total count and bin width. `cumulative`
+`bins` may be an explicit increasing edge list with at least two entries; the
+bin count is derived and `range` cannot also be supplied. `density` divides
+each bin by its own width for non-uniform edges. `cumulative`
 accumulates counts or density left-to-right. `orientation = "horizontal"` keeps
 the same bin edges and counts but draws each bin along x from the zero count
 baseline, with the data value on y. Horizontal groups carry
@@ -762,7 +770,10 @@ is exported through the series style and participates in `hatch_defs`.
 
 ### `fig:step(x, y[, opts])`
 
-Step plot with `opts.where = "pre" | "post" | "mid"` (default `pre`).
+Step plot with `opts.where = "pre" | "post" | "mid"` (default `pre`). Add
+`fill = true` to draw a `step-fill` area to the zero baseline; `fillalpha`
+controls that area's opacity (default `0.2`). Scenes export `fill` and
+`fillalpha`.
 
 ### `fig:stem(x, y[, opts])`
 
@@ -1373,7 +1384,8 @@ match these forms raise errors.
   `series-line`, `series-scatter`, `series-hist`, `series-bar`, `series-axline`,
   `series-fill`, `series-fillx`, `series-stem`, `series-quiver`,
   `series-hexbin`, `series-eventplot`, `series-box`, `series-violin`,
-  `hist-step`, `hist-step-filled`, `event`, `box-mean-marker`,
+  `hist-step`, `hist-step-filled`, `step-fill`, `event`,
+  `errorbar-limit-lower`, `errorbar-limit-upper`, `box-mean-marker`,
   `box-mean-line`, `violin-mean-marker`, `violin-mean-line`,
   `annotation-layer`, `annotation`,
   `annotation-text`, `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`,
@@ -1424,6 +1436,11 @@ includes, but is not limited to:
 - annotation background options without a background color
 - negative axis label padding
 - pie label/percentage distances outside [0.01, 2]
+- invalid pie wedge edge colors or negative line widths
+- scatter edgecolor arrays whose length does not match the points
+- malformed errorbar limit flags
+- non-boolean step fill flags or alpha values outside [0, 1]
+- non-increasing or too-short explicit histogram bin edges, or bins combined with range
 - non-boolean hist2d show_empty values
 - scatter alpha arrays whose length does not match the points
 - stem orientations outside vertical/horizontal
@@ -1563,6 +1580,7 @@ Returns a renderer-agnostic scene table:
       segments = { { x1, y1, x2, y2 }, ... },
       x = { 10, 20, 30 }, y = { 100, 200, 300 }, style = {...} },
     { kind = "errorbar", x = {...}, y = {...}, errorevery = 1,
+      lolims = { true, false }, uplims = { false, true },
       yerr = {...}, yerr_lower = {...}, yerr_upper = {...},
       xerr = {...}, xerr_lower = {...}, xerr_upper = {...} },
     { kind = "axline", x1 = 0, y1 = 0, x2 = 1, y2 = 1, style = {...} },
@@ -1603,7 +1621,7 @@ Returns a renderer-agnostic scene table:
     { kind = "hist2d", x = {...}, y = {...}, bins_x = 10, bins_y = 10,
       show_empty = true, edges_x = {...}, edges_y = {...}, cells = {...} },
     { kind = "step", x = {...}, y = {...}, where = "post",
-      ecdf = true, complementary = true, style = {...} },
+      fill = true, fillalpha = 0.2, style = {...} },
   },
   annotations = {
     {
@@ -1636,12 +1654,13 @@ and `meanline`; violin scenes also carry `orientation`; stem scenes carry
 ECDF step scenes
 carry `ecdf` plus `complementary`. Cartesian scene roots export `title_align`
 and, when requested, `legend_style`. Error-bar scenes always carry
-`errorevery` and quiver scenes carry `angles`; marker-capable line, errorbar,
-and stem styles may include `markerfacecolor`, `markeredgecolor`, and
-`markeredgewidth`. Scatter styles may include per-point `markers` and `alphas`
-arrays, and bar/barh/hist/fill/span styles include `hatch` when a pattern is
-active. Scene roots export `title_fontsize`/`title_color`, and pie scenes export
-`rotatelabels`. Bar series always keep category centers in `x`. The scene
+`errorevery`, optional `lolims`/`uplims`, and quiver scenes carry `angles`;
+marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
+`markeredgecolor`, and `markeredgewidth`. Scatter styles may include per-point
+`markers`, `alphas`, and `edgecolors` arrays, and bar/barh/hist/fill/span styles
+include `hatch` when a pattern is active. Step scenes export `fill` and
+`fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
+export `rotatelabels`, `edgecolor`, and `linewidth`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns
 the `category_ticks` positions.
 Grouped series also expose a scalar `offset` plus an `offsets` array; stacked

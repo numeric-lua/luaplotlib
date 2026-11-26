@@ -31,6 +31,7 @@ local function copy_style(style)
     markersize = style.markersize,
     markers = style.markers and copy_array(style.markers) or nil,
     alphas = style.alphas and copy_array(style.alphas) or nil,
+    edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     hatch = style.hatch,
     markevery = style.markevery and copy_array(style.markevery) or nil,
     markerfacecolor = style.markerfacecolor,
@@ -205,6 +206,8 @@ function M.from_figure(figure)
       radius = figure._pie.radius,
       inner_radius = figure._pie.inner_radius,
       shadow = figure._pie.shadow and true or false,
+      edgecolor = figure._pie.edgecolor or "#ffffff",
+      linewidth = figure._pie.linewidth or 1.5,
       labeldistance = figure._pie.labeldistance or 1.08,
       pctdistance = figure._pie.pctdistance or 0.64,
       rotatelabels = figure._pie.rotatelabels and true or false,
@@ -356,6 +359,8 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       copy.errorevery = series.errorevery or 1
+      if series.lolims ~= nil then copy.lolims = copy_array(series.lolims) end
+      if series.uplims ~= nil then copy.uplims = copy_array(series.uplims) end
       copy.yerr = copy_array(series.yerr_upper or series.yerr)
       copy.yerr_lower = copy_array(series.yerr_lower or series.yerr)
       copy.yerr_upper = copy_array(series.yerr_upper or series.yerr)
@@ -518,6 +523,8 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       copy.where = series.where
+      copy.fill = series.fill and true or false
+      copy.fillalpha = series.fillalpha or 0.2
       if series.ecdf then
         copy.ecdf = true
         copy.complementary = series.complementary and true or false

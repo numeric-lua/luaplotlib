@@ -340,6 +340,8 @@ for svg in \
   examples/output/axline.svg \
   examples/output/cartesian-controls.svg \
   examples/output/histogram-horizontal.svg \
+  examples/output/hist-edges.svg \
+  examples/output/step-fill.svg \
   examples/output/stem.svg \
   examples/output/stem-horizontal.svg \
   examples/output/quiver.svg \
@@ -472,6 +474,22 @@ hist_filled_thick=$(grep -o   'class="hist-step-filled"[^>]*stroke-width="2.5"' 
   wc -l | tr -d ' ')
 [ "$hist_thick" -eq 1 ] && [ "$hist_filled_thick" -eq 1 ] ||
   fail "$HIST_STYLES should use a 2.5-pixel outline"
+
+STEP_FILL=examples/output/step-fill.svg
+grep -q 'class="series series-step"[^>]*data-fill="true"' "$STEP_FILL" ||
+  fail "$STEP_FILL is not a filled step series"
+grep -q 'class="step-fill"' "$STEP_FILL" ||
+  fail "$STEP_FILL has no step area polygon"
+grep -q 'class="step-fill"[^>]*fill-opacity="0.28"' "$STEP_FILL" ||
+  fail "$STEP_FILL should use its configured fill opacity"
+
+HIST_EDGES=examples/output/hist-edges.svg
+hist_edge_bins=$(grep -o 'class="hist-bin"' "$HIST_EDGES" | wc -l |
+  tr -d ' ')
+[ "$hist_edge_bins" -eq 5 ] ||
+  fail "$HIST_EDGES should draw five explicit-edge bins"
+grep -q '<pattern id="hatch-' "$HIST_EDGES" ||
+  fail "$HIST_EDGES has no histogram hatch"
 grep -q '<pattern id="hatch-' "$HIST_STYLES" ||
   fail "$HIST_STYLES has no histogram hatch definition"
 grep -q 'class="hist-step-filled"[^>]*fill="url(#hatch-' "$HIST_STYLES" ||
@@ -531,6 +549,16 @@ printf '%s\n' "$errorbar_marker" | grep -q 'fill="#ffffff"' ||
   fail "$ERRORBAR markers should have a white face"
 printf '%s\n' "$errorbar_marker" | grep -q 'stroke="#1f77b4"' ||
   fail "$ERRORBAR markers should have a blue edge"
+grep -q 'data-lolims="true" data-uplims="true"' "$ERRORBAR" ||
+  fail "$ERRORBAR should expose limit flags"
+errorbar_limits=$(grep -o 'class="errorbar-limit-[a-z]*"' "$ERRORBAR" |
+  wc -l | tr -d ' ')
+[ "$errorbar_limits" -eq 3 ] ||
+  fail "$ERRORBAR should draw three limit arrowheads"
+errorbar_caps=$(grep -o 'class="errorbar-cap"' "$ERRORBAR" | wc -l |
+  tr -d ' ')
+[ "$errorbar_caps" -eq 9 ] ||
+  fail "$ERRORBAR should draw nine ordinary caps after limits"
 
 # Complementary ECDF steps count down and expose their mode.
 ECDF=examples/output/ecdf-complementary.svg
@@ -816,6 +844,10 @@ scatter_alphas=$(grep -o 'class="point"[^>]*fill-opacity="[^"]*"' "$SCATTER_COLO
   sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$scatter_alphas" -gt 3 ] ||
   fail "$SCATTER_COLORS should vary per-point alpha"
+scatter_edges=$(grep -o 'class="point"[^>]*stroke="[^"]*"' "$SCATTER_COLORS" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$scatter_edges" -ge 2 ] ||
+  fail "$SCATTER_COLORS should vary per-point edge colors"
 grep -q 'class="colorbar scatter-colorbar"' "$SCATTER_COLORS" ||
   fail "$SCATTER_COLORS has no scatter colorbar"
 scatter_ticks=$(grep -o 'data-ticks="[0-9]*"' "$SCATTER_COLORS" | head -1 |
@@ -967,6 +999,8 @@ pie_rotated_labels=$(grep -o 'class="pie-label"[^>]*transform="rotate(' \
   "$PIE_ROTATED" | wc -l | tr -d ' ')
 [ "$pie_rotated_labels" -eq 5 ] ||
   fail "$PIE_ROTATED should rotate all five pie labels"
+grep -q 'class="pie-slice"[^>]*stroke="#1f2937" stroke-width="1.2"' \
+  "$PIE_ROTATED" || fail "$PIE_ROTATED should style its wedge edges"
 grep -q 'data-labeldistance="1.14" data-pctdistance="0.55"' "$PIE_EXPLODE" ||
   fail "$PIE_EXPLODE should expose its label and percentage distances"
 
@@ -1002,6 +1036,7 @@ done
 for svg in "$LINE" "$ERRORBAR" "$ECDF" "$AXLINE" "$CONTROLS" "$HIST_H" \
   "$STEM" "$STEM_H" "$QUIVER_CART" "$QUIVER_UV" "$HEXBIN" "$HIST2D" \
   "$SCATTER_COLORS" "$VIOLIN" "$VIOLIN_H" "$STACK_BASELINE" "$BAR_ERRORS" \
+  "$STEP_FILL" "$HIST_EDGES" \
   "$BAR_WIDTH" "$BARS_GROUPED" "$BARH_HATCH" "$ANNOTATIONS" "$BROKEN_BARH" \
   "$PIE_EXPLODE" "$PIE_ROTATED" "$HEATMAP_EXTENT" "$CONTOUR_COORDS" \
   "$ASPECT" "$MINOR_SUB" "$EVENT" "$HIST_STYLES" "$BOX_H" "$IMSHOW"; do

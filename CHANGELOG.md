@@ -54,13 +54,26 @@
   shared hatch patterns. Masked fill runs keep their hatch, and spans export
   the resolved hatch through their series style;
 - `fig:title` accepts `fontsize` and `color` for Cartesian, pie, polar, and
-  subplot titles. Scenes export `title_fontsize` and `title_color`.
+  subplot titles. Scenes export `title_fontsize` and `title_color`;
+- `fig:pie`/`fig:donut` accept `edgecolor` and `linewidth` for wedge outlines.
+  Defaults remain the existing white 1.5-pixel stroke, and pie scenes export
+  both fields;
+- `fig:scatter` and `fig:polar_scatter` accept per-point `edgecolor` arrays.
+  The resolved outline colors are exported as `style.edgecolors`;
+- `fig:errorbar` accepts `lolims`/`uplims` as booleans or per-point arrays,
+  replacing the corresponding caps with down/up arrowheads. SVG and scenes
+  report the limit arrays;
+- `fig:step` accepts `fill = true` and `fillalpha` to draw a `step-fill` area
+  to the zero baseline. Scenes export both fields;
+- `fig:hist` accepts an explicit increasing edge list as `bins`; density uses
+  each bin's own width, and explicit edges cannot be combined with `range`.
   Existing examples and visual QA cover per-bar colors, annotation
-  backgrounds/rotation, label padding, pie distances/rotation, complete hist2d
-  grids, per-point markers/alpha, errorbar/stem marker styling, horizontal
-  stems/violins, quiver angle modes, tick/title styling, event line styles,
-  and fill/span/histogram hatches. The dependency-free suite grows from 410 to
-  474 tests. Existing Cartesian APIs remain compatible, polar rendering is
+  backgrounds/rotation, label padding, pie distances/rotation/edges, complete
+  hist2d grids, per-point markers/alpha/edges, errorbar/stem marker styling and
+  limits, horizontal stems/violins, quiver angle modes, tick/title styling,
+  event line styles, filled steps, explicit histogram edges, and
+  fill/span/histogram hatches. The dependency-free suite grows from 410 to 489
+  tests. Existing Cartesian APIs remain compatible, polar rendering is
   unchanged, and there are no new runtime dependencies.
 
 ## 4.28.0

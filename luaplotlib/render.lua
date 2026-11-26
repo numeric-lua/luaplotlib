@@ -992,12 +992,18 @@ local function render_scatter(series, map_x, map_y, buf)
     local color = style.colors and style.colors[i] or style.color
     local marker = style.markers and style.markers[i] or style.marker
     local alpha = style.alphas and style.alphas[i] or style.alpha
-    local fade, point_outline = "", outline
+    local edge = style.edgecolors and style.edgecolors[i] or style.edgecolor
+    local point_outline = ""
+    if edge ~= nil then
+      point_outline = string.format(' stroke="%s" stroke-width="%s"',
+        edge, util.fmt(style.linewidth))
+    end
+    local fade = ""
     if alpha < 1 then
       local opacity = util.fmt(alpha)
       fade = string.format(' fill-opacity="%s"', opacity)
-      if outline ~= "" then
-        point_outline = outline ..
+      if point_outline ~= "" then
+        point_outline = point_outline ..
           string.format(' stroke-opacity="%s"', opacity)
       end
     end
@@ -1267,8 +1273,15 @@ local function render_errorbar(series, map_x, map_y, buf)
   end
   local every = series.errorevery or 1
   local drawn = math.floor((#series.x - 1) / every) + 1
+  local any_lolims, any_uplims = false, false
+  for index = 1, #series.x do
+    if series.lolims and series.lolims[index] then any_lolims = true end
+    if series.uplims and series.uplims[index] then any_uplims = true end
+  end
   local metadata = string.format(
-    ' data-errorevery="%d" data-error-points="%d"', every, drawn)
+    ' data-errorevery="%d" data-error-points="%d" data-lolims="%s" data-uplims="%s"',
+    every, drawn, any_lolims and "true" or "false",
+    any_uplims and "true" or "false")
   if series.yerr_asymmetric then metadata = metadata .. ' data-yerr-mode="asymmetric"' end
   if series.xerr_asymmetric then metadata = metadata .. ' data-xerr-mode="asymmetric"' end
   buf[#buf + 1] = string.format('  <g class="series series-errorbar"%s%s>',
@@ -1289,14 +1302,30 @@ local function render_errorbar(series, map_x, map_y, buf)
         '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
         util.fmt(x), util.fmt(top), util.fmt(x), util.fmt(bottom), color,
         util.fmt(width))
-      buf[#buf + 1] = string.format(
-        '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-        util.fmt(x - cap), util.fmt(top), util.fmt(x + cap), util.fmt(top),
-        color, util.fmt(width))
-      buf[#buf + 1] = string.format(
-        '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-        util.fmt(x - cap), util.fmt(bottom), util.fmt(x + cap),
-        util.fmt(bottom), color, util.fmt(width))
+      if series.uplims and series.uplims[i] then
+        buf[#buf + 1] = string.format(
+          '   <polygon class="errorbar-limit-upper" points="%s,%s %s,%s %s,%s" fill="%s"/>',
+          util.fmt(x), util.fmt(top), util.fmt(x - cap * 0.5),
+          util.fmt(top + cap), util.fmt(x + cap * 0.5),
+          util.fmt(top + cap), color)
+      else
+        buf[#buf + 1] = string.format(
+          '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+          util.fmt(x - cap), util.fmt(top), util.fmt(x + cap), util.fmt(top),
+          color, util.fmt(width))
+      end
+      if series.lolims and series.lolims[i] then
+        buf[#buf + 1] = string.format(
+          '   <polygon class="errorbar-limit-lower" points="%s,%s %s,%s %s,%s" fill="%s"/>',
+          util.fmt(x), util.fmt(bottom), util.fmt(x - cap * 0.5),
+          util.fmt(bottom - cap), util.fmt(x + cap * 0.5),
+          util.fmt(bottom - cap), color)
+      else
+        buf[#buf + 1] = string.format(
+          '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+          util.fmt(x - cap), util.fmt(bottom), util.fmt(x + cap),
+          util.fmt(bottom), color, util.fmt(width))
+      end
       if series.xerr then
         local left = map_x(series.x[i] - xerr_lower)
         local right = map_x(series.x[i] + xerr_upper)
@@ -1616,8 +1645,25 @@ local function render_step(series, map_x, map_y, buf)
       metadata = metadata .. ' data-complementary="true"'
     end
   end
+  if series.fill then metadata = metadata .. ' data-fill="true"' end
   buf[#buf + 1] = string.format('  <g class="series series-step"%s>',
     metadata)
+  if series.fill then
+    local baseline = map_y(0)
+    local polygon = {}
+    for index = 1, #xs do
+      polygon[#polygon + 1] = util.fmt(map_x(xs[index])) .. "," ..
+        util.fmt(ys[index])
+    end
+    for index = #xs, 1, -1 do
+      polygon[#polygon + 1] = util.fmt(map_x(xs[index])) .. "," ..
+        util.fmt(baseline)
+    end
+    buf[#buf + 1] = string.format(
+      '   <polygon class="step-fill" points="%s" fill="%s" fill-opacity="%s" stroke="none"/>',
+      table.concat(polygon, " "), series.style.color,
+      util.fmt(series.fillalpha or 0.2))
+  end
   render_line({ x = xs, y = ys, style = series.style, kind = "line" },
     map_x, map_y, buf)
   buf[#buf + 1] = '  </g>'
@@ -2237,10 +2283,11 @@ function M.to_pie_svg(fig)
           util.fmt(x1 + 4), util.fmt(y1 + 4), util.fmt(radius),
           util.fmt(radius), large, util.fmt(x2 + 4), util.fmt(y2 + 4)))
       end
-      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="%s" stroke="#ffffff" stroke-width="1.5"/>',
+      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d 1 %s %s Z" fill="%s" stroke="%s" stroke-width="%s"/>',
         util.fmt(slice.explode or 0), util.fmt(slice_cx), util.fmt(slice_cy),
         util.fmt(x1), util.fmt(y1), util.fmt(radius), util.fmt(radius),
-        large, util.fmt(x2), util.fmt(y2), slice.color))
+        large, util.fmt(x2), util.fmt(y2), slice.color,
+        pie.edgecolor or "#ffffff", util.fmt(pie.linewidth or 1.5)))
       if pie.autopct then
         local tx, ty = pie_point(slice_cx, slice_cy, radius * (pie.pctdistance or 0.64), middle)
         local format_string = pie.autopct == true and "%.1f%%" or pie.autopct

@@ -27,6 +27,8 @@ fig:pie({ 31, 24, 21, 14, 10 }, {
   startangle = 110,
   radius = 0.24,
   labeldistance = 1.16,
+  edgecolor = "#1f2937",
+  linewidth = 1.2,
   rotatelabels = true,
   autopct = true,
 })

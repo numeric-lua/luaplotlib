@@ -68,6 +68,8 @@ luajit examples/heatmap.lua
 luajit examples/minor_subdivisions.lua
 luajit examples/eventplot_layout.lua
 luajit examples/hist_styles.lua
+luajit examples/hist_edges.lua
+luajit examples/step_fill.lua
 luajit examples/violinplot.lua
 luajit examples/violin_horizontal.lua
 luajit examples/boxplot_horizontal.lua
@@ -358,6 +360,24 @@ and shaded spans use the shared hatch patterns. `title` now accepts
 `fontsize`/`color` for Cartesian, pie, polar, and subplot titles; scenes export
 the resolved style.
 
+Wedge outlines, per-point scatter edges, limit arrows, filled steps, and
+explicit histogram edges are also additive:
+
+```lua
+fig:pie(values, { edgecolor = "#1f2937", linewidth = 1.2 })
+fig:scatter(x, y, { edgecolor = { "#ffffff", "#0f172a" } })
+fig:errorbar(x, y, yerr, {
+  lolims = { true, false, false }, uplims = { false, true, false },
+})
+fig:step(x, y, { fill = true, fillalpha = 0.28 })
+fig:hist(values, { bins = { 0, 1, 2.5, 4, 6 } })
+```
+
+`edgecolor` on scatter may be a per-point array. Errorbar `lolims`/`uplims`
+replace the corresponding caps with arrowheads. Filled steps draw an area to
+the zero baseline. Histogram `bins` may be a count or an explicit increasing
+edge list; density accounts for each bin's actual width.
+
 Scatter alpha, horizontal stems, quiver projection, tick styling, and histogram
 hatches are also additive:
 
@@ -590,16 +610,18 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
   `fig:savefig(path)`
 - Line plots with colors, dashes, marker face/edge styling, labels, and alpha
-- Scatter plots with per-point markers, colors, sizes, and alpha, or numeric
-  `c` values mapped through the heat palette and an optional colorbar
-- Histograms with configurable bins, ranges, `bar`/`step`/`stepfilled`
-  outlines, and outline widths, plus rectangular `hist2d` counts/densities with
-  explicit grids, optional empty cells, value limits, and colorbars
+- Scatter plots with per-point markers, colors, edge colors, sizes, and alpha,
+  or numeric `c` values mapped through the heat palette and an optional
+  colorbar
+- Histograms with configurable counts/ranges or explicit bin edges,
+  `bar`/`step`/`stepfilled` outlines, widths, and hatches, plus rectangular
+  `hist2d` counts/densities with explicit grids, optional empty cells, value
+  limits, and colorbars
 - Vertical and horizontal bars with numeric positions or categorical labels,
   including multi-series grouped and stacked bars, per-bar color lists,
   configurable outline widths and hatches, and symmetric/asymmetric error bars
-- Pie and donut charts with exploded slices, soft shadows, distance-tuned or
-  rotated labels, and percentage annotations
+- Pie and donut charts with exploded slices, soft shadows, configurable wedge
+  outlines, distance-tuned or rotated labels, and percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional mean markers or
   mean lines
@@ -617,7 +639,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Text annotations with optional leader arrows, rotation, and background boxes
   at Cartesian or polar data coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
-  and upper extents, optional `errorevery` decimation, and configurable caps
+  and upper extents, optional `errorevery` decimation, configurable caps, and
+  lower/upper limit arrowheads
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
@@ -672,8 +695,9 @@ errorbar-stride, ecdf-complementary, per-bar-color, annotation-background,
 label-padding, pie-distance, hist2d-empty, scatter-marker, annotation-rotation,
 error-stem-marker, event-linestyle, barh-hatch, scatter-alpha, stem-horizontal,
 quiver-uv, tick-style, hist-hatch, violin-horizontal, pie-rotation,
-fill-hatch, span-hatch, title-style, image-alpha, and equal-aspect metadata,
-and confirms that Cartesian examples stay Cartesian.
+fill-hatch, span-hatch, title-style, pie-edge, scatter-edge, errorbar-limit,
+step-fill, hist-edges, image-alpha, and equal-aspect metadata, and confirms
+that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -713,6 +737,8 @@ make examples
 # examples/output/minor-subdivisions.svg
 # examples/output/eventplot-layout.svg
 # examples/output/hist-styles.svg
+# examples/output/hist-edges.svg
+# examples/output/step-fill.svg
 # examples/output/boxplot-horizontal.svg
 # examples/output/imshow-colorbar.svg
 # examples/output/bars-grouped.svg
@@ -744,9 +770,11 @@ canvas clamping, measured-text polar legends, annotations, asymmetric error
 bars, linear/log/date axes, twin x/y axes, configurable minor subdivisions,
 per-row event colors, event lane labels, box/violin means, broken horizontal
 bars, pie explode/shadow, configurable bar/histogram outlines, marker
-face/edge styling, per-point scatter markers and alpha, annotation
+face/edge styling, per-point scatter markers/alpha/edges, annotation
 rotation/backgrounds, horizontal stems, quiver uv angles, tick/title label
-styling, horizontal violins, rotated pie labels, fill/span hatches,
+styling, horizontal violins, rotated pie labels, pie wedge outlines,
+fill/span/step hatches and fills, errorbar limit arrows, explicit histogram
+edges,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
 multi-series colors, label padding, pie label/pct
@@ -805,8 +833,9 @@ See
   empty cells unless `show_empty = true`, and bar `yerr` takes one error
   specification per value series rather than a freely mixed per-bar error
   matrix. Histogram hatching is unavailable for stepped outlines, which have no
-  fill. Fill/span hatches use one shared pattern per series; rotated pie labels
-  may still need a larger canvas or label distance for crowded slices.
+  fill, and explicit histogram edges cannot be combined with `range`.
+  Fill/span hatches use one shared pattern per series; rotated pie labels may
+  still need a larger canvas or label distance for crowded slices.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

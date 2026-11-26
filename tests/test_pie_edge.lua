@@ -1,0 +1,32 @@
+local plt = require("luaplotlib")
+
+test("pie slices keep the default white edge", function()
+  local fig = plt.figure()
+  fig:pie({ 1, 2 })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'class="pie-slice"')
+  assert_contains(svg, 'stroke="#ffffff" stroke-width="1.5"')
+  assert_equal(fig:to_scene().pie.edgecolor, "#ffffff")
+  assert_equal(fig:to_scene().pie.linewidth, 1.5)
+end)
+
+test("pie wedge edge color and width are configurable", function()
+  local fig = plt.figure()
+  fig:pie({ 1, 2, 3 }, {
+    edgecolor = "#1f2937", linewidth = 3,
+  })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'stroke="#1f2937" stroke-width="3"')
+  assert_equal(fig:to_scene().pie.edgecolor, "#1f2937")
+  assert_equal(fig:to_scene().pie.linewidth, 3)
+end)
+
+test("pie edge options validate color and width", function()
+  local fig = plt.figure()
+  assert_error("edgecolor", function()
+    fig:pie({ 1, 2 }, { edgecolor = "12bad" })
+  end)
+  assert_error("linewidth must be >= 0", function()
+    fig:pie({ 1, 2 }, { linewidth = -1 })
+  end)
+end)
