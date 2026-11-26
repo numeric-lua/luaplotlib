@@ -41,11 +41,13 @@ end
 
 local marker_names = { "circle", "square", "triangle", "diamond" }
 local edge_names = { "#ffffff", "#0f172a" }
-local markers, alphas, edges = {}, {}, {}
+local width_names = { 0.5, 1.2 }
+local markers, alphas, edges, widths = {}, {}, {}, {}
 for index = 1, #x do
   markers[index] = marker_names[(index - 1) % #marker_names + 1]
   alphas[index] = 0.35 + 0.65 * (((index - 1) % 10) / 9)
   edges[index] = edge_names[(index - 1) % #edge_names + 1]
+  widths[index] = width_names[(index - 1) % #width_names + 1]
 end
 
 local fig = plt.figure({ width = 800, height = 540 })
@@ -61,7 +63,7 @@ fig:scatter(x, y, {
   colorbar_label = "phase signal",
   colorbar_ticks = 5,
   edgecolor = edges,
-  linewidth = 0.8,
+  linewidth = widths,
 })
 fig:title("luaplotlib: numeric scatter colors")
 fig:xlabel("x")

@@ -56,6 +56,8 @@ fig:errorbar(x, y, yerr, xerr, {
   errorevery = 2,
   lolims = { true, false, true, false, false, false },
   uplims = { false, false, false, false, true, false },
+  xlolims = { true, false, false, false, false, false },
+  xuplims = { false, false, false, false, true, false },
 })
 fig:title("luaplotlib: error bars")
 fig:xlabel("sample")

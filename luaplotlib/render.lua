@@ -24,15 +24,17 @@ local function layout(fig)
   local width = fig.width
   local height = fig.height
   local tick_extra = math.max(0, (fig._ticklabelsize or 11) - 11)
+  local label_extra = math.max(0, math.max(
+    (fig._xlabel_fontsize or 13), (fig._ylabel_fontsize or 13)) - 13)
   local left = math.min(72, math.max(36, width * 0.14)) +
-    (fig._ylabel_pad or 0) + tick_extra
+    (fig._ylabel_pad or 0) + tick_extra + label_extra
   local right = width - math.min(28, math.max(12, width * 0.04))
   if fig._colorbar then right = right - 62 end
   if fig._twin then right = right - 58 end
   local top = math.min(48, math.max(24, height * 0.10))
   if fig._twiny then top = top + 52 end
   local bottom = height - math.min(66, math.max(36, height * 0.16)) -
-    (fig._xlabel_pad or 0) - tick_extra
+    (fig._xlabel_pad or 0) - tick_extra - label_extra
 
   if right - left < 20 or bottom - top < 20 then
     util.fail("figure is too small to render a plot area", 3)
@@ -551,32 +553,35 @@ local function find_category_ticks(fig, minimum, maximum, axis)
   return result
 end
 
-local function swatch(buf, kind, color, x, y)
+local function swatch(buf, kind, color, x, y, length)
+  length = length or 20
   if kind == "scatter" then
     buf[#buf + 1] = string.format(
       '  <circle cx="%s" cy="%s" r="4" fill="%s"/>',
-      util.fmt(x + 10), util.fmt(y), color)
+      util.fmt(x + length / 2), util.fmt(y), color)
   elseif kind == "fill" then
     buf[#buf + 1] = string.format(
-      '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
-      util.fmt(x), util.fmt(y - 4), color)
+      '  <rect x="%s" y="%s" width="%s" height="9" rx="1" fill="%s"/>',
+      util.fmt(x), util.fmt(y - 4), util.fmt(length), color)
   elseif kind == "hist" or kind == "bar" or kind == "hexbin" or
       kind == "hist2d" or kind == "violin" or kind == "broken_barh" then
     buf[#buf + 1] = string.format(
-      '  <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
-      util.fmt(x), util.fmt(y - 4), color)
+      '  <rect x="%s" y="%s" width="%s" height="9" rx="1" fill="%s"/>',
+      util.fmt(x), util.fmt(y - 4), util.fmt(length), color)
   elseif kind == "quiver" then
     buf[#buf + 1] = string.format(
       '  <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
-      util.fmt(x), util.fmt(y), util.fmt(x + 14), util.fmt(y), color)
+      util.fmt(x), util.fmt(y), util.fmt(x + length * 0.7), util.fmt(y),
+      color)
     buf[#buf + 1] = string.format(
       '  <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
-      util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
-      util.fmt(x + 13), util.fmt(y + 3.5), color)
+      util.fmt(x + length), util.fmt(y), util.fmt(x + length * 0.65),
+      util.fmt(y - 3.5), util.fmt(x + length * 0.65), util.fmt(y + 3.5),
+      color)
   else
     buf[#buf + 1] = string.format(
       '  <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
-      util.fmt(x), util.fmt(y), util.fmt(x + 20), util.fmt(y), color)
+      util.fmt(x), util.fmt(y), util.fmt(x + length), util.fmt(y), color)
   end
 end
 
@@ -608,36 +613,39 @@ local function render_legend(fig, geom, buf)
   end
 
   local opts = fig._legend_opts or { loc = "upper right", frame = true, ncol = 1 }
+  local border = opts.borderpad or 8
+  local handle = opts.handlelength or 20
   local ncol = math.max(1, math.min(opts.ncol or 1, #entries))
   local rows = math.ceil(#entries / ncol)
-  local col_width = math.min(geom.plot_width - 8,
-    math.max(88, 52 + max_chars * 6.5))
-  local box_width = math.min(geom.plot_width - 8,
-    col_width * ncol + (ncol - 1) * 8)
+  local col_width = math.min(geom.plot_width - border,
+    math.max(88, border + handle + 8 + 16 + max_chars * 6.5))
+  local box_width = math.min(geom.plot_width - border,
+    col_width * ncol + (ncol - 1) * border)
   local title_height = opts.title and 20 or 0
-  local box_height = 12 + title_height + rows * 20
+  local box_height = 2 * border - 4 + title_height + rows * 20
   local loc = opts.loc or "upper right"
   local center_x = geom.left + (geom.plot_width - box_width) / 2
   local center_y = geom.top + (geom.plot_height - box_height) / 2
   local x, y
   if loc == "upper left" then
-    x, y = geom.left + 8, geom.top + 8
+    x, y = geom.left + border, geom.top + border
   elseif loc == "upper center" then
-    x, y = center_x, geom.top + 8
+    x, y = center_x, geom.top + border
   elseif loc == "lower left" then
-    x, y = geom.left + 8, geom.bottom - box_height - 8
+    x, y = geom.left + border, geom.bottom - box_height - border
   elseif loc == "lower center" then
-    x, y = center_x, geom.bottom - box_height - 8
+    x, y = center_x, geom.bottom - box_height - border
   elseif loc == "lower right" then
-    x, y = geom.right - box_width - 8, geom.bottom - box_height - 8
+    x, y = geom.right - box_width - border,
+      geom.bottom - box_height - border
   elseif loc == "center left" then
-    x, y = geom.left + 8, center_y
+    x, y = geom.left + border, center_y
   elseif loc == "center right" then
-    x, y = geom.right - box_width - 8, center_y
+    x, y = geom.right - box_width - border, center_y
   elseif loc == "center" then
     x, y = center_x, center_y
   else
-    x, y = geom.right - box_width - 8, geom.top + 8
+    x, y = geom.right - box_width - border, geom.top + border
   end
   x = clamp(x, geom.left + 4, math.max(geom.left + 4, geom.right - box_width - 4))
   y = clamp(y, geom.top + 4, math.max(geom.top + 4, geom.bottom - box_height - 4))
@@ -647,8 +655,9 @@ local function render_legend(fig, geom, buf)
   local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
   buf[#buf + 1] = string.format(
-    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s"/>',
-    util.escape_xml(loc), util.fmt(framealpha))
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s"/>',
+    util.escape_xml(loc), util.fmt(framealpha), util.fmt(border),
+    util.fmt(handle))
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
@@ -658,18 +667,18 @@ local function render_legend(fig, geom, buf)
   if opts.title then
     buf[#buf + 1] = string.format(
       '  <text class="legend-title" x="%s" y="%s" font-size="11" font-weight="bold" fill="%s">%s</text>',
-      util.fmt(x + 8), util.fmt(y + 14), TEXT_COLOR,
+      util.fmt(x + border), util.fmt(y + border + 6), TEXT_COLOR,
       util.escape_xml(opts.title))
   end
   for i, entry in ipairs(entries) do
     local column = math.floor((i - 1) / rows) + 1
     local row = (i - 1) % rows + 1
-    local entry_x = x + 8 + (column - 1) * (col_width + 8)
-    local entry_y = y + 12 + title_height + (row - 1) * 20
-    swatch(buf, entry.kind, entry.color, entry_x, entry_y)
+    local entry_x = x + border + (column - 1) * (col_width + border)
+    local entry_y = y + (2 * border - 4) + title_height + (row - 1) * 20
+    swatch(buf, entry.kind, entry.color, entry_x, entry_y, handle)
     buf[#buf + 1] = string.format(
       '  <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
-      util.fmt(entry_x + 28), util.fmt(entry_y + 4), TEXT_COLOR,
+      util.fmt(entry_x + handle + 8), util.fmt(entry_y + 4), TEXT_COLOR,
       util.escape_xml(entry.label))
   end
   buf[#buf + 1] = ' </g>'
@@ -993,10 +1002,11 @@ local function render_scatter(series, map_x, map_y, buf)
     local marker = style.markers and style.markers[i] or style.marker
     local alpha = style.alphas and style.alphas[i] or style.alpha
     local edge = style.edgecolors and style.edgecolors[i] or style.edgecolor
+    local width = style.linewidths and style.linewidths[i] or style.linewidth
     local point_outline = ""
     if edge ~= nil then
       point_outline = string.format(' stroke="%s" stroke-width="%s"',
-        edge, util.fmt(style.linewidth))
+        edge, util.fmt(width))
     end
     local fade = ""
     if alpha < 1 then
@@ -1123,9 +1133,10 @@ local function render_hexbin(series, map_x, map_y, buf)
     opacity = string.format(' fill-opacity="%s"', util.fmt(style.alpha))
   end
   buf[#buf + 1] = string.format(
-    '  <g class="series series-hexbin" data-bins="%d" data-points="%d" data-gridsize="%d" data-mincnt="%d" data-vmin="%s" data-vmax="%s"%s>',
+    '  <g class="series series-hexbin" data-bins="%d" data-points="%d" data-gridsize="%d" data-mincnt="%d" data-norm="%s" data-vmin="%s" data-vmax="%s"%s>',
     #series.cells, series.point_count, series.gridsize, series.mincnt,
-    util.fmt(series.vmin), util.fmt(series.vmax), label)
+    series.norm or "linear", util.fmt(series.vmin), util.fmt(series.vmax),
+    label)
   local half_width = series.width / 2
   local half_height = series.radius / 2
   for _, cell in ipairs(series.cells) do
@@ -1144,7 +1155,8 @@ local function render_hexbin(series, map_x, map_y, buf)
     buf[#buf + 1] = string.format(
       '   <polygon class="hexbin-cell" data-row="%d" data-col="%d" data-count="%d" data-x="%s" data-y="%s" points="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       cell.row, cell.column, cell.count, util.fmt(cell.x), util.fmt(cell.y),
-      points, colors.heat(cell.count, series.vmin, series.vmax),
+      points, colors.heat(cell.color_value or cell.count,
+        series.color_vmin or series.vmin, series.color_vmax or series.vmax),
       series.edgecolor, util.fmt(series.linewidth), opacity)
   end
   buf[#buf + 1] = '  </g>'
@@ -1157,8 +1169,14 @@ local function colorbar_values(series)
   local count = series.colorbar_ticks or 3
   local values = {}
   for index = 1, count do
-    values[index] = series.vmin +
-      (series.vmax - series.vmin) * (index - 1) / (count - 1)
+    local fraction = (index - 1) / (count - 1)
+    if series.norm == "log" then
+      values[index] = math.exp(math.log(1 + series.vmin) +
+        (math.log(1 + series.vmax) - math.log(1 + series.vmin)) * fraction) - 1
+    else
+      values[index] = series.vmin +
+        (series.vmax - series.vmin) * fraction
+    end
   end
   return values, "uniform"
 end
@@ -1174,7 +1192,13 @@ local function render_value_colorbar(series, geom, buf, class_name,
   local y = geom.top
   local width = 16
   local height = geom.plot_height
-  local span = series.vmax - series.vmin
+  local color_vmin = series.color_vmin or series.vmin
+  local color_vmax = series.color_vmax or series.vmax
+  local span = color_vmax - color_vmin
+  local function transform(value)
+    if series.norm == "log" then return math.log(1 + value) end
+    return value
+  end
   buf[#buf + 1] = string.format(
     '  <g class="%s" data-orientation="vertical" data-vmin="%s" data-vmax="%s" data-ticks="%d" data-tick-source="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s"%s>',
     class_name, util.fmt(series.vmin), util.fmt(series.vmax), #values, source,
@@ -1182,13 +1206,12 @@ local function render_value_colorbar(series, geom, buf, class_name,
     extra_attributes or "")
   local steps = 40
   for index = 1, steps do
-    local value = series.vmax - (series.vmax - series.vmin) *
-      ((index - 0.5) / steps)
+    local value = color_vmax - span * ((index - 0.5) / steps)
     buf[#buf + 1] = string.format(
       '   <rect class="colorbar-step" x="%s" y="%s" width="%s" height="%s" fill="%s"/>',
       util.fmt(x), util.fmt(y + height * (index - 1) / steps),
       util.fmt(width), util.fmt(height / steps + 0.5),
-      colors.heat(value, series.vmin, series.vmax))
+      colors.heat(value, color_vmin, color_vmax))
   end
   buf[#buf + 1] = string.format(
     '   <rect class="colorbar-frame" x="%s" y="%s" width="%s" height="%s" fill="none" stroke="%s" stroke-width="1"/>',
@@ -1196,7 +1219,7 @@ local function render_value_colorbar(series, geom, buf, class_name,
     util.fmt(height + 1), AXIS_COLOR)
   local maximum_label = 0
   for _, value in ipairs(values) do
-    local fraction = span == 0 and 0 or (value - series.vmin) / span
+    local fraction = span == 0 and 0 or (transform(value) - color_vmin) / span
     local tick_y = y + height - height * fraction
     local label = util.fmt_tick(value)
     local measured = #label * 6
@@ -1274,14 +1297,18 @@ local function render_errorbar(series, map_x, map_y, buf)
   local every = series.errorevery or 1
   local drawn = math.floor((#series.x - 1) / every) + 1
   local any_lolims, any_uplims = false, false
+  local any_xlolims, any_xuplims = false, false
   for index = 1, #series.x do
     if series.lolims and series.lolims[index] then any_lolims = true end
     if series.uplims and series.uplims[index] then any_uplims = true end
+    if series.xlolims and series.xlolims[index] then any_xlolims = true end
+    if series.xuplims and series.xuplims[index] then any_xuplims = true end
   end
   local metadata = string.format(
-    ' data-errorevery="%d" data-error-points="%d" data-lolims="%s" data-uplims="%s"',
+    ' data-errorevery="%d" data-error-points="%d" data-lolims="%s" data-uplims="%s" data-xlolims="%s" data-xuplims="%s"',
     every, drawn, any_lolims and "true" or "false",
-    any_uplims and "true" or "false")
+    any_uplims and "true" or "false", any_xlolims and "true" or "false",
+    any_xuplims and "true" or "false")
   if series.yerr_asymmetric then metadata = metadata .. ' data-yerr-mode="asymmetric"' end
   if series.xerr_asymmetric then metadata = metadata .. ' data-xerr-mode="asymmetric"' end
   buf[#buf + 1] = string.format('  <g class="series series-errorbar"%s%s>',
@@ -1334,14 +1361,30 @@ local function render_errorbar(series, map_x, map_y, buf)
           '   <line class="errorbar" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
           util.fmt(left), util.fmt(center), util.fmt(right), util.fmt(center),
           color, util.fmt(width))
-        buf[#buf + 1] = string.format(
-          '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-          util.fmt(left), util.fmt(center - cap), util.fmt(left),
-          util.fmt(center + cap), color, util.fmt(width))
-        buf[#buf + 1] = string.format(
-          '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
-          util.fmt(right), util.fmt(center - cap), util.fmt(right),
-          util.fmt(center + cap), color, util.fmt(width))
+        if series.xlolims and series.xlolims[i] then
+          buf[#buf + 1] = string.format(
+            '   <polygon class="errorbar-limit-left" points="%s,%s %s,%s %s,%s" fill="%s"/>',
+            util.fmt(left), util.fmt(center), util.fmt(left + cap),
+            util.fmt(center - cap * 0.5), util.fmt(left + cap),
+            util.fmt(center + cap * 0.5), color)
+        else
+          buf[#buf + 1] = string.format(
+            '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+            util.fmt(left), util.fmt(center - cap), util.fmt(left),
+            util.fmt(center + cap), color, util.fmt(width))
+        end
+        if series.xuplims and series.xuplims[i] then
+          buf[#buf + 1] = string.format(
+            '   <polygon class="errorbar-limit-right" points="%s,%s %s,%s %s,%s" fill="%s"/>',
+            util.fmt(right), util.fmt(center), util.fmt(right - cap),
+            util.fmt(center - cap * 0.5), util.fmt(right - cap),
+            util.fmt(center + cap * 0.5), color)
+        else
+          buf[#buf + 1] = string.format(
+            '   <line class="errorbar-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"/>',
+            util.fmt(right), util.fmt(center - cap), util.fmt(right),
+            util.fmt(center + cap), color, util.fmt(width))
+        end
       end
     end
   end
@@ -2943,16 +2986,18 @@ function M.to_svg(fig)
   add('   </g>')
 
   if fig._xlabel ~= nil then
-    printf('   <text class="xlabel" x="%s" y="%s" font-size="13" fill="%s" text-anchor="middle">%s</text>',
+    printf('   <text class="xlabel" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle">%s</text>',
       util.fmt(geom.left + geom.plot_width / 2), util.fmt(geom.height - 14),
-      TEXT_COLOR, util.escape_xml(fig._xlabel))
+      util.fmt(fig._xlabel_fontsize or 13),
+      fig._xlabel_color or TEXT_COLOR, util.escape_xml(fig._xlabel))
   end
 
   if fig._ylabel ~= nil then
     local center_y = geom.top + geom.plot_height / 2
     local x = 18
-    printf('   <text class="ylabel" x="%s" y="%s" font-size="13" fill="%s" text-anchor="middle" transform="rotate(-90 %s %s)">%s</text>',
-      util.fmt(x), util.fmt(center_y), TEXT_COLOR,
+    printf('   <text class="ylabel" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle" transform="rotate(-90 %s %s)">%s</text>',
+      util.fmt(x), util.fmt(center_y),
+      util.fmt(fig._ylabel_fontsize or 13), fig._ylabel_color or TEXT_COLOR,
       util.fmt(x), util.fmt(center_y), util.escape_xml(fig._ylabel))
   end
 

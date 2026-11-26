@@ -62,8 +62,12 @@ fig:title("luaplotlib: line plot", {
   fontsize = 20,
   color = "#0f172a",
 })
-fig:xlabel("x (radians)", { labelpad = 10 })
-fig:ylabel("value", { labelpad = 8 })
+fig:xlabel("x (radians)", {
+  labelpad = 10, fontsize = 15, color = "#334155",
+})
+fig:ylabel("value", {
+  labelpad = 8, fontsize = 15, color = "#334155",
+})
 fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
 fig:ticklabelsize(12)
@@ -75,6 +79,8 @@ fig:legend({
   framealpha = 0.85,
   facecolor = "#f8fafc",
   edgecolor = "#94a3b8",
+  borderpad = 11,
+  handlelength = 26,
 })
 
 local path = outdir .. "/line.svg"

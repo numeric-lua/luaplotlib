@@ -32,6 +32,7 @@ local function copy_style(style)
     markers = style.markers and copy_array(style.markers) or nil,
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
+    linewidths = style.linewidths and copy_array(style.linewidths) or nil,
     hatch = style.hatch,
     markevery = style.markevery and copy_array(style.markevery) or nil,
     markerfacecolor = style.markerfacecolor,
@@ -145,6 +146,10 @@ function M.from_figure(figure)
     ylabel = figure._ylabel,
     xlabel_pad = figure._xlabel_pad or 0,
     ylabel_pad = figure._ylabel_pad or 0,
+    xlabel_fontsize = figure._xlabel_fontsize or 13,
+    ylabel_fontsize = figure._ylabel_fontsize or 13,
+    xlabel_color = figure._xlabel_color or "#222222",
+    ylabel_color = figure._ylabel_color or "#222222",
     xscale = figure._xscale or "linear",
     yscale = figure._yscale or "linear",
     xtick_rotation = figure._xtick_rotation or 0,
@@ -196,6 +201,8 @@ function M.from_figure(figure)
       framealpha = opts.framealpha or 0.92,
       facecolor = opts.facecolor or "#ffffff",
       edgecolor = opts.edgecolor or "#bbbbbb",
+      borderpad = opts.borderpad or 8,
+      handlelength = opts.handlelength or 20,
       ncol = opts.ncol or 1,
       title = opts.title,
     }
@@ -331,6 +338,7 @@ function M.from_figure(figure)
           x = cell.x,
           y = cell.y,
           count = cell.count,
+          color_value = cell.color_value or cell.count,
         }
         copy.counts[index] = cell.count
         local left = cell.x - series.width / 2
@@ -349,6 +357,9 @@ function M.from_figure(figure)
       copy.point_count = series.point_count
       copy.vmin = series.vmin
       copy.vmax = series.vmax
+      copy.norm = series.norm or "linear"
+      copy.color_vmin = series.color_vmin or series.vmin
+      copy.color_vmax = series.color_vmax or series.vmax
       copy.colorbar = series.colorbar and true or false
       copy.colorbar_label = series.colorbar_label
       copy.colorbar_ticks = series.colorbar_ticks
@@ -361,6 +372,8 @@ function M.from_figure(figure)
       copy.errorevery = series.errorevery or 1
       if series.lolims ~= nil then copy.lolims = copy_array(series.lolims) end
       if series.uplims ~= nil then copy.uplims = copy_array(series.uplims) end
+      if series.xlolims ~= nil then copy.xlolims = copy_array(series.xlolims) end
+      if series.xuplims ~= nil then copy.xuplims = copy_array(series.xuplims) end
       copy.yerr = copy_array(series.yerr_upper or series.yerr)
       copy.yerr_lower = copy_array(series.yerr_lower or series.yerr)
       copy.yerr_upper = copy_array(series.yerr_upper or series.yerr)

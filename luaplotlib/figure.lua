@@ -378,6 +378,7 @@ local HEXBIN_OPTIONS = {
   mincnt = true,
   vmin = true,
   vmax = true,
+  norm = true,
   colorbar = true,
   colorbar_label = true,
   colorbar_ticks = true,
@@ -429,6 +430,8 @@ local ERRORBAR_OPTIONS = {
   errorevery = true,
   lolims = true,
   uplims = true,
+  xlolims = true,
+  xuplims = true,
 }
 
 local ANNOTATE_OPTIONS = {
@@ -946,6 +949,10 @@ function Figure.new(opts)
     _ylabel = nil,
     _xlabel_pad = 0,
     _ylabel_pad = 0,
+    _xlabel_fontsize = 13,
+    _ylabel_fontsize = 13,
+    _xlabel_color = "#222222",
+    _ylabel_color = "#222222",
     _xlim = nil,
     _ylim = nil,
     _xscale = checked_scale(opts.xscale, "figure xscale", true),
@@ -962,6 +969,7 @@ function Figure.new(opts)
     _legend_opts = {
       loc = "upper right", frame = true, framealpha = 0.92,
       facecolor = "#ffffff", edgecolor = "#bbbbbb",
+      borderpad = 8, handlelength = 20,
     },
     _category_ticks = nil,
     _category_axis = "x",
@@ -1255,8 +1263,19 @@ function Figure:polar_scatter(theta, r, opts)
     radius = util.check_number(radius_arg, "polar scatter size", 0.1)
   end
 
+  local point_linewidths
   local linewidth = 1
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    if #opts.linewidth ~= #tv then
+      fail("polar scatter linewidth array must match the number of points")
+    end
+    point_linewidths = {}
+    for index = 1, #opts.linewidth do
+      point_linewidths[index] = util.check_number(opts.linewidth[index],
+        "polar scatter linewidth[" .. index .. "]", 0)
+    end
+    linewidth = point_linewidths[1] or 1
+  elseif opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "polar scatter linewidth", 0)
   end
 
@@ -1319,6 +1338,7 @@ function Figure:polar_scatter(theta, r, opts)
   style.edgecolors = point_edgecolors
   style.alphas = point_alphas
   style.linewidth = linewidth
+  style.linewidths = point_linewidths
 
   local state = ensure_polar_state(self)
   state.series[#state.series + 1] = {
@@ -2061,8 +2081,19 @@ function Figure:scatter(x, y, opts)
     radius = util.check_number(radius_arg, "scatter size", 0.1)
   end
 
+  local point_linewidths
   local linewidth = 1
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    if #opts.linewidth ~= #xv then
+      fail("scatter linewidth array must match the number of points")
+    end
+    point_linewidths = {}
+    for index = 1, #opts.linewidth do
+      point_linewidths[index] = util.check_number(opts.linewidth[index],
+        "scatter linewidth[" .. index .. "]", 0)
+    end
+    linewidth = point_linewidths[1] or 1
+  elseif opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "scatter linewidth", 0)
   end
 
@@ -2161,6 +2192,7 @@ function Figure:scatter(x, y, opts)
   style.edgecolors = point_edgecolors
   style.alphas = point_alphas
   style.linewidth = linewidth
+  style.linewidths = point_linewidths
 
   if colorbar then self._colorbar = true end
   self._series[#self._series + 1] = {
@@ -2743,6 +2775,21 @@ function Figure:hexbin(x, y, opts)
   if vmax <= vmin then
     fail("hexbin vmax must be greater than vmin")
   end
+  local norm = opts.norm or "linear"
+  if norm ~= "linear" and norm ~= "log" then
+    fail("hexbin norm must be 'linear' or 'log'")
+  end
+  if norm == "log" and vmin < 0 then
+    fail("hexbin log norm requires vmin >= 0")
+  end
+  local color_vmin = norm == "log" and math.log(1 + vmin) or vmin
+  local color_vmax = norm == "log" and math.log(1 + vmax) or vmax
+  if color_vmax <= color_vmin then
+    fail("hexbin color range must be positive")
+  end
+  for _, bin in ipairs(cells) do
+    bin.color_value = norm == "log" and math.log(1 + bin.count) or bin.count
+  end
 
   local colorbar = opts.colorbar
   if colorbar == nil then colorbar = true end
@@ -2770,6 +2817,9 @@ function Figure:hexbin(x, y, opts)
       colorbar_tick_values[index] = util.check_number(
         opts.colorbar_tick_values[index],
         "hexbin colorbar_tick_values[" .. index .. "]")
+      if norm == "log" and colorbar_tick_values[index] < 0 then
+        fail("hexbin log norm requires non-negative colorbar tick values")
+      end
     end
   end
 
@@ -2791,6 +2841,9 @@ function Figure:hexbin(x, y, opts)
     cells = cells,
     vmin = vmin,
     vmax = vmax,
+    norm = norm,
+    color_vmin = color_vmin,
+    color_vmax = color_vmax,
     gridsize = gridsize,
     mincnt = mincnt,
     width = width,
@@ -3319,6 +3372,7 @@ function Figure:twinx()
     _legend_opts = {
       loc = "upper right", frame = true, framealpha = 0.92,
       facecolor = "#ffffff", edgecolor = "#bbbbbb",
+      borderpad = 8, handlelength = 20,
     },
   }, Figure)
   self._twin = twin
@@ -4496,6 +4550,10 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   end
   local lolims = checked_limit_flags(opts.lolims, #xv, "errorbar lolims")
   local uplims = checked_limit_flags(opts.uplims, #xv, "errorbar uplims")
+  local xlolims = checked_limit_flags(opts.xlolims, #xv,
+    "errorbar xlolims")
+  local xuplims = checked_limit_flags(opts.xuplims, #xv,
+    "errorbar xuplims")
 
   local style = checked_style(self, opts, "errorbar")
   style.linewidth = linewidth
@@ -4526,6 +4584,8 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
     errorevery = errorevery,
     lolims = lolims,
     uplims = uplims,
+    xlolims = xlolims,
+    xuplims = xuplims,
     style = style,
   }
   return self
@@ -4612,28 +4672,50 @@ end
 function Figure:xlabel(text, opts)
   util.check_string(text, "xlabel", true)
   local pad = self._xlabel_pad or 0
+  local fontsize = self._xlabel_fontsize or 13
+  local color = self._xlabel_color or "#222222"
   if opts ~= nil then
-    opts = util.check_options(opts, { labelpad = true }, "xlabel")
+    opts = util.check_options(opts,
+      { labelpad = true, fontsize = true, color = true }, "xlabel")
     if opts.labelpad ~= nil then
       pad = util.check_number(opts.labelpad, "xlabel labelpad", 0)
+    end
+    if opts.fontsize ~= nil then
+      fontsize = util.check_number(opts.fontsize, "xlabel fontsize", 0.1)
+    end
+    if opts.color ~= nil then
+      color = util.check_color(opts.color, "xlabel color")
     end
   end
   self._xlabel = text
   self._xlabel_pad = pad
+  self._xlabel_fontsize = fontsize
+  self._xlabel_color = color
   return self
 end
 
 function Figure:ylabel(text, opts)
   util.check_string(text, "ylabel", true)
   local pad = self._ylabel_pad or 0
+  local fontsize = self._ylabel_fontsize or 13
+  local color = self._ylabel_color or "#222222"
   if opts ~= nil then
-    opts = util.check_options(opts, { labelpad = true }, "ylabel")
+    opts = util.check_options(opts,
+      { labelpad = true, fontsize = true, color = true }, "ylabel")
     if opts.labelpad ~= nil then
       pad = util.check_number(opts.labelpad, "ylabel labelpad", 0)
+    end
+    if opts.fontsize ~= nil then
+      fontsize = util.check_number(opts.fontsize, "ylabel fontsize", 0.1)
+    end
+    if opts.color ~= nil then
+      color = util.check_color(opts.color, "ylabel color")
     end
   end
   self._ylabel = text
   self._ylabel_pad = pad
+  self._ylabel_fontsize = fontsize
+  self._ylabel_color = color
   return self
 end
 
@@ -4966,6 +5048,8 @@ function Figure:legend(opts)
       framealpha = true,
       facecolor = true,
       edgecolor = true,
+      borderpad = true,
+      handlelength = true,
       ncol = true,
       title = true,
     }, "legend")
@@ -4997,12 +5081,23 @@ function Figure:legend(opts)
     if opts.edgecolor ~= nil then
       edgecolor = util.check_color(opts.edgecolor, "legend edgecolor")
     end
+    local borderpad = self._legend_opts.borderpad or 8
+    if opts.borderpad ~= nil then
+      borderpad = util.check_number(opts.borderpad, "legend borderpad", 0)
+    end
+    local handlelength = self._legend_opts.handlelength or 20
+    if opts.handlelength ~= nil then
+      handlelength = util.check_number(opts.handlelength,
+        "legend handlelength", 0)
+    end
     self._legend_opts = {
       loc = opts.loc or self._legend_opts.loc,
       frame = opts.frame == nil and self._legend_opts.frame or opts.frame,
       framealpha = framealpha,
       facecolor = facecolor,
       edgecolor = edgecolor,
+      borderpad = borderpad,
+      handlelength = handlelength,
       ncol = ncol,
       title = opts.title == nil and self._legend_opts.title or opts.title,
     }

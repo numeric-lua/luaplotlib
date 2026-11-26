@@ -49,6 +49,7 @@ fig:hexbin(x, y, {
   colorbar = true,
   colorbar_label = "points per cell",
   colorbar_ticks = 5,
+  norm = "log",
   edgecolor = "#ffffff",
   linewidth = 0.6,
   alpha = 0.95,

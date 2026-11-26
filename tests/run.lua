@@ -277,6 +277,11 @@ local test_files = {
   "test_errorbar_limits.lua",
   "test_step_fill.lua",
   "test_hist_edges.lua",
+  "test_axis_label_style.lua",
+  "test_legend_spacing.lua",
+  "test_errorbar_xlimits.lua",
+  "test_scatter_linewidths.lua",
+  "test_hexbin_norm.lua",
   "test_export.lua",
 }
 

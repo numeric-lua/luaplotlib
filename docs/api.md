@@ -291,6 +291,8 @@ circle around the data point. `capsize = 0` suppresses the end caps.
 | `capsize` | number ≥ 0 | `4` |
 | `elinewidth` | number ≥ 0 | `1` |
 | `ecolor` | color string | same as `color` |
+| `lolims` / `uplims` | boolean or one boolean per point | `false` |
+| `xlolims` / `xuplims` | boolean or one boolean per point | `false` |
 | `errorevery` | positive integer | `1` (every point) |
 | `lolims` | boolean or one boolean per point | `false` |
 | `uplims` | boolean or one boolean per point | `false` |
@@ -514,8 +516,11 @@ Errorbar markers accept the same `markerfacecolor`, `markeredgecolor`, and
 `markeredgewidth` options as line markers. `errorevery = n` keeps every line
 vertex and marker but draws error bars only at
 the first point and every nth point after it. The group exposes
-`data-errorevery` and `data-error-points`, and scenes export `errorevery`;
-automatic limits cover the drawn error extents plus every point position.
+`data-errorevery`, `data-error-points`, and limit flags; scenes export
+`errorevery` plus the four limit arrays. `lolims`/`uplims` replace vertical
+caps with down/up arrowheads; `xlolims`/`xuplims` replace horizontal caps with
+left/right arrowheads. Automatic limits cover the drawn error extents plus
+every point position.
 
 ### `fig:scatter(x, y, opts)`
 
@@ -531,8 +536,8 @@ triangle, diamond, cross, or x, or a table with one marker name per point.
 | `markersize` | number > 0 | alias/precedence after `size` |
 | `s` | number > 0 | additional size alias |
 | `alpha` | number or per-point array in [0, 1] | `1` |
-| `edgecolor` | color string | no outline |
-| `linewidth` | number ≥ 0 | `1` when an outline is present |
+| `edgecolor` | color string or per-point color array | no outline |
+| `linewidth` | number ≥ 0 or per-point array | `1` when an outline is present |
 | `c` | numeric array matching the points | unset |
 | `vmin` / `vmax` | finite numbers with `vmax > vmin` | `c` minimum / maximum |
 | `colorbar` | boolean | `true` when `c` is set |
@@ -676,7 +681,7 @@ Each `hist2d-cell` rectangle carries `data-row`, `data-col`, `data-count`,
 `data-value`, and its source cell bounds. The colorbar group
 (`colorbar hist2d-colorbar`) reports the same norm and value range. Scene export
 includes the input arrays, edges, cells, counts, values, density flag, limits,
-and colorbar settings.
+and colorbar settings plus `norm`, `color_vmin`, and `color_vmax`.
 
 ### `fig:hexbin(x, y, opts)`
 
@@ -688,6 +693,7 @@ by its point count.
 | `gridsize` | integer in [2, 200] | `20` |
 | `mincnt` | integer ≥ 1 | `1` |
 | `vmin` / `vmax` | finite numbers with `vmax > vmin` | count range |
+| `norm` | `"linear"` or `"log"` | `"linear"` |
 | `colorbar` | boolean | `true` |
 | `colorbar_label` | string | no title |
 | `colorbar_ticks` | integer in [2, 10] | `3` |
@@ -699,15 +705,17 @@ by its point count.
 `gridsize` is the number of hexagons across the x span; the row count is
 derived from the y span so cells stay regular in data coordinates. Cells with
 fewer than `mincnt` points are omitted. Counts use the shared heat palette.
-`colorbar_ticks` and `colorbar_tick_values` are mutually exclusive.
+`norm = "log"` colors by `log(1 + count)` while vmin/vmax and colorbar labels
+remain counts; log norm requires `vmin >= 0`. `colorbar_ticks` and
+`colorbar_tick_values` are mutually exclusive.
 
 The series group exposes `data-bins`, `data-points`, `data-gridsize`,
-`data-mincnt`, `data-vmin`, and `data-vmax`. Each `hexbin-cell` polygon carries
+`data-mincnt`, `data-norm`, `data-vmin`, and `data-vmax`. Each `hexbin-cell` polygon carries
 `data-row`, `data-col`, `data-count`, `data-x`, and `data-y`. A labeled
 colorbar group (`colorbar hexbin-colorbar`) reports its value range, tick
 count/source, geometry, and per-tick `data-value`/`data-fraction`. Scene export
-includes the point arrays, filtered cells, counts, limits, and colorbar
-settings.
+includes the point arrays, filtered cells, counts, limits, `norm`,
+`color_vmin`/`color_vmax`, and colorbar settings.
 
 ### `fig:eventplot(positions[, opts])`
 
@@ -1110,14 +1118,15 @@ fig:title("left aligned", { loc = "left" })
 fig:title("right aligned", { loc = "right" })
 fig:title("styled", { fontsize = 20, color = "#0f172a" })
 fig:xlabel("text")
-fig:xlabel("x", { labelpad = 10 })
-fig:ylabel("y", { labelpad = 8 })
+fig:xlabel("x", { labelpad = 10, fontsize = 15, color = "#334155" })
+fig:ylabel("y", { labelpad = 8, fontsize = 15, color = "#334155" })
 ```
 
 Arguments must be strings (empty strings are allowed). `xlabel` and `ylabel`
 accept `labelpad` (number ≥ 0, default `0`) to increase the corresponding layout
-margin and move the axis label away from the plot box; root SVG metadata and
-scenes report `xlabel_pad`/`ylabel_pad`. `title` accepts
+margin and move the axis label away from the plot box; `fontsize` (number >
+0) and `color` style the label text. Root SVG metadata and scenes report
+`xlabel_pad`/`ylabel_pad`, plus the resolved `*_fontsize`/`*_color` values. `title` accepts
 `loc = "left"`, `"center"` (default), or `"right"` and aligns the title to the
 axes box (Cartesian), canvas (pie/polar), or outer grid (subplots). Calling
 `title(text)` without options keeps the last alignment. Scenes export the
@@ -1300,19 +1309,23 @@ No options are required.
 | `framealpha` | number in [0, 1] | `0.92` |
 | `facecolor` | color string | `#ffffff` |
 | `edgecolor` | color string | `#bbbbbb` |
+| `borderpad` | number ≥ 0 | `8` |
+| `handlelength` | number ≥ 0 | `20` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
 
 The accepted locations are the four corners, `"upper center"`,
 `"lower center"`, `"center left"`, `"center right"`, `"center"`, and `"best"`.
 `framealpha`, `facecolor`, and `edgecolor` style the frame independently.
-Only series with a non-empty `label` appear. Swatches reflect the series type
+`borderpad` expands the frame around its contents and `handlelength` sets the
+swatch length on Cartesian and polar legends. Only series with a non-empty
+`label` appear. Swatches reflect the series type
 (line, point, bar, or error bar). Calling `legend()` with no labeled series
 produces no legend box. In polar figures `"best"` searches for the placement
 that covers the fewest labels and data points; Cartesian figures currently
 resolve `"best"` to the upper-right corner. Cartesian scene roots export a
 `legend_style` object when a legend was requested, and polar scene legends carry
-the same frame fields.
+the same frame and spacing fields.
 
 ### `fig:to_svg()`
 
@@ -1385,7 +1398,8 @@ match these forms raise errors.
   `series-fill`, `series-fillx`, `series-stem`, `series-quiver`,
   `series-hexbin`, `series-eventplot`, `series-box`, `series-violin`,
   `hist-step`, `hist-step-filled`, `step-fill`, `event`,
-  `errorbar-limit-lower`, `errorbar-limit-upper`, `box-mean-marker`,
+  `errorbar-limit-lower`, `errorbar-limit-upper`, `errorbar-limit-left`,
+  `errorbar-limit-right`, `box-mean-marker`,
   `box-mean-line`, `violin-mean-marker`, `violin-mean-line`,
   `annotation-layer`, `annotation`,
   `annotation-text`, `annotation-arrow`, `axes`, `ticks`, `minor-tick-mark`,
@@ -1434,13 +1448,16 @@ includes, but is not limited to:
 - non-boolean ECDF complementary values
 - malformed multi-series bar color lists
 - annotation background options without a background color
-- negative axis label padding
+- negative axis label padding, non-positive axis label font sizes, or invalid label colors
+- negative or malformed legend border padding/handle lengths
 - pie label/percentage distances outside [0.01, 2]
 - invalid pie wedge edge colors or negative line widths
 - scatter edgecolor arrays whose length does not match the points
-- malformed errorbar limit flags
+- malformed errorbar y or x limit flags
 - non-boolean step fill flags or alpha values outside [0, 1]
 - non-increasing or too-short explicit histogram bin edges, or bins combined with range
+- per-point scatter linewidth arrays with wrong lengths or negative values
+- unsupported hexbin count norms or log norm with negative vmin
 - non-boolean hist2d show_empty values
 - scatter alpha arrays whose length does not match the points
 - stem orientations outside vertical/horizontal
@@ -1541,6 +1558,8 @@ Returns a renderer-agnostic scene table:
   title_fontsize = 18, title_color = "#222222",
   xlabel = "...", ylabel = "...",
   xlabel_pad = 0, ylabel_pad = 0,
+  xlabel_fontsize = 13, ylabel_fontsize = 13,
+  xlabel_color = "#222222", ylabel_color = "#222222",
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
   ticklabelsize = 11, ticklabelcolor = "#222222",
@@ -1550,6 +1569,7 @@ Returns a renderer-agnostic scene table:
   grid = false, legend = false,
   legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
                    facecolor = "#ffffff", edgecolor = "#bbbbbb",
+                   borderpad = 8, handlelength = 20,
                    ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
@@ -1581,6 +1601,7 @@ Returns a renderer-agnostic scene table:
       x = { 10, 20, 30 }, y = { 100, 200, 300 }, style = {...} },
     { kind = "errorbar", x = {...}, y = {...}, errorevery = 1,
       lolims = { true, false }, uplims = { false, true },
+      xlolims = { false, true }, xuplims = { true, false },
       yerr = {...}, yerr_lower = {...}, yerr_upper = {...},
       xerr = {...}, xerr_lower = {...}, xerr_upper = {...} },
     { kind = "axline", x1 = 0, y1 = 0, x2 = 1, y2 = 1, style = {...} },
@@ -1654,11 +1675,12 @@ and `meanline`; violin scenes also carry `orientation`; stem scenes carry
 ECDF step scenes
 carry `ecdf` plus `complementary`. Cartesian scene roots export `title_align`
 and, when requested, `legend_style`. Error-bar scenes always carry
-`errorevery`, optional `lolims`/`uplims`, and quiver scenes carry `angles`;
+`errorevery`, optional `lolims`/`uplims`/`xlolims`/`xuplims`, and quiver scenes
+carry `angles`;
 marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markeredgecolor`, and `markeredgewidth`. Scatter styles may include per-point
-`markers`, `alphas`, and `edgecolors` arrays, and bar/barh/hist/fill/span styles
-include `hatch` when a pattern is active. Step scenes export `fill` and
+`markers`, `alphas`, `edgecolors`, and `linewidths` arrays, and
+bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
 export `rotatelabels`, `edgecolor`, and `linewidth`. Bar series always keep category centers in `x`. The scene
 root exposes `category_axis` (`"x"` or `"y"`) so a backend knows which axis owns

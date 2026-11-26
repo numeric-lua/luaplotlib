@@ -557,10 +557,11 @@ local function render_scatter(series, figure, cfg, geom, buf)
     local marker = style.markers and style.markers[index] or style.marker
     local alpha = style.alphas and style.alphas[index] or style.alpha
     local edge = style.edgecolors and style.edgecolors[index] or style.edgecolor
+    local width = style.linewidths and style.linewidths[index] or style.linewidth
     local point_outline = ""
     if edge ~= nil then
       point_outline = string.format(' stroke="%s" stroke-width="%s"',
-        edge, util.fmt(style.linewidth))
+        edge, util.fmt(width))
     end
     local fade = ""
     if alpha < 1 then
@@ -2018,11 +2019,13 @@ local function legend_dimensions(figure, geom, entries)
   local opts = figure._legend_opts or {
     loc = "upper right", frame = true, ncol = 1,
   }
+  local border = opts.borderpad or 8
+  local handle = opts.handlelength or 20
   local requested_ncol = math.max(1, math.min(opts.ncol or 1, #entries))
   local title_width = 0
   local title_height = 0
   if opts.title ~= nil and opts.title ~= "" then
-    title_width = text.measure(opts.title, LEGEND_FONT_SIZE) + 16
+    title_width = text.measure(opts.title, LEGEND_FONT_SIZE) + 2 * border
     title_height = 22
   end
 
@@ -2032,19 +2035,21 @@ local function legend_dimensions(figure, geom, entries)
   while true do
     rows = math.ceil(#entries / ncol)
     local entry_width = math.max(60,
-      LEGEND_SWATCH + max_text + LEGEND_PAD)
-    box_width = entry_width * ncol + (ncol - 1) * 8
+      handle + 8 + max_text + LEGEND_PAD)
+    box_width = entry_width * ncol + (ncol - 1) * border
     if title_width > box_width then box_width = title_width end
     if box_width <= max_width or ncol == 1 then break end
     ncol = ncol - 1
   end
   if box_width > max_width then box_width = max_width end
   col_width = math.max(30,
-    math.floor((box_width - (ncol - 1) * 8) / ncol))
+    math.floor((box_width - (ncol - 1) * border) / ncol))
 
-  local box_height = 12 + title_height + rows * 20
+  local box_height = 2 * border - 4 + title_height + rows * 20
   return {
     opts = opts,
+    borderpad = border,
+    handlelength = handle,
     ncol = ncol,
     rows = rows,
     col_width = col_width,
@@ -2323,18 +2328,21 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
     col_width = dims.col_width,
     title_height = dims.title_height,
     text_width = dims.text_width,
+    borderpad = dims.borderpad,
+    handlelength = dims.handlelength,
     opts = opts,
     loc = opts.loc or "upper right",
     placement = best.inside and "inside" or "outside",
   }
 end
 
-local function polar_swatch(entry, x, y, buf)
+local function polar_swatch(entry, x, y, buf, length)
+  length = length or 20
   local kind, color = entry.kind, entry.color
   if kind == "scatter" then
     buf[#buf + 1] = string.format(
       '   <circle cx="%s" cy="%s" r="4" fill="%s"/>',
-      util.fmt(x + 10), util.fmt(y), color)
+      util.fmt(x + length / 2), util.fmt(y), color)
   elseif kind == "heatmap" then
     -- A stepped gradient swatch communicates the field range better than a
     -- single midpoint color, matching the new polar colorbar.
@@ -2345,17 +2353,18 @@ local function polar_swatch(entry, x, y, buf)
       local value = vmin + (vmax - vmin) * (step - 0.5) / steps
       buf[#buf + 1] = string.format(
         '   <rect class="legend-swatch-step" x="%s" y="%s" width="%s" height="10" fill="%s"/>',
-        util.fmt(x + (step - 1) * 20 / steps), util.fmt(y - 5),
-        util.fmt(20 / steps + 0.2), colors.heat(value, vmin, vmax))
+        util.fmt(x + (step - 1) * length / steps), util.fmt(y - 5),
+        util.fmt(length / steps + 0.2), colors.heat(value, vmin, vmax))
     end
   elseif kind == "quiver" then
     buf[#buf + 1] = string.format(
       '   <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
-      util.fmt(x), util.fmt(y), util.fmt(x + 14), util.fmt(y), color)
+      util.fmt(x), util.fmt(y), util.fmt(x + length * 0.7), util.fmt(y), color)
     buf[#buf + 1] = string.format(
       '   <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
-      util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
-      util.fmt(x + 13), util.fmt(y + 3.5), color)
+      util.fmt(x + length), util.fmt(y), util.fmt(x + length * 0.65),
+      util.fmt(y - 3.5), util.fmt(x + length * 0.65), util.fmt(y + 3.5),
+      color)
   elseif kind == "streamplot" then
     local dash = ""
     if entry.linestyle == "dashed" then
@@ -2366,30 +2375,31 @@ local function polar_swatch(entry, x, y, buf)
     if entry.linestyle ~= "none" then
       buf[#buf + 1] = string.format(
         '   <path class="legend-swatch-streamplot" d="M %s %s Q %s %s %s %s T %s %s" fill="none" stroke="%s" stroke-width="2" stroke-linecap="round"%s/>',
-        util.fmt(x), util.fmt(y), util.fmt(x + 5), util.fmt(y - 5),
-        util.fmt(x + 10), util.fmt(y), util.fmt(x + 16), util.fmt(y),
-        color, dash)
+        util.fmt(x), util.fmt(y), util.fmt(x + length * 0.25),
+        util.fmt(y - 5), util.fmt(x + length * 0.5), util.fmt(y),
+        util.fmt(x + length * 0.8), util.fmt(y), color, dash)
     end
     buf[#buf + 1] = string.format(
       '   <polygon points="%s,%s %s,%s %s,%s" fill="%s"/>',
-      util.fmt(x + 20), util.fmt(y), util.fmt(x + 13), util.fmt(y - 3.5),
-      util.fmt(x + 13), util.fmt(y + 3.5), color)
+      util.fmt(x + length), util.fmt(y), util.fmt(x + length * 0.65),
+      util.fmt(y - 3.5), util.fmt(x + length * 0.65), util.fmt(y + 3.5),
+      color)
   elseif kind == "bar" then
     buf[#buf + 1] = string.format(
-      '   <rect x="%s" y="%s" width="20" height="9" rx="1" fill="%s"/>',
-      util.fmt(x), util.fmt(y - 4), color)
+      '   <rect x="%s" y="%s" width="%s" height="9" rx="1" fill="%s"/>',
+      util.fmt(x), util.fmt(y - 4), util.fmt(length), color)
   elseif kind == "errorbar" then
     buf[#buf + 1] = string.format(
       '   <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2" stroke-linecap="round"/>',
-      util.fmt(x), util.fmt(y), util.fmt(x + 20), util.fmt(y), color)
+      util.fmt(x), util.fmt(y), util.fmt(x + length), util.fmt(y), color)
     buf[#buf + 1] = string.format(
       '   <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-      util.fmt(x + 10), util.fmt(y - 3), util.fmt(x + 10), util.fmt(y + 3),
-      color)
+      util.fmt(x + length / 2), util.fmt(y - 3),
+      util.fmt(x + length / 2), util.fmt(y + 3), color)
   else
     buf[#buf + 1] = string.format(
       '   <line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2.5" stroke-linecap="round"/>',
-      util.fmt(x), util.fmt(y), util.fmt(x + 20), util.fmt(y), color)
+      util.fmt(x), util.fmt(y), util.fmt(x + length), util.fmt(y), color)
   end
 end
 
@@ -2400,10 +2410,11 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
-    util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92))
+    util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92),
+    util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20))
   local framealpha = opts.framealpha or 0.92
   local facecolor = opts.facecolor or "#ffffff"
   local edgecolor = opts.edgecolor or "#bbbbbb"
@@ -2416,18 +2427,22 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   if opts.title then
     buf[#buf + 1] = string.format(
       '   <text class="legend-title" x="%s" y="%s" font-size="11" font-weight="bold" fill="%s">%s</text>',
-      util.fmt(x + 8), util.fmt(y + 14), TEXT_COLOR,
+      util.fmt(x + (plan.borderpad or 8)),
+      util.fmt(y + (plan.borderpad or 8) + 6), TEXT_COLOR,
       util.escape_xml(opts.title))
   end
   for index, entry in ipairs(plan.entries) do
     local column = math.floor((index - 1) / plan.rows) + 1
     local row = (index - 1) % plan.rows + 1
-    local entry_x = x + 8 + (column - 1) * (plan.col_width + 8)
-    local entry_y = y + 12 + plan.title_height + (row - 1) * 20
-    polar_swatch(entry, entry_x, entry_y, buf)
+    local border = plan.borderpad or 8
+    local handle = plan.handlelength or 20
+    local entry_x = x + border + (column - 1) * (plan.col_width + border)
+    local entry_y = y + (2 * border - 4) + plan.title_height +
+      (row - 1) * 20
+    polar_swatch(entry, entry_x, entry_y, buf, handle)
     buf[#buf + 1] = string.format(
       '   <text x="%s" y="%s" font-size="11" fill="%s">%s</text>',
-      util.fmt(entry_x + 28), util.fmt(entry_y + 4), TEXT_COLOR,
+      util.fmt(entry_x + handle + 8), util.fmt(entry_y + 4), TEXT_COLOR,
       util.escape_xml(entry.label))
   end
   buf[#buf + 1] = '  </g>'
@@ -2553,6 +2568,7 @@ local function copy_style(style)
     markers = style.markers and copy_array(style.markers) or nil,
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
+    linewidths = style.linewidths and copy_array(style.linewidths) or nil,
     hatch = style.hatch,
     radius = style.radius,
     capsize = style.capsize,
@@ -2727,6 +2743,8 @@ function M.to_scene(figure)
       framealpha = opts.framealpha or 0.92,
       facecolor = opts.facecolor or "#ffffff",
       edgecolor = opts.edgecolor or "#bbbbbb",
+      borderpad = opts.borderpad or 8,
+      handlelength = opts.handlelength or 20,
       title = opts.title,
       ncol = opts.ncol or 1,
       entries = {},

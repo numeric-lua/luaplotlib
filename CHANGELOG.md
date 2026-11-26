@@ -66,13 +66,27 @@
 - `fig:step` accepts `fill = true` and `fillalpha` to draw a `step-fill` area
   to the zero baseline. Scenes export both fields;
 - `fig:hist` accepts an explicit increasing edge list as `bins`; density uses
-  each bin's own width, and explicit edges cannot be combined with `range`.
+  each bin's own width, and explicit edges cannot be combined with `range`;
+- `fig:xlabel`/`fig:ylabel` accept `fontsize` and `color`. Larger label sizes
+  expand the layout margins, and scenes export the resolved sizes/colors;
+- `fig:legend` accepts `borderpad` and `handlelength` on Cartesian and polar
+  figures. The frame and swatch geometry follow both values, and scenes export
+  them in `legend_style`/polar legend metadata;
+- `fig:errorbar` accepts `xlolims`/`xuplims` as booleans or per-point arrays,
+  replacing horizontal caps with left/right arrowheads. SVG and scenes report
+  the x limit arrays alongside the existing y limits;
+- `fig:scatter` and `fig:polar_scatter` accept per-point `linewidth` arrays,
+  exported as `style.linewidths`;
+- `fig:hexbin` accepts `norm = "linear" | "log"`. Log norm colors by
+  `log(1 + count)` while vmin/vmax and colorbar labels stay in count units;
+  scenes export `norm`, `color_vmin`, and `color_vmax`.
   Existing examples and visual QA cover per-bar colors, annotation
   backgrounds/rotation, label padding, pie distances/rotation/edges, complete
-  hist2d grids, per-point markers/alpha/edges, errorbar/stem marker styling and
-  limits, horizontal stems/violins, quiver angle modes, tick/title styling,
-  event line styles, filled steps, explicit histogram edges, and
-  fill/span/histogram hatches. The dependency-free suite grows from 410 to 489
+  hist2d grids, per-point markers/alpha/edges/widths, axis-label typography,
+  legend spacing, errorbar/stem marker styling and x/y limits, horizontal
+  stems/violins, quiver angle modes, tick/title styling, event line styles,
+  filled steps, explicit histogram edges, log hexbin colors, and
+  fill/span/histogram hatches. The dependency-free suite grows from 410 to 506
   tests. Existing Cartesian APIs remain compatible, polar rendering is
   unchanged, and there are no new runtime dependencies.
 

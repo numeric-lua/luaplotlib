@@ -410,6 +410,12 @@ grep -q 'class="tick-label"[^>]*font-size="12" fill="#334155"' "$LINE" ||
   fail "$LINE should render styled tick labels"
 grep -q 'class="title" x="[^"]*" y="[^"]*" font-size="20" fill="#0f172a"' \
   "$LINE" || fail "$LINE should render a styled title"
+grep -q 'class="xlabel"[^>]*font-size="15" fill="#334155"' "$LINE" ||
+  fail "$LINE should render a styled x label"
+grep -q 'class="ylabel"[^>]*font-size="15" fill="#334155"' "$LINE" ||
+  fail "$LINE should render a styled y label"
+grep -q 'data-borderpad="11" data-handlelength="26"' "$LINE" ||
+  fail "$LINE should render legend spacing controls"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg
@@ -553,12 +559,18 @@ grep -q 'data-lolims="true" data-uplims="true"' "$ERRORBAR" ||
   fail "$ERRORBAR should expose limit flags"
 errorbar_limits=$(grep -o 'class="errorbar-limit-[a-z]*"' "$ERRORBAR" |
   wc -l | tr -d ' ')
-[ "$errorbar_limits" -eq 3 ] ||
-  fail "$ERRORBAR should draw three limit arrowheads"
+[ "$errorbar_limits" -eq 5 ] ||
+  fail "$ERRORBAR should draw five limit arrowheads"
 errorbar_caps=$(grep -o 'class="errorbar-cap"' "$ERRORBAR" | wc -l |
   tr -d ' ')
-[ "$errorbar_caps" -eq 9 ] ||
-  fail "$ERRORBAR should draw nine ordinary caps after limits"
+[ "$errorbar_caps" -eq 7 ] ||
+  fail "$ERRORBAR should draw seven ordinary caps after limits"
+grep -q 'data-xlolims="true" data-xuplims="true"' "$ERRORBAR" ||
+  fail "$ERRORBAR should expose x limit flags"
+errorbar_xlimits=$(grep -o 'class="errorbar-limit-\(left\|right\)"' "$ERRORBAR" |
+  wc -l | tr -d ' ')
+[ "$errorbar_xlimits" -eq 2 ] ||
+  fail "$ERRORBAR should draw two horizontal limit arrowheads"
 
 # Complementary ECDF steps count down and expose their mode.
 ECDF=examples/output/ecdf-complementary.svg
@@ -749,6 +761,8 @@ hexbin_sum=$(grep -o 'class="hexbin-cell"[^>]*data-count="[0-9]*"' "$HEXBIN" |
   fail "$HEXBIN cell counts do not fit its input point count"
 grep -q 'class="colorbar hexbin-colorbar"' "$HEXBIN" ||
   fail "$HEXBIN has no count colorbar"
+grep -q 'class="series series-hexbin"[^>]*data-norm="log"' "$HEXBIN" ||
+  fail "$HEXBIN should use log count normalization"
 hexbin_ticks=$(grep -o 'data-ticks="[0-9]*"' "$HEXBIN" | head -1 |
   tr -dc '0-9')
 hexbin_labels=$(grep -o 'class="colorbar-label"' "$HEXBIN" | wc -l |
@@ -848,6 +862,10 @@ scatter_edges=$(grep -o 'class="point"[^>]*stroke="[^"]*"' "$SCATTER_COLORS" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$scatter_edges" -ge 2 ] ||
   fail "$SCATTER_COLORS should vary per-point edge colors"
+scatter_widths=$(grep -o 'class="point"[^>]*stroke-width="[^"]*"' "$SCATTER_COLORS" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$scatter_widths" -ge 2 ] ||
+  fail "$SCATTER_COLORS should vary per-point outline widths"
 grep -q 'class="colorbar scatter-colorbar"' "$SCATTER_COLORS" ||
   fail "$SCATTER_COLORS has no scatter colorbar"
 scatter_ticks=$(grep -o 'data-ticks="[0-9]*"' "$SCATTER_COLORS" | head -1 |

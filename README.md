@@ -262,7 +262,9 @@ fig:title("Aligned left", { loc = "left" })
 ranging and legend/scene export, and histogram `linewidth` resolves through the
 series style. `title` accepts `loc = "left"`, `"center"` (default), or
 `"right"` for Figures, SubplotFigures, pies, and polar figures; scenes export
-`title_align`.
+`title_align`. Axis labels accept `fontsize` and `color`; both values are
+exported in scenes. Legend `borderpad` and `handlelength` tune frame padding
+and swatch width on Cartesian and polar figures.
 
 Legends, markers, error bars, and ECDF curves add the final control set:
 
@@ -359,6 +361,23 @@ labels follow their slice angle, staying upright on the left half. Fill bands
 and shaded spans use the shared hatch patterns. `title` now accepts
 `fontsize`/`color` for Cartesian, pie, polar, and subplot titles; scenes export
 the resolved style.
+
+Axis-label typography, legend metrics, x limit arrows, scatter outline widths,
+and logarithmic hexbin counts are additive:
+
+```lua
+fig:xlabel("x", { fontsize = 15, color = "#334155" })
+fig:ylabel("y", { fontsize = 15, color = "#334155" })
+fig:legend({ borderpad = 11, handlelength = 26 })
+fig:errorbar(x, y, yerr, xerr, { xlolims = true, xuplims = { false, true } })
+fig:scatter(x, y, { edgecolor = "#0f172a", linewidth = { 0.5, 1.2 } })
+fig:hexbin(x, y, { norm = "log", colorbar = true })
+```
+
+`borderpad` expands the legend frame, and `handlelength` sets the swatch run
+length. `xlolims`/`xuplims` replace horizontal caps with arrowheads. Scatter
+`linewidth` may be one value or one per point. Hexbin `norm = "log"` colors by
+`log(1 + count)` while colorbar labels remain counts.
 
 Wedge outlines, per-point scatter edges, limit arrows, filled steps, and
 explicit histogram edges are also additive:
@@ -610,9 +629,9 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - `figure({width, height, dpi, xscale, yscale})` and `fig:to_svg()` /
   `fig:savefig(path)`
 - Line plots with colors, dashes, marker face/edge styling, labels, and alpha
-- Scatter plots with per-point markers, colors, edge colors, sizes, and alpha,
-  or numeric `c` values mapped through the heat palette and an optional
-  colorbar
+- Scatter plots with per-point markers, colors, edge colors, outline widths,
+  sizes, and alpha, or numeric `c` values mapped through the heat palette and
+  an optional colorbar
 - Histograms with configurable counts/ranges or explicit bin edges,
   `bar`/`step`/`stepfilled` outlines, widths, and hatches, plus rectangular
   `hist2d` counts/densities with explicit grids, optional empty cells, value
@@ -640,13 +659,13 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   at Cartesian or polar data coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
   and upper extents, optional `errorevery` decimation, configurable caps, and
-  lower/upper limit arrowheads
+  lower/upper and left/right limit arrowheads
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
-  titles, label-padded axis labels, and legends with nine locations plus frame
-  alpha/colors
+  titles, label-padded/styled axis labels, and legends with nine locations,
+  frame alpha/colors, border padding, and configurable handle lengths
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
@@ -657,8 +676,9 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Cartesian quiver vector fields with data-space or screen-space (`uv`) angles,
   automatic/explicit scaling, pivots, normalization, deterministic arrow caps,
   and legend/scene metadata
-- Hexagonal binning with minimum counts, value limits, explicit or uniform
-  colorbar ticks, and renderer-agnostic cell/count export
+- Hexagonal binning with minimum counts, value limits, linear or log count
+  normalization, explicit or uniform colorbar ticks, and renderer-agnostic
+  cell/count export
 - Image `extent`/`origin` mapping, image colorbar titles and explicit or
   uniform ticks, cell alpha, and explicit contour column/row coordinates
 - Optional equal or numeric data-unit aspect ratios that center the plot box
@@ -696,8 +716,9 @@ label-padding, pie-distance, hist2d-empty, scatter-marker, annotation-rotation,
 error-stem-marker, event-linestyle, barh-hatch, scatter-alpha, stem-horizontal,
 quiver-uv, tick-style, hist-hatch, violin-horizontal, pie-rotation,
 fill-hatch, span-hatch, title-style, pie-edge, scatter-edge, errorbar-limit,
-step-fill, hist-edges, image-alpha, and equal-aspect metadata, and confirms
-that Cartesian examples stay Cartesian.
+step-fill, hist-edges, label/legend styling, errorbar x limits, scatter
+outline widths, log hexbin counts, image-alpha, and equal-aspect metadata, and
+confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -773,8 +794,9 @@ bars, pie explode/shadow, configurable bar/histogram outlines, marker
 face/edge styling, per-point scatter markers/alpha/edges, annotation
 rotation/backgrounds, horizontal stems, quiver uv angles, tick/title label
 styling, horizontal violins, rotated pie labels, pie wedge outlines,
-fill/span/step hatches and fills, errorbar limit arrows, explicit histogram
-edges,
+fill/span/step hatches and fills, errorbar x/y limit arrows, explicit
+histogram edges, log hexbin colors, axis-label typography, legend spacing,
+per-point scatter outline widths,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
 multi-series colors, label padding, pie label/pct
@@ -835,7 +857,9 @@ See
   matrix. Histogram hatching is unavailable for stepped outlines, which have no
   fill, and explicit histogram edges cannot be combined with `range`.
   Fill/span hatches use one shared pattern per series; rotated pie labels may
-  still need a larger canvas or label distance for crowded slices.
+  still need a larger canvas or label distance for crowded slices. Axis-label
+  font sizes and legend padding/handle length alter layout, but very large
+  values can still crowd or clip within a fixed canvas.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.
