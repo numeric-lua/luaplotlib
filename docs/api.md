@@ -470,8 +470,8 @@ figure that already has Cartesian series or annotations.
 ### `fig:barh(labels_or_y, values, opts)`
 
 Horizontal bars for a single numeric series. Category labels are placed on the
-y axis; `bar_colors`, `show_values`, `linewidth`, and the one-per-call `hatch`
-pattern behave like `bar`.
+y axis; `bar_colors`, `edgecolors` (one outline color per bar), `show_values`,
+`linewidth`, and the one-per-call `hatch` pattern behave like `bar`.
 
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
@@ -580,6 +580,7 @@ the arrows stay legible on linear and log axes.
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `1.2` |
 | `head` | number ≥ 0 (SVG user units) | `6` |
+| `headwidth` | number ≥ 0, head width relative to `head` | `0.9` |
 | `scale` | positive number | automatic |
 | `pivot` | `"tail"`, `"middle"`, or `"tip"` | `"tail"` |
 | `max_arrows` | integer in [1, 4096] | `512` |
@@ -599,7 +600,7 @@ is larger than `max_arrows`, indices are decimated deterministically with
 
 The series group exposes `data-count`, `data-drawn`, `data-stride`,
 `data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`,
-`data-normalize`, and `data-angles`. Per-vector `color` arrays are exported as
+`data-normalize`, `data-headwidth`, and `data-angles`. Per-vector `color` arrays are exported as
 `style.colors`. Scenes export `angles`. Each `quiver-arrow` group carries `data-index`,
 `data-magnitude`, `data-x`, `data-y`, and `data-angle`, with `quiver-shaft`
 and `quiver-head` children. Labelled quivers join the regular legend with an
@@ -622,6 +623,7 @@ Draw a histogram as adjacent filled rectangles.
 | `label` | string | no legend entry |
 | `alpha` | number in [0, 1] | `1` |
 | `edgecolor` | color string | `#ffffff` |
+| `edgecolors` | one outline color per bin | `edgecolor` |
 | `density` | boolean | `false` |
 | `cumulative` | boolean | `false` |
 
@@ -634,6 +636,7 @@ baseline, with the data value on y. Horizontal groups carry
 `data-orientation="horizontal"`, and the scene exports `orientation` with the
 axis ranges swapped accordingly.
 
+`edgecolors` supplies one outline color per bin and requires `histtype = "bar"`.
 `histtype = "bar"` is the existing adjacent-rectangle rendering. `"step"`
 draws a single stepped outline (`hist-step`) through every bin edge, including
 empty bins, and closes to the zero baseline at both ends. `"stepfilled"` draws
@@ -925,6 +928,7 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `notch` | boolean | `false` |
 | `whis` | number ≥ 0, IQR fence multiplier | `1.5` |
 | `showfliers` | boolean | `true` |
+| `showbox`, `showwhiskers`, `showcaps` | boolean | `true` |
 | `color`, `label` | series style | palette / no legend entry |
 
 `width` may be one scalar or one value per sample. Vertical boxes place
@@ -941,9 +945,10 @@ around the median by `1.57 * IQR / sqrt(n)`, clamped to the quartiles.
 `showmeans = true` adds a `box-mean-marker` circle at the sample mean;
 combining it with `meanline = true` draws a dashed `box-mean-line` across the
 box instead. The group exposes `data-width`, `data-mean`, `data-showmeans`, and
-`data-meanline`, `data-notch`, `data-whis`, and `data-showfliers`. `to_scene()` exports `orientation`, `mean`,
-`showmeans`, `meanline`, `notch`, `notch_low`, `notch_high`, `whis`, and
-`showfliers`, and the scene root reports `category_axis = "x"` or `"y"`.
+`data-meanline`, `data-notch`, `data-whis`, `data-showfliers`, `data-showbox`,
+`data-showwhiskers`, and `data-showcaps`. `to_scene()` exports `orientation`, `mean`,
+`showmeans`, `meanline`, `notch`, `notch_low`, `notch_high`, `whis`,
+`showfliers`, `showbox`, `showwhiskers`, and `showcaps`, and the scene root reports `category_axis = "x"` or `"y"`.
 
 ### `fig:violinplot(samples, opts)`
 
@@ -1029,6 +1034,7 @@ fig:bar({ "Q1", "Q2" }, {
 | `labels` | table of strings, one per series | descriptor labels or none |
 | `alpha` | number in [0, 1] | `1` |
 | `edgecolor` | color string | `#ffffff` |
+| `edgecolors` | flat per-bar list or one list per series | `edgecolor` |
 | `grouped` | boolean | `true` for multiple series |
 | `stacked` | boolean | `false` |
 | `yerr` | error specification (see below) | no error bars |
@@ -1047,8 +1053,9 @@ a single series; use `labels` (or descriptor labels) for multiple series. The
 `labels` and `colors` tables must have exactly one entry per value series.
 `bar_colors` is a flat list with one color per bar for a single series, or a
 nested list with one color list per series for grouped/stacked bars; each nested
-list must contain one color per bar. Bar scene series export their resolved
-`bar_colors` array.
+list must contain one color per bar. `edgecolors` follows the same shape and
+sets one outline color per bar. Bar scene series export their resolved
+`bar_colors` and `edgecolors` arrays.
 
 `yerr` mirrors `errorbar` error specifications. For a single series it may be a
 non-negative number, a flat per-bar sequence, or an asymmetric
@@ -1339,6 +1346,7 @@ No options are required.
 | `borderpad` | number ≥ 0 | `8` |
 | `handlelength` | number ≥ 0 | `20` |
 | `fontsize` | number > 0 | `11` |
+| `title_fontsize` | number > 0 | `fontsize` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
 
@@ -1347,7 +1355,7 @@ The accepted locations are the four corners, `"upper center"`,
 `framealpha`, `facecolor`, and `edgecolor` style the frame independently.
 `borderpad` expands the frame around its contents, `handlelength` sets the
 swatch length, and `fontsize` scales labels and frame geometry on Cartesian and
-polar legends. Only series with a non-empty
+polar legends. `title_fontsize` styles only the title, independently of labels. Only series with a non-empty
 `label` appear. Swatches reflect the series type
 (line, point, bar, or error bar). Calling `legend()` with no labeled series
 produces no legend box. In polar figures `"best"` searches for the placement
@@ -1494,6 +1502,9 @@ includes, but is not limited to:
 - box/violin width arrays with wrong lengths or out-of-range values
 - errorbar markersize/elinewidth arrays with wrong lengths or invalid values
 - eventplot linewidth arrays with wrong lengths or negative values
+- non-boolean box component visibility flags
+- negative quiver head widths, non-positive legend title sizes
+- bar/barh/hist edge-color arrays with wrong lengths or invalid colors
 - scatter edgecolor arrays whose length does not match the points
 - malformed errorbar y or x limit flags
 - non-boolean step fill flags or alpha values outside [0, 1]
@@ -1612,7 +1623,7 @@ Returns a renderer-agnostic scene table:
   legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
                    facecolor = "#ffffff", edgecolor = "#bbbbbb",
                    borderpad = 8, handlelength = 20, fontsize = 11,
-                   ncol = 1, title = nil },
+                   title_fontsize = 11, ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
   minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
@@ -1673,7 +1684,9 @@ Returns a renderer-agnostic scene table:
       orientation = "vertical", showmeans = true, meanline = false,
       q1 = 2, median = 3, q3 = 4, notch = false,
       notch_low = nil, notch_high = nil,
-      whis = 1.5, showfliers = true, style = {...} },
+      whis = 1.5, showfliers = true,
+      showbox = true, showwhiskers = true, showcaps = true,
+      style = {...} },
     { kind = "bar", x = {...}, y = {...}, width = 0.8,
       bar_colors = { "#9ecae1", ... } },
     -- Grouped bars keep category centers in x and add a per-series offset:
@@ -1727,7 +1740,8 @@ marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markeredgecolor`, and `markeredgewidth`. Scatter styles may include per-point
 `markers`, `alphas`, `edgecolors`, and `linewidths` arrays. Errorbar styles may
 include per-point `ecolors`, `markersizes`, and `elinewidths`, and eventplot
-styles may include per-row `linewidths`; bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
+styles may include per-row `linewidths`; bar/barh/hist/fill/span styles may
+include per-bar/bin `edgecolors`; include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
 export `rotatelabels`, `edgecolor`, `linewidth`, and the slice text sizes/colors.
 Hist2d scenes export `explicit_edges`, `color_norm`, `color_vmin`, and

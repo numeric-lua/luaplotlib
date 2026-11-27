@@ -2022,13 +2022,14 @@ local function legend_dimensions(figure, geom, entries)
   local border = opts.borderpad or 8
   local handle = opts.handlelength or 20
   local fontsize = opts.fontsize or LEGEND_FONT_SIZE
+  local title_size = opts.title_fontsize or fontsize
   local row_height = fontsize + 9
   local requested_ncol = math.max(1, math.min(opts.ncol or 1, #entries))
   local title_width = 0
   local title_height = 0
   if opts.title ~= nil and opts.title ~= "" then
-    title_width = text.measure(opts.title, fontsize) + 2 * border
-    title_height = fontsize + 11
+    title_width = text.measure(opts.title, title_size) + 2 * border
+    title_height = math.max(fontsize + 9, title_size + 11)
   end
 
   local max_width = math.max(40, geom.width - 16)
@@ -2053,6 +2054,7 @@ local function legend_dimensions(figure, geom, entries)
     borderpad = border,
     handlelength = handle,
     fontsize = fontsize,
+    title_fontsize = title_size,
     row_height = row_height,
     ncol = ncol,
     rows = rows,
@@ -2335,6 +2337,7 @@ local function legend_plan(figure, cfg, geom, extra_boxes)
     borderpad = dims.borderpad,
     handlelength = dims.handlelength,
     fontsize = dims.fontsize,
+    title_fontsize = dims.title_fontsize,
     row_height = dims.row_height,
     opts = opts,
     loc = opts.loc or "upper right",
@@ -2416,12 +2419,12 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
     util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92),
     util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20),
-    util.fmt(plan.fontsize or 11))
+    util.fmt(plan.fontsize or 11), util.fmt(plan.title_fontsize or 11))
   local framealpha = opts.framealpha or 0.92
   local facecolor = opts.facecolor or "#ffffff"
   local edgecolor = opts.edgecolor or "#bbbbbb"
@@ -2435,8 +2438,8 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
     buf[#buf + 1] = string.format(
       '   <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s">%s</text>',
       util.fmt(x + (plan.borderpad or 8)),
-      util.fmt(y + (plan.borderpad or 8) + (plan.fontsize or 11) + 3),
-      util.fmt(plan.fontsize or 11), TEXT_COLOR,
+      util.fmt(y + (plan.borderpad or 8) + (plan.title_fontsize or 11) + 3),
+      util.fmt(plan.title_fontsize or 11), TEXT_COLOR,
       util.escape_xml(opts.title))
   end
   for index, entry in ipairs(plan.entries) do
@@ -2580,6 +2583,7 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    headwidth = style.headwidth,
     markersizes = style.markersizes and copy_array(style.markersizes) or nil,
     elinewidths = style.elinewidths and copy_array(style.elinewidths) or nil,
     ecolors = style.ecolors and copy_array(style.ecolors) or nil,
@@ -2760,6 +2764,7 @@ function M.to_scene(figure)
       borderpad = opts.borderpad or 8,
       handlelength = opts.handlelength or 20,
       fontsize = opts.fontsize or 11,
+      title_fontsize = opts.title_fontsize or opts.fontsize or 11,
       title = opts.title,
       ncol = opts.ncol or 1,
       entries = {},

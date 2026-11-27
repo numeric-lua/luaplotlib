@@ -472,6 +472,23 @@ Box and violin widths accept one value per sample. Errorbar `markersize` and
 `elinewidth` accept one value per point, applied to marker radii and error
 strokes/caps. Eventplot `linewidth` accepts one value per row.
 
+Box component visibility, quiver head shape, legend titles, and per-bar/bin
+outline colors are additive:
+
+```lua
+fig:boxplot(samples, { showbox = true, showwhiskers = true, showcaps = false })
+fig:quiver(x, y, u, v, { head = 7, headwidth = 1.4 })
+fig:legend({ title = "series", title_fontsize = 15 })
+fig:bar(labels, values, { edgecolors = { "#1f2937", "#7c3aed" } })
+fig:barh(labels, values, { edgecolors = per_bar_colors })
+fig:hist(values, { edgecolors = per_bin_colors })
+```
+
+`showbox`, `showwhiskers`, and `showcaps` toggle boxplot components. Quiver
+`headwidth` controls the full head width relative to `head`. Legend
+`title_fontsize` styles the title independently from `fontsize`. `edgecolors`
+supplies one outline color per bar, per horizontal bar, or per histogram bin.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -723,18 +740,19 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
   titles, label-padded/styled axis labels, and legends with nine locations,
-  frame alpha/colors, border padding, configurable handle lengths, and font
-  size
+  frame alpha/colors, border padding, configurable handle lengths, and
+  independent label/title font sizes
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
   hatch fills, plus hatched `axhspan`/`axvspan` bands
-- Histograms with optional hatch fills and styled stems with custom bases,
+- Histograms with optional hatch fills, per-bin outline colors, and styled
+  stems with custom bases,
   markers, marker face/edge styling, and vertical or horizontal orientation
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
 - Cartesian quiver vector fields with data-space or screen-space (`uv`) angles,
-  automatic/explicit scaling, pivots, normalization, deterministic arrow caps,
-  and legend/scene metadata
+  automatic/explicit scaling, pivots, adjustable head width, normalization,
+  deterministic arrow caps, and legend/scene metadata
 - Hexagonal and rectangular 2-D binning with minimum counts, value limits,
   explicit or count-based rectangular edges, linear or log count colors,
   explicit or uniform colorbar ticks, and renderer-agnostic cell/count export
@@ -778,7 +796,8 @@ fill-hatch, span-hatch, title-style, pie-edge, scatter-edge, errorbar-limit,
 step-fill, hist-edges, label/legend styling, errorbar x limits, scatter
 outline widths, log hexbin/hist2d counts, notched/whisker boxplots,
 counterclockwise pie direction, per-arrow/event/error colors,
-box/violin/error/event size arrays, pie text styling, legend font sizing,
+box/violin/error/event size arrays, pie text styling, legend title sizing,
+box component visibility, quiver head widths, per-bar/bin outline colors,
 image-alpha, and equal-aspect metadata, and confirms that Cartesian examples
 stay Cartesian.
 When
@@ -861,8 +880,9 @@ fill/span/step hatches and fills, errorbar x/y limit arrows, explicit
 histogram edges, explicit 2-D edges, log hexbin/hist2d colors, box
 notches/whisker controls, per-sample box/violin widths, counterclockwise pies,
 per-arrow/event/error colors, per-point error marker/line sizes, per-row event
-widths, pie text styling, axis-label/legend typography, legend spacing,
-per-point scatter outline widths,
+widths, box component visibility, quiver head widths, bar/bin outline colors,
+pie text styling, axis-label/legend typography, independent legend title sizes,
+legend spacing, per-point scatter outline widths,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
 multi-series colors, label padding, pie label/pct
@@ -928,8 +948,9 @@ See
   values can still crowd or clip within a fixed canvas. Box notches use the
   normal-approximation interval and clamp to the quartiles for small samples.
   Hidden fliers stay in scene `outliers` but no longer affect automatic
-  ranges. Per-element widths and marker sizes must match the sample/point/row
-  count, and very large marker sizes can overlap neighboring points.
+  ranges. Per-element widths, outlines, and marker sizes must match the
+  sample/point/row/bin count, and very large marker sizes can overlap
+  neighboring points.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

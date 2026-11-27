@@ -56,6 +56,7 @@ fig:quiver(x, y, u, v, {
   color = arrow_colors,
   pivot = "middle",
   head = 6,
+  headwidth = 1.3,
   max_arrows = 128,
 })
 fig:title("luaplotlib: Cartesian quiver")

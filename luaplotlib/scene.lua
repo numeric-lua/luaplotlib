@@ -34,6 +34,7 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    headwidth = style.headwidth,
     markersizes = style.markersizes and copy_array(style.markersizes) or nil,
     elinewidths = style.elinewidths and copy_array(style.elinewidths) or nil,
     ecolors = style.ecolors and copy_array(style.ecolors) or nil,
@@ -208,6 +209,7 @@ function M.from_figure(figure)
       borderpad = opts.borderpad or 8,
       handlelength = opts.handlelength or 20,
       fontsize = opts.fontsize or 11,
+      title_fontsize = opts.title_fontsize or opts.fontsize or 11,
       ncol = opts.ncol or 1,
       title = opts.title,
     }
@@ -704,6 +706,9 @@ function M.from_figure(figure)
       copy.notch_high = series.notch_high
       copy.whis = series.whis or 1.5
       copy.showfliers = series.showfliers ~= false
+      copy.showbox = series.showbox ~= false
+      copy.showwhiskers = series.showwhiskers ~= false
+      copy.showcaps = series.showcaps ~= false
       copy.low = series.low
       copy.high = series.high
       copy.outliers = copy_array(series.outliers)

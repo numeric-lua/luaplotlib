@@ -103,6 +103,7 @@ local POLAR_QUIVER_OPTIONS = {
   linewidth = true,
   alpha = true,
   head = true,
+  headwidth = true,
   scale = true,
   pivot = true,
   max_arrows = true,
@@ -189,6 +190,7 @@ local HIST_OPTIONS = {
   label = true,
   alpha = true,
   edgecolor = true,
+  edgecolors = true,
   range = true,
   density = true,
   cumulative = true,
@@ -226,6 +228,7 @@ local BAR_OPTIONS = {
   linewidth = true,
   alpha = true,
   edgecolor = true,
+  edgecolors = true,
   stacked = true,
   grouped = true,
   bar_colors = true,
@@ -343,6 +346,7 @@ local BARH_OPTIONS = {
   hatch = true,
   alpha = true,
   edgecolor = true,
+  edgecolors = true,
   bar_colors = true,
   show_values = true,
 }
@@ -401,6 +405,7 @@ local QUIVER_OPTIONS = {
   linewidth = true,
   alpha = true,
   head = true,
+  headwidth = true,
   scale = true,
   pivot = true,
   max_arrows = true,
@@ -420,6 +425,9 @@ local BOX_OPTIONS = {
   notch = true,
   whis = true,
   showfliers = true,
+  showbox = true,
+  showwhiskers = true,
+  showcaps = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -1062,6 +1070,10 @@ function Figure:quiver(x, y, u, v, opts)
   if opts.head ~= nil then
     head = util.check_number(opts.head, "quiver head", 0)
   end
+  local headwidth = 0.9
+  if opts.headwidth ~= nil then
+    headwidth = util.check_number(opts.headwidth, "quiver headwidth", 0)
+  end
   local scale = nil
   if opts.scale ~= nil then
     scale = util.check_number(opts.scale, "quiver scale", 0)
@@ -1105,6 +1117,7 @@ function Figure:quiver(x, y, u, v, opts)
   local style = checked_style(self, style_opts, "quiver")
   style.linewidth = linewidth
   style.head = head
+  style.headwidth = headwidth
   style.colors = point_colors
 
   self._series[#self._series + 1] = {
@@ -2477,6 +2490,21 @@ function Figure:hist(values, opts)
       fail("hist hatch requires bar or stepfilled histtype")
     end
   end
+  local edgecolors = nil
+  if opts.edgecolors ~= nil then
+    if histtype ~= "bar" then
+      fail("hist edgecolors require histtype bar")
+    end
+    if type(opts.edgecolors) ~= "table" or
+        #opts.edgecolors ~= bins then
+      fail("hist edgecolors must have one color per bin")
+    end
+    edgecolors = {}
+    for index = 1, #opts.edgecolors do
+      edgecolors[index] = util.check_color(opts.edgecolors[index],
+        "hist edgecolors[" .. index .. "]")
+    end
+  end
   local edges = {}
   if explicit_edges ~= nil then
     for index = 1, #explicit_edges do edges[index] = explicit_edges[index] end
@@ -2515,6 +2543,7 @@ function Figure:hist(values, opts)
   style.bins = bins
   style.linewidth = linewidth
   style.hatch = hatch
+  style.edgecolors = edgecolors
 
   self._series[#self._series + 1] = {
     kind = "hist",
@@ -3259,6 +3288,43 @@ function Figure:bar(labels_or_x, values, opts, ...)
       bar_colors_series = { colors }
     end
   end
+  local bar_edgecolors_series
+  if opts.edgecolors ~= nil then
+    if type(opts.edgecolors) ~= "table" then
+      fail("bar edgecolors must be a table")
+    end
+    local nested = type(opts.edgecolors[1]) == "table"
+    bar_edgecolors_series = {}
+    if nested then
+      if #opts.edgecolors ~= series_count then
+        fail("bar edgecolors must have one color list per series")
+      end
+      for series_index = 1, series_count do
+        local list = opts.edgecolors[series_index]
+        if type(list) ~= "table" or #list ~= #xv then
+          fail("bar edgecolors per-series lists must match the number of bars")
+        end
+        local colors_list = {}
+        for i = 1, #list do
+          colors_list[i] = util.check_color(list[i],
+            string.format("bar edgecolors[%d][%d]", series_index, i))
+        end
+        bar_edgecolors_series[series_index] = colors_list
+      end
+    else
+      if #opts.edgecolors ~= #xv then
+        fail("bar edgecolors must have one color per bar")
+      end
+      local colors_list = {}
+      for i = 1, #opts.edgecolors do
+        colors_list[i] = util.check_color(opts.edgecolors[i],
+          "bar edgecolors[" .. i .. "]")
+      end
+      for series_index = 1, series_count do
+        bar_edgecolors_series[series_index] = colors_list
+      end
+    end
+  end
   if opts.show_values ~= nil then
     util.check_boolean(opts.show_values, "bar show_values")
   end
@@ -3374,6 +3440,9 @@ function Figure:bar(labels_or_x, values, opts, ...)
     }, "bar")
     style.width_fraction = width_fraction
     style.linewidth = bar_linewidth
+    if bar_edgecolors_series ~= nil then
+      style.edgecolors = bar_edgecolors_series[i]
+    end
     styles[i] = style
   end
 
@@ -4080,6 +4149,18 @@ function Figure:barh(labels_or_y, values, opts)
         "barh bar_colors[" .. i .. "]")
     end
   end
+  local edgecolors = nil
+  if opts.edgecolors ~= nil then
+    if type(opts.edgecolors) ~= "table" or
+        #opts.edgecolors ~= #values_v then
+      fail("barh edgecolors must have one color per bar")
+    end
+    edgecolors = {}
+    for i = 1, #opts.edgecolors do
+      edgecolors[i] = util.check_color(opts.edgecolors[i],
+        "barh edgecolors[" .. i .. "]")
+    end
+  end
   if opts.show_values ~= nil then
     util.check_boolean(opts.show_values, "barh show_values")
   end
@@ -4087,7 +4168,8 @@ function Figure:barh(labels_or_y, values, opts)
     kind = "barh", x = values_v, y = positions, height = height,
     bar_colors = bar_colors, show_values = opts.show_values == true,
     style = { color = color, label = opts.label, alpha = alpha,
-      edgecolor = edgecolor, linewidth = linewidth, hatch = hatch },
+      edgecolor = edgecolor, edgecolors = edgecolors,
+      linewidth = linewidth, hatch = hatch },
   }
   return self
 end
@@ -4345,6 +4427,15 @@ function Figure:boxplot(values, opts)
   local showfliers = opts.showfliers
   if showfliers == nil then showfliers = true end
   util.check_boolean(showfliers, "boxplot showfliers")
+  local function optional_boolean(value, default, name)
+    if value == nil then return default end
+    util.check_boolean(value, name)
+    return value
+  end
+  local showbox = optional_boolean(opts.showbox, true, "boxplot showbox")
+  local showwhiskers = optional_boolean(opts.showwhiskers, true,
+    "boxplot showwhiskers")
+  local showcaps = optional_boolean(opts.showcaps, true, "boxplot showcaps")
   local labels = opts.labels
   if labels ~= nil then
     if type(labels) ~= "table" or #labels ~= #samples then
@@ -4412,6 +4503,7 @@ function Figure:boxplot(values, opts)
       showmeans = showmeans, meanline = meanline,
       notch = notch, notch_low = notch_low, notch_high = notch_high,
       whis = whis, showfliers = showfliers,
+      showbox = showbox, showwhiskers = showwhiskers, showcaps = showcaps,
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
       style = { color = color, label = opts.label, alpha = 1 },
@@ -5292,6 +5384,7 @@ function Figure:legend(opts)
       borderpad = true,
       handlelength = true,
       fontsize = true,
+      title_fontsize = true,
       ncol = true,
       title = true,
     }, "legend")
@@ -5336,6 +5429,11 @@ function Figure:legend(opts)
     if opts.fontsize ~= nil then
       fontsize = util.check_number(opts.fontsize, "legend fontsize", 0.1)
     end
+    local title_fontsize = self._legend_opts.title_fontsize
+    if opts.title_fontsize ~= nil then
+      title_fontsize = util.check_number(opts.title_fontsize,
+        "legend title_fontsize", 0.1)
+    end
     self._legend_opts = {
       loc = opts.loc or self._legend_opts.loc,
       frame = opts.frame == nil and self._legend_opts.frame or opts.frame,
@@ -5345,6 +5443,7 @@ function Figure:legend(opts)
       borderpad = borderpad,
       handlelength = handlelength,
       fontsize = fontsize,
+      title_fontsize = title_fontsize,
       ncol = ncol,
       title = opts.title == nil and self._legend_opts.title or opts.title,
     }

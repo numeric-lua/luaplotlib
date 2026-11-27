@@ -419,6 +419,10 @@ grep -q 'data-borderpad="11" data-handlelength="26"' "$LINE" ||
   fail "$LINE should render legend spacing controls"
 grep -q 'data-fontsize="13"' "$LINE" ||
   fail "$LINE should render the legend font size"
+grep -q 'data-title-fontsize="15"' "$LINE" ||
+  fail "$LINE should render the legend title font size"
+grep -q 'class="legend-title"[^>]*font-size="15"' "$LINE" ||
+  fail "$LINE should style its legend title"
 grep -q 'class="legend"[^>]*' "$LINE" ||
   fail "$LINE has no legend"
 
@@ -511,6 +515,10 @@ hist_edge_bins=$(grep -o 'class="hist-bin"' "$HIST_EDGES" | wc -l |
   fail "$HIST_EDGES should draw five explicit-edge bins"
 grep -q '<pattern id="hatch-' "$HIST_EDGES" ||
   fail "$HIST_EDGES has no histogram hatch"
+hist_edge_colors=$(grep -o 'class="hist-bin"[^>]*stroke="[^"]*"' "$HIST_EDGES" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$hist_edge_colors" -ge 3 ] ||
+  fail "$HIST_EDGES should vary per-bin edge colors"
 grep -q '<pattern id="hatch-' "$HIST_STYLES" ||
   fail "$HIST_STYLES has no histogram hatch definition"
 grep -q 'class="hist-step-filled"[^>]*fill="url(#hatch-' "$HIST_STYLES" ||
@@ -545,6 +553,11 @@ grep -q 'data-whis="1" data-showfliers="false"' "$BOX_H" ||
 box_fliers=$(grep -o 'class="box-outlier"' "$BOX_H" | wc -l | tr -d ' ' || true)
 [ "$box_fliers" -eq 0 ] ||
   fail "$BOX_H should hide its outliers"
+grep -q 'data-showcaps="false"' "$BOX_H" ||
+  fail "$BOX_H should hide its caps"
+box_caps=$(grep -o 'class="box-cap"' "$BOX_H" | wc -l | tr -d ' ' || true)
+[ "$box_caps" -eq 0 ] ||
+  fail "$BOX_H should draw no box caps"
 
 # Image colorbars accept a title and explicit tick values.
 IMSHOW=examples/output/imshow-colorbar.svg
@@ -760,6 +773,8 @@ grep -q 'data-scale-mode="auto"' "$QUIVER_CART" ||
   fail "$QUIVER_CART should advertise its automatic scale"
 grep -q 'data-pivot="middle"' "$QUIVER_CART" ||
   fail "$QUIVER_CART should advertise its middle pivot"
+grep -q 'data-headwidth="1.3"' "$QUIVER_CART" ||
+  fail "$QUIVER_CART should expose its head width"
 quiver_colors=$(grep -o 'class="quiver-shaft"[^>]*stroke="[^"]*"' "$QUIVER_CART" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$quiver_colors" -ge 2 ] ||
@@ -997,6 +1012,10 @@ barh_hatched=$(grep -o 'class="barh"[^>]*fill="url(#hatch-' "$BARH_HATCH" |
   wc -l | tr -d ' ')
 [ "$barh_hatched" -eq 4 ] ||
   fail "$BARH_HATCH should fill four bars with a hatch pattern"
+barh_edge_colors=$(grep -o 'class="barh"[^>]*stroke="[^"]*"' "$BARH_HATCH" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$barh_edge_colors" -ge 3 ] ||
+  fail "$BARH_HATCH should vary bar edge colors"
 
 # Grouped bars support one color per bar within each series.
 BARS_GROUPED=examples/output/bars-grouped.svg
@@ -1006,6 +1025,10 @@ bar_fills=$(grep -o 'class="bar"[^>]*fill="[^"]*"' "$BARS_GROUPED" |
   sed -E 's/.*fill="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$bar_fills" -eq 8 ] ||
   fail "$BARS_GROUPED should use eight distinct bar fills"
+grouped_edges=$(grep -o 'class="bar"[^>]*stroke="[^"]*"' "$BARS_GROUPED" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$grouped_edges" -ge 4 ] ||
+  fail "$BARS_GROUPED should vary per-series bar edge colors"
 
 # Grouped bars must carry both symmetric and asymmetric error geometry.
 BAR_ERRORS=examples/output/bar-errors.svg

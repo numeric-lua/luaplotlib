@@ -620,6 +620,7 @@ local function render_legend(fig, geom, buf)
   local border = opts.borderpad or 8
   local handle = opts.handlelength or 20
   local fontsize = opts.fontsize or 11
+  local title_size = opts.title_fontsize or fontsize
   local row_height = fontsize + 9
   local char_width = fontsize * 6.5 / 11
   local ncol = math.max(1, math.min(opts.ncol or 1, #entries))
@@ -628,7 +629,7 @@ local function render_legend(fig, geom, buf)
     math.max(88, border + handle + 8 + 16 + max_chars * char_width))
   local box_width = math.min(geom.plot_width - border,
     col_width * ncol + (ncol - 1) * border)
-  local title_height = opts.title and row_height or 0
+  local title_height = opts.title and math.max(row_height, title_size + 9) or 0
   local box_height = 2 * border - 4 + title_height + rows * row_height
   local loc = opts.loc or "upper right"
   local center_x = geom.left + (geom.plot_width - box_width) / 2
@@ -662,9 +663,9 @@ local function render_legend(fig, geom, buf)
   local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
   buf[#buf + 1] = string.format(
-    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s"/>',
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s"/>',
     util.escape_xml(loc), util.fmt(framealpha), util.fmt(border),
-    util.fmt(handle), util.fmt(fontsize))
+    util.fmt(handle), util.fmt(fontsize), util.fmt(title_size))
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
@@ -674,8 +675,8 @@ local function render_legend(fig, geom, buf)
   if opts.title then
     buf[#buf + 1] = string.format(
       '  <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s">%s</text>',
-      util.fmt(x + border), util.fmt(y + border + fontsize + 3),
-      util.fmt(fontsize), TEXT_COLOR, util.escape_xml(opts.title))
+      util.fmt(x + border), util.fmt(y + border + title_size + 3),
+      util.fmt(title_size), TEXT_COLOR, util.escape_xml(opts.title))
   end
   for i, entry in ipairs(entries) do
     local column = math.floor((i - 1) / rows) + 1
@@ -1087,8 +1088,9 @@ local function render_quiver(series, map_x, map_y, buf)
   end
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-quiver" data-count="%d" data-drawn="%d" data-stride="%d" data-max-arrows="%d" data-scale="%s" data-scale-mode="%s" data-pivot="%s" data-normalize="%s" data-angles="%s"%s>',
-    count, #entries, stride, series.max_arrows, util.fmt(scale),
+    '  <g class="series series-quiver" data-count="%d" data-drawn="%d" data-stride="%d" data-max-arrows="%d" data-headwidth="%s" data-scale="%s" data-scale-mode="%s" data-pivot="%s" data-normalize="%s" data-angles="%s"%s>',
+    count, #entries, stride, series.max_arrows,
+    util.fmt(style.headwidth or 0.9), util.fmt(scale),
     automatic and "auto" or "explicit", series.pivot,
     series.normalize and "true" or "false", series.angles or "xy", label)
 
@@ -1118,7 +1120,7 @@ local function render_quiver(series, map_x, map_y, buf)
         stroke_opacity)
     end
     if head > 1e-9 then
-      local half = head * 0.45
+      local half = head * (style.headwidth or 0.9) / 2
       local px, py = -uy * half, ux * half
       buf[#buf + 1] = string.format(
         '    <polygon class="quiver-head" points="%s,%s %s,%s %s,%s" fill="%s"%s/>',
@@ -1489,11 +1491,12 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
           if style.hatch then
             fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
           end
+          local point_edge = style.edgecolors and style.edgecolors[i] or edge
           buf[#buf + 1] = string.format(
             '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(left), util.fmt(top),
             util.fmt(math.abs(value_x - x_baseline)),
-            util.fmt(math.abs(y2 - y1)), fill, edge,
+            util.fmt(math.abs(y2 - y1)), fill, point_edge,
             util.fmt(style.linewidth or 1), opacity)
         else
           local x1 = map_x(series.edges[i])
@@ -1503,10 +1506,11 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
           if style.hatch then
             fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
           end
+          local point_edge = style.edgecolors and style.edgecolors[i] or edge
           buf[#buf + 1] = string.format(
             '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
-            util.fmt(y_baseline - top), fill, edge,
+            util.fmt(y_baseline - top), fill, point_edge,
             util.fmt(style.linewidth or 1), opacity)
         end
       end
@@ -1536,10 +1540,11 @@ local function render_barh(series, map_x, map_y, baseline, buf)
     local width = math.abs(value_x - baseline)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
     if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
+    local point_edge = style.edgecolors and style.edgecolors[i] or edge
     buf[#buf + 1] = string.format(
       '   <rect class="barh" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(left), util.fmt(top), util.fmt(width), util.fmt(height), fill,
-      edge, util.fmt(style.linewidth or 1), opacity)
+      point_edge, util.fmt(style.linewidth or 1), opacity)
     if series.show_values then
       local text_x = value >= 0 and (value_x + 4) or (value_x - 4)
       local anchor = value >= 0 and "start" or "end"
@@ -1969,85 +1974,102 @@ local function render_box(series, map_x, map_y, buf)
     (q3_screen - q1_screen))
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-width="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s" data-whis="%s" data-showfliers="%s">',
+    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-width="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s" data-whis="%s" data-showfliers="%s" data-showbox="%s" data-showwhiskers="%s" data-showcaps="%s">',
     util.fmt(series.position), horizontal and "horizontal" or "vertical",
     util.fmt(series.width), util.fmt(series.mean),
     series.showmeans and "true" or "false",
     series.meanline and "true" or "false", series.notch and "true" or "false",
-    util.fmt(series.whis or 1.5), series.showfliers == false and "false" or "true")
-  if series.notch then
-    local function point(position, value)
-      if horizontal then
-        return util.fmt(map_x(value)) .. "," .. util.fmt(map_y(position))
+    util.fmt(series.whis or 1.5),
+    series.showfliers == false and "false" or "true",
+    series.showbox == false and "false" or "true",
+    series.showwhiskers == false and "false" or "true",
+    series.showcaps == false and "false" or "true")
+
+  if series.showbox ~= false then
+    if series.notch then
+      local function point(position, value)
+        if horizontal then
+          return util.fmt(map_x(value)) .. "," .. util.fmt(map_y(position))
+        end
+        return util.fmt(map_x(position)) .. "," .. util.fmt(map_y(value))
       end
-      return util.fmt(map_x(position)) .. "," .. util.fmt(map_y(value))
+      local notch_points = {
+        point(low_position, series.q3),
+        point(high_position, series.q3),
+        point(high_position, series.notch_high),
+        point(series.position, series.median),
+        point(high_position, series.notch_low),
+        point(high_position, series.q1),
+        point(low_position, series.q1),
+        point(low_position, series.notch_low),
+        point(series.position, series.median),
+        point(low_position, series.notch_high),
+      }
+      buf[#buf + 1] = string.format(
+        '   <polygon class="box box-notch" points="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+        table.concat(notch_points, " "), color, color)
+    else
+      buf[#buf + 1] = string.format(
+        '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
+        util.fmt(rect_height), color, color)
     end
-    local low_position = series.position - half
-    local high_position = series.position + half
-    local notch_points = {
-      point(low_position, series.q3),
-      point(high_position, series.q3),
-      point(high_position, series.notch_high),
-      point(series.position, series.median),
-      point(high_position, series.notch_low),
-      point(high_position, series.q1),
-      point(low_position, series.q1),
-      point(low_position, series.notch_low),
-      point(series.position, series.median),
-      point(low_position, series.notch_high),
-    }
-    buf[#buf + 1] = string.format(
-      '   <polygon class="box box-notch" points="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
-      table.concat(notch_points, " "), color, color)
-  else
-    buf[#buf + 1] = string.format(
-      '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
-      util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
-      util.fmt(rect_height), color, color)
   end
+
   if horizontal then
     buf[#buf + 1] = string.format(
       '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
       util.fmt(median_screen), util.fmt(math.min(position_a, position_b)),
-      util.fmt(median_screen), util.fmt(math.max(position_a, position_b)), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
-      util.fmt(q3_screen), util.fmt(center), util.fmt(high_screen),
-      util.fmt(center), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
-      util.fmt(low_screen), util.fmt(center), util.fmt(q1_screen),
-      util.fmt(center), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-      util.fmt(high_screen), util.fmt(cap_a), util.fmt(high_screen),
-      util.fmt(cap_b), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-      util.fmt(low_screen), util.fmt(cap_a), util.fmt(low_screen),
-      util.fmt(cap_b), color)
+      util.fmt(median_screen), util.fmt(math.max(position_a, position_b)),
+      color)
+    if series.showwhiskers ~= false then
+      buf[#buf + 1] = string.format(
+        '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(q3_screen), util.fmt(center), util.fmt(high_screen),
+        util.fmt(center), color)
+      buf[#buf + 1] = string.format(
+        '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(low_screen), util.fmt(center), util.fmt(q1_screen),
+        util.fmt(center), color)
+    end
+    if series.showcaps ~= false then
+      buf[#buf + 1] = string.format(
+        '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+        util.fmt(high_screen), util.fmt(cap_a), util.fmt(high_screen),
+        util.fmt(cap_b), color)
+      buf[#buf + 1] = string.format(
+        '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+        util.fmt(low_screen), util.fmt(cap_a), util.fmt(low_screen),
+        util.fmt(cap_b), color)
+    end
   else
     buf[#buf + 1] = string.format(
       '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
       util.fmt(math.min(position_a, position_b)), util.fmt(median_screen),
-      util.fmt(math.max(position_a, position_b)), util.fmt(median_screen), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
-      util.fmt(center), util.fmt(q3_screen), util.fmt(center),
-      util.fmt(high_screen), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
-      util.fmt(center), util.fmt(low_screen), util.fmt(center),
-      util.fmt(q1_screen), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-      util.fmt(cap_a), util.fmt(high_screen), util.fmt(cap_b),
-      util.fmt(high_screen), color)
-    buf[#buf + 1] = string.format(
-      '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
-      util.fmt(cap_a), util.fmt(low_screen), util.fmt(cap_b),
-      util.fmt(low_screen), color)
+      util.fmt(math.max(position_a, position_b)), util.fmt(median_screen),
+      color)
+    if series.showwhiskers ~= false then
+      buf[#buf + 1] = string.format(
+        '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(center), util.fmt(q3_screen), util.fmt(center),
+        util.fmt(high_screen), color)
+      buf[#buf + 1] = string.format(
+        '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
+        util.fmt(center), util.fmt(low_screen), util.fmt(center),
+        util.fmt(q1_screen), color)
+    end
+    if series.showcaps ~= false then
+      buf[#buf + 1] = string.format(
+        '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+        util.fmt(cap_a), util.fmt(high_screen), util.fmt(cap_b),
+        util.fmt(high_screen), color)
+      buf[#buf + 1] = string.format(
+        '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
+        util.fmt(cap_a), util.fmt(low_screen), util.fmt(cap_b),
+        util.fmt(low_screen), color)
+    end
   end
+
   if series.showmeans then
     if series.meanline then
       if horizontal then
@@ -2073,13 +2095,14 @@ local function render_box(series, map_x, map_y, buf)
         util.fmt(center), util.fmt(mean_screen), color)
     end
   end
+
   if series.showfliers ~= false then
     for _, value in ipairs(series.outliers) do
       if horizontal then
-      buf[#buf + 1] = string.format(
-        '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
-        util.fmt(map_x(value)), util.fmt(center), color)
-    else
+        buf[#buf + 1] = string.format(
+          '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
+          util.fmt(map_x(value)), util.fmt(center), color)
+      else
         buf[#buf + 1] = string.format(
           '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
           util.fmt(center), util.fmt(map_y(value)), color)
@@ -2088,6 +2111,7 @@ local function render_box(series, map_x, map_y, buf)
   end
   buf[#buf + 1] = '  </g>'
 end
+
 local HATCH_PATTERNS = {
   ["/"] = { transform = "rotate(45)", body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
   ["\\"] = { transform = "rotate(-45)", body = '<line x1="0" y1="0" x2="0" y2="6" stroke="#333" stroke-width="1"/>' },
@@ -2177,10 +2201,11 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
     local height = math.abs(base_y - value_y)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
     if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
+    local point_edge = style.edgecolors and style.edgecolors[i] or edge
     buf[#buf + 1] = string.format(
       '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
-      fill, edge, util.fmt(style.linewidth or 1), opacity)
+      fill, point_edge, util.fmt(style.linewidth or 1), opacity)
     if series.yerr_lower ~= nil then
       local reference = value
       if series.bottom ~= nil then reference = series.bottom[i] + value end

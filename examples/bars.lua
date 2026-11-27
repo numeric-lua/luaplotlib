@@ -48,6 +48,10 @@ grouped:bar(quarters, { product, services }, {
     { "#9ecae1", "#6baed6", "#4292c6", "#2171b5" },
     { "#fdae6b", "#fd8d3c", "#f16913", "#d94801" },
   },
+  edgecolors = {
+    { "#0c4a6e", "#075985", "#0369a1", "#0c4a6e" },
+    { "#7c2d12", "#9a3412", "#c2410c", "#7c2d12" },
+  },
 })
 grouped:title("luaplotlib: grouped bars")
 grouped:xlabel("quarter")

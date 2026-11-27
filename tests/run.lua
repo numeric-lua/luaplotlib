@@ -296,6 +296,11 @@ local test_files = {
   "test_violin_widths.lua",
   "test_errorbar_sizes.lua",
   "test_eventplot_widths.lua",
+  "test_box_visibility.lua",
+  "test_quiver_headwidth.lua",
+  "test_legend_title_fontsize.lua",
+  "test_bar_edgecolors.lua",
+  "test_hist_edgecolors.lua",
   "test_export.lua",
 }
 

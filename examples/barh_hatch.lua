@@ -24,6 +24,7 @@ local fig = plt.figure({ width = 820, height = 460 })
 fig:barh({ "Design", "Build", "Verify", "Ship" }, { 8, 14, 9, 5 }, {
   color = "#4c78a8",
   edgecolor = "#1f2937",
+  edgecolors = { "#1f2937", "#7c3aed", "#0f766e", "#b45309" },
   linewidth = 1.5,
   hatch = "/",
   label = "effort",
