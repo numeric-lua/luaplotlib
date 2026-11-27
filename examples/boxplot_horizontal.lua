@@ -29,7 +29,7 @@ fig:boxplot({
   labels = { "control", "treatment", "follow-up" },
   orientation = "horizontal",
   color = "#9467bd",
-  width = 0.55,
+  width = { 0.45, 0.62, 0.52 },
   showmeans = true,
   notch = true,
   whis = 1.0,

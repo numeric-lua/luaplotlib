@@ -37,7 +37,7 @@ fig:eventplot({
     "#991b1b", "#f87171", "#991b1b", "#f87171",
     "#5b21b6", "#a78bfa", "#5b21b6", "#a78bfa",
   },
-  linewidth = 2.5,
+  linewidth = { 2, 3, 4 },
   linestyle = "dashed",
   label = "events",
 })

@@ -34,7 +34,7 @@ fig:violinplot(samples, {
   orientation = "horizontal",
   labels = { "control", "shifted", "wide" },
   colors = { "#4c78a8", "#f58518", "#54a24b" },
-  width = 0.62,
+  width = { 0.55, 0.68, 0.60 },
   points = 70,
   alpha = 0.55,
   edgecolor = "#1f2937",

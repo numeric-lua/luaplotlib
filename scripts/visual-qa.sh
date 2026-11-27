@@ -473,6 +473,10 @@ event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$event_colors" -ge 3 ] ||
   fail "$EVENT should use at least three distinct event colors"
+event_widths=$(grep -o '<line class="event"[^>]*stroke-width="[^"]*"' "$EVENT" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$event_widths" -eq 3 ] ||
+  fail "$EVENT should use three distinct row line widths"
 
 # Histogram step styles must render the outline and filled staircase variants.
 HIST_STYLES=examples/output/hist-styles.svg
@@ -532,6 +536,10 @@ grep -q 'data-notch="true"' "$BOX_H" ||
 box_notches=$(grep -o 'class="box box-notch"' "$BOX_H" | wc -l | tr -d ' ')
 [ "$box_notches" -eq 3 ] ||
   fail "$BOX_H should draw three notched box polygons"
+box_widths=$(grep -o 'class="series series-box"[^>]*data-width="[^"]*"' "$BOX_H" |
+  sed -E 's/.*data-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$box_widths" -eq 3 ] ||
+  fail "$BOX_H should use three distinct box widths"
 grep -q 'data-whis="1" data-showfliers="false"' "$BOX_H" ||
   fail "$BOX_H should expose whisker and flier controls"
 box_fliers=$(grep -o 'class="box-outlier"' "$BOX_H" | wc -l | tr -d ' ' || true)
@@ -576,6 +584,14 @@ printf '%s\n' "$errorbar_marker" | grep -q 'fill="#ffffff"' ||
   fail "$ERRORBAR markers should have a white face"
 printf '%s\n' "$errorbar_marker" | grep -q 'stroke="#1f77b4"' ||
   fail "$ERRORBAR markers should have a blue edge"
+errorbar_sizes=$(grep -o 'class="marker"[^>]*r="[^"]*"' "$ERRORBAR" |
+  sed -E 's/.*r="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$errorbar_sizes" -ge 2 ] ||
+  fail "$ERRORBAR should vary marker sizes per point"
+errorbar_widths=$(grep -o 'class="errorbar"[^>]*stroke-width="[^"]*"' "$ERRORBAR" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$errorbar_widths" -ge 2 ] ||
+  fail "$ERRORBAR should vary error line widths per point"
 grep -q 'data-lolims="true" data-uplims="true"' "$ERRORBAR" ||
   fail "$ERRORBAR should expose limit flags"
 errorbar_limits=$(grep -o 'class="errorbar-limit-[a-z]*"' "$ERRORBAR" |
@@ -946,6 +962,10 @@ violin_h_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN_H" | wc -l |
   tr -d ' ')
 [ "$violin_h_means" -eq 3 ] ||
   fail "$VIOLIN_H should draw one mean marker per violin"
+violin_widths=$(grep -o 'class="series series-violin"[^>]*data-width="[^"]*"' "$VIOLIN_H" |
+  sed -E 's/.*data-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$violin_widths" -eq 3 ] ||
+  fail "$VIOLIN_H should use three distinct violin widths"
 violin_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN" | wc -l |
   tr -d ' ')
 [ "$violin_means" -eq 3 ] ||

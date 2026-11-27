@@ -2580,6 +2580,8 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    markersizes = style.markersizes and copy_array(style.markersizes) or nil,
+    elinewidths = style.elinewidths and copy_array(style.elinewidths) or nil,
     ecolors = style.ecolors and copy_array(style.ecolors) or nil,
     hatch = style.hatch,
     radius = style.radius,

@@ -2324,15 +2324,30 @@ function Figure:eventplot(positions, opts)
         "eventplot eventcolors[" .. index .. "]")
     end
   end
+  local row_linewidths
   local linewidth = opts.linewidth
-  if linewidth == nil then linewidth = 2 end
-  linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
+  if type(linewidth) == "table" then
+    if #linewidth ~= #rows then
+      fail("eventplot linewidth array must have one entry per row")
+    end
+    row_linewidths = {}
+    for index = 1, #linewidth do
+      row_linewidths[index] = util.check_number(linewidth[index],
+        "eventplot linewidth[" .. index .. "]", 0)
+    end
+    linewidth = row_linewidths[1]
+  elseif linewidth == nil then
+    linewidth = 2
+  else
+    linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
+  end
   local linestyle = opts.linestyle or "solid"
   if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
     fail("eventplot linestyle must be one of solid, dashed, dotted, or none")
   end
   local style = checked_style(self, opts, "eventplot")
   style.linewidth = linewidth
+  style.linewidths = row_linewidths
   style.linestyle = linestyle
   if row_colors ~= nil then style.color = row_colors[1] end
   self._series[#self._series + 1] = {
@@ -4292,8 +4307,19 @@ function Figure:boxplot(values, opts)
   end
   local samples = values
   if type(values[1]) == "number" then samples = { values } end
+  local widths
   local width = 0.6
-  if opts.width ~= nil then
+  if type(opts.width) == "table" then
+    if #opts.width ~= #samples then
+      fail("boxplot width array must match the number of samples")
+    end
+    widths = {}
+    for index = 1, #opts.width do
+      widths[index] = util.check_number(opts.width[index],
+        "boxplot width[" .. index .. "]", 0.01, 1)
+    end
+    width = widths[1]
+  elseif opts.width ~= nil then
     width = util.check_number(opts.width, "boxplot width", 0.01, 1)
   end
   local orientation = opts.orientation or "vertical"
@@ -4380,7 +4406,8 @@ function Figure:boxplot(values, opts)
       end
     end
     self._series[#self._series + 1] = {
-      kind = "box", position = index, width = width,
+      kind = "box", position = index,
+      width = widths and widths[index] or width,
       orientation = orientation, mean = mean,
       showmeans = showmeans, meanline = meanline,
       notch = notch, notch_low = notch_low, notch_high = notch_high,
@@ -4415,8 +4442,19 @@ function Figure:violinplot(values, opts)
   end
   local sample_count = #samples
 
+  local width_fractions
   local width_fraction = 0.5
-  if opts.width ~= nil then
+  if type(opts.width) == "table" then
+    if #opts.width ~= sample_count then
+      fail("violinplot width array must match the number of samples")
+    end
+    width_fractions = {}
+    for index = 1, #opts.width do
+      width_fractions[index] = util.check_number(opts.width[index],
+        "violinplot width[" .. index .. "]", 0.01, 1)
+    end
+    width_fraction = width_fractions[1]
+  elseif opts.width ~= nil then
     width_fraction = util.check_number(opts.width,
       "violinplot width", 0.01, 1)
   end
@@ -4472,7 +4510,7 @@ function Figure:violinplot(values, opts)
     if delta > 0 and (spacing == nil or delta < spacing) then spacing = delta end
   end
   spacing = spacing or 1
-  local width = spacing * width_fraction
+  local base_width = spacing * width_fraction
 
   local labels = opts.labels
   if labels ~= nil then
@@ -4511,6 +4549,8 @@ function Figure:violinplot(values, opts)
 
   local ticks = {}
   for index = 1, sample_count do
+    local series_width = spacing *
+      (width_fractions and width_fractions[index] or width_fraction)
     local values_v = data.sequence(samples[index],
       "violinplot sample " .. index)
     if #values_v == 0 then fail("violinplot samples must be non-empty") end
@@ -4575,7 +4615,7 @@ function Figure:violinplot(values, opts)
     local body_x, body_y = {}, {}
     for point = 1, points do
       local value = minimum + span * (point - 1) / (points - 1)
-      local offset = width * 0.5 * densities[point]
+      local offset = series_width * 0.5 * densities[point]
       if orientation == "horizontal" then
         body_x[#body_x + 1] = value
         body_y[#body_y + 1] = positions[index] + offset
@@ -4586,7 +4626,7 @@ function Figure:violinplot(values, opts)
     end
     for point = points - 1, 2, -1 do
       local value = minimum + span * (point - 1) / (points - 1)
-      local offset = width * 0.5 * densities[point]
+      local offset = series_width * 0.5 * densities[point]
       if orientation == "horizontal" then
         body_x[#body_x + 1] = value
         body_y[#body_y + 1] = positions[index] - offset
@@ -4617,7 +4657,7 @@ function Figure:violinplot(values, opts)
     self._series[#self._series + 1] = {
       kind = "violin",
       position = positions[index],
-      width = width,
+      width = series_width,
       points = points,
       bandwidth = bandwidth,
       values = sorted,
@@ -4692,16 +4732,38 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   end
   local marker = checked_marker(opts.marker == nil and "circle" or opts.marker,
     "errorbar")
+  local markersizes
   local markersize = 4
-  if opts.markersize ~= nil then
+  if type(opts.markersize) == "table" then
+    if #opts.markersize ~= #xv then
+      fail("errorbar markersize array must match the number of points")
+    end
+    markersizes = {}
+    for index = 1, #opts.markersize do
+      markersizes[index] = util.check_number(opts.markersize[index],
+        "errorbar markersize[" .. index .. "]", 0.1)
+    end
+    markersize = markersizes[1]
+  elseif opts.markersize ~= nil then
     markersize = util.check_number(opts.markersize, "errorbar markersize", 0.1)
   end
   local capsize = 4
   if opts.capsize ~= nil then
     capsize = util.check_number(opts.capsize, "errorbar capsize", 0)
   end
+  local elinewidths
   local elinewidth = 1
-  if opts.elinewidth ~= nil then
+  if type(opts.elinewidth) == "table" then
+    if #opts.elinewidth ~= #xv then
+      fail("errorbar elinewidth array must match the number of points")
+    end
+    elinewidths = {}
+    for index = 1, #opts.elinewidth do
+      elinewidths[index] = util.check_number(opts.elinewidth[index],
+        "errorbar elinewidth[" .. index .. "]", 0)
+    end
+    elinewidth = elinewidths[1]
+  elseif opts.elinewidth ~= nil then
     elinewidth = util.check_number(opts.elinewidth, "errorbar elinewidth", 0)
   end
   local errorevery = 1
@@ -4736,9 +4798,11 @@ function Figure:errorbar(x, y, yerr, xerr, opts)
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
+  style.markersizes = markersizes
   checked_marker_style(style_opts, "errorbar", style)
   style.capsize = capsize
   style.elinewidth = elinewidth
+  style.elinewidths = elinewidths
   if style_opts.ecolor ~= nil then
     style.ecolor = util.check_color(style_opts.ecolor, "errorbar ecolor")
   else

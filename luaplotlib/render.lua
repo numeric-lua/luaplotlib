@@ -977,8 +977,10 @@ local function render_line(series, map_x, map_y, buf)
         marker_outline)
     end
     for _, i in ipairs(marker_indices) do
+      local marker_size = style.markersizes and style.markersizes[i] or
+        style.markersize
       buf[#buf + 1] = markers.svg(style.marker, "marker",
-        map_x(series.x[i]), map_y(series.y[i]), style.markersize,
+        map_x(series.x[i]), map_y(series.y[i]), marker_size,
         marker_fill, marker_opacity, marker_outline)
     end
   end
@@ -1301,7 +1303,7 @@ end
 local function render_errorbar(series, map_x, map_y, buf)
   local style = series.style
   local cap = style.capsize or 4
-  local width = style.elinewidth or 1
+  local base_width = style.elinewidth or 1
   local base_color = style.ecolor or style.color
   local label = ""
   if style.label ~= nil then
@@ -1329,6 +1331,7 @@ local function render_errorbar(series, map_x, map_y, buf)
   for i = 1, #series.x do
     if (i - 1) % every == 0 then
       local color = style.ecolors and style.ecolors[i] or base_color
+      local width = style.elinewidths and style.elinewidths[i] or base_width
       local x = map_x(series.x[i])
       local y = series.y[i]
       local yerr_lower = (series.yerr_lower or series.yerr)[i]
@@ -1820,8 +1823,9 @@ local function render_violin(series, map_x, map_y, buf)
     label = string.format(' data-label="%s"', attribute(style.label))
   end
   buf[#buf + 1] = string.format(
-    '  <g class="series series-violin" data-position="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-mean="%s" data-q1="%s" data-median="%s" data-q3="%s" data-showmeans="%s" data-meanline="%s" data-orientation="%s"%s>',
-    util.fmt(series.position), series.points, util.fmt(series.bandwidth),
+    '  <g class="series series-violin" data-position="%s" data-width="%s" data-points="%d" data-bandwidth="%s" data-min="%s" data-max="%s" data-mean="%s" data-q1="%s" data-median="%s" data-q3="%s" data-showmeans="%s" data-meanline="%s" data-orientation="%s"%s>',
+    util.fmt(series.position), util.fmt(series.width), series.points,
+    util.fmt(series.bandwidth),
     util.fmt(series.minimum), util.fmt(series.maximum), util.fmt(series.mean),
     util.fmt(series.q1), util.fmt(series.median), util.fmt(series.q3),
     series.showmeans and "true" or "false",
@@ -1965,9 +1969,10 @@ local function render_box(series, map_x, map_y, buf)
     (q3_screen - q1_screen))
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s" data-whis="%s" data-showfliers="%s">',
+    '  <g class="series series-box" data-position="%s" data-orientation="%s" data-width="%s" data-mean="%s" data-showmeans="%s" data-meanline="%s" data-notch="%s" data-whis="%s" data-showfliers="%s">',
     util.fmt(series.position), horizontal and "horizontal" or "vertical",
-    util.fmt(series.mean), series.showmeans and "true" or "false",
+    util.fmt(series.width), util.fmt(series.mean),
+    series.showmeans and "true" or "false",
     series.meanline and "true" or "false", series.notch and "true" or "false",
     util.fmt(series.whis or 1.5), series.showfliers == false and "false" or "true")
   if series.notch then
@@ -2840,6 +2845,8 @@ function M.to_svg(fig)
         local offset = series.lineoffsets[row]
         local half = series.linelengths[row] / 2
         local row_color = row_colors and row_colors[row] or style.color
+        local row_width = style.linewidths and style.linewidths[row] or
+          style.linewidth
         for _, value in ipairs(events) do
           event_index = event_index + 1
           local event_color = series.eventcolors and
@@ -2852,7 +2859,7 @@ function M.to_svg(fig)
               '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x1), util.fmt(y), util.fmt(x2), util.fmt(y),
-              event_color, util.fmt(style.linewidth), dash, opacity)
+              event_color, util.fmt(row_width), dash, opacity)
           else
             local x = map_x(value)
             local y1, y2 = map_y(offset - half), map_y(offset + half)
@@ -2860,7 +2867,7 @@ function M.to_svg(fig)
               '   <line class="event" data-row="%d" data-offset="%s" data-length="%s" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s"%s%s/>',
               row, util.fmt(offset), util.fmt(series.linelengths[row]),
               util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
-              event_color, util.fmt(style.linewidth), dash, opacity)
+              event_color, util.fmt(row_width), dash, opacity)
           end
           if style.linestyle ~= "none" then buf[#buf + 1] = line end
         end

@@ -101,16 +101,24 @@
   `explicit_edges`;
 - `fig:errorbar` accepts per-point `ecolor` arrays, exported as `style.ecolors`;
 - `fig:legend` accepts `fontsize`, scaling labels, title, and frame geometry on
-  Cartesian and polar figures; scenes export it.
+  Cartesian and polar figures; scenes export it;
+- `fig:boxplot` accepts one `width` per sample. SVG groups expose `data-width`;
+- `fig:violinplot` accepts one `width` fraction per sample. SVG groups expose
+  `data-width`;
+- `fig:errorbar` accepts per-point `markersize` and `elinewidth` arrays,
+  exported as `style.markersizes` and `style.elinewidths`;
+- `fig:eventplot` accepts one `linewidth` per row, exported as
+  `style.linewidths`.
   Existing examples and visual QA cover per-bar colors, annotation
   backgrounds/rotation, label padding, pie distances/rotation/edges/text and
   direction, complete hist2d grids, explicit 2-D edges, log hist2d colors,
-  per-point markers/alpha/edges/widths/error colors, axis-label/legend
-  typography, legend spacing, errorbar/stem marker styling and x/y limits,
-  horizontal stems/violins, notched/whisker boxplots, quiver angle modes and
-  per-vector colors, tick/title styling, event line styles and per-event
-  colors, filled steps, explicit histogram edges, log hexbin colors, and
-  fill/span/histogram hatches. The dependency-free suite grows from 410 to 534
+  per-point markers/alpha/edges/widths/error colors/sizes, per-sample
+  box/violin widths, per-row event widths, axis-label/legend typography,
+  legend spacing, errorbar/stem marker styling and x/y limits, horizontal
+  stems/violins, notched/whisker boxplots, quiver angle modes and per-vector
+  colors, tick/title styling, event line styles and per-event colors, filled
+  steps, explicit histogram edges, log hexbin colors, and
+  fill/span/histogram hatches. The dependency-free suite grows from 410 to 543
   tests. Existing Cartesian APIs remain compatible, polar rendering is
   unchanged, and there are no new runtime dependencies.
 

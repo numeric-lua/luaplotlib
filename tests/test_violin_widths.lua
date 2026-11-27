@@ -1,0 +1,22 @@
+local plt = require("luaplotlib")
+
+test("violinplot accepts one width fraction per sample", function()
+  local fig = plt.figure()
+  fig:violinplot({ { 1, 2, 3 }, { 2, 3, 4 } },
+    { width = { 0.3, 0.8 } })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-width="0.3"')
+  assert_contains(svg, 'data-width="0.8"')
+  local scene = fig:to_scene()
+  assert_equal(scene.series[2].width, 0.8)
+end)
+
+test("violinplot width arrays validate length and range", function()
+  local fig = plt.figure()
+  assert_error("match the number of samples", function()
+    fig:violinplot({ { 1, 2 }, { 2, 3 } }, { width = { 0.5 } })
+  end)
+  assert_error("width%[1%] must be >= 0.01", function()
+    fig:violinplot({ { 1, 2 } }, { width = { 0 } })
+  end)
+end)

@@ -486,14 +486,14 @@ upper sides.
 | `linewidth` | number ≥ 0 | `1.5` |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, `"none"` | `"solid"` |
 | `marker` | marker name, `true`, or `false` | `"circle"` |
-| `markersize` | number > 0 | `4` |
+| `markersize` | number > 0 or per-point array | `4` |
 | `markerfacecolor` | color string | series color |
 | `markeredgecolor` | color string | no outline |
 | `markeredgewidth` | number ≥ 0 | `1` when an outline is present |
 | `alpha` | number in [0, 1] | `1` |
 | `capsize` | number ≥ 0, in SVG user units | `4` |
-| `elinewidth` | number ≥ 0 | `1` |
-| `ecolor` | color string | same as `color` |
+| `elinewidth` | number ≥ 0 or per-point array | `1` |
+| `ecolor` | color string or per-point array | same as `color` |
 
 `yerr` is required; `xerr` is optional. Each accepts one of three forms:
 
@@ -522,7 +522,7 @@ Errorbar markers accept the same `markerfacecolor`, `markeredgecolor`, and
 vertex and marker but draws error bars only at
 the first point and every nth point after it. The group exposes
 `data-errorevery`, `data-error-points`, and limit flags; scenes export
-`errorevery` plus the four limit arrays. `ecolor` may contain one error-line/cap color per point. `lolims`/`uplims`
+`errorevery` plus the four limit arrays. `ecolor`, `markersize`, and `elinewidth` may contain one value per point. `lolims`/`uplims`
 replace vertical caps with down/up arrowheads; `xlolims`/`xuplims` replace horizontal caps with
 left/right arrowheads. Automatic limits cover the drawn error extents plus
 every point position.
@@ -743,7 +743,8 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `eventcolors` | array with one color per event | row colors |
 | `labels` | array with one axis label per row | no labels |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
-| `color`, `label`, `linewidth`, `alpha` | normal series style | palette / `2` / `1` |
+| `linewidth` | number ≥ 0 or one value per row | `2` |
+| `color`, `label`, `alpha` | normal series style | palette / `1` |
 
 In the default vertical orientation each value is an x coordinate and the mark
 is a vertical line centered on its row's offset. With `orientation =
@@ -751,7 +752,8 @@ is a vertical line centered on its row's offset. With `orientation =
 centered on its row's x offset. `lineoffsets` place the lane centers and
 `linelengths` set each lane's span in data units. `colors` gives one stroke
 color per row and cannot be combined with `color`; `eventcolors` overrides row
-colors with one entry per event across all rows. Offsets and
+colors with one entry per event across all rows. `linewidth` accepts one value
+per row. Offsets and
 lengths participate in automatic ranging, and a row's length may differ from
 its neighbors'. Setting `linestyle = "none"` hides event marks while keeping
 the lane group and axis labels. `to_scene()` exports `orientation`, `rows`,
@@ -917,7 +919,7 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | --- | --- | --- |
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `labels` | one label per sample | `sample N` |
-| `width` | number in [0.01, 1] | `0.6` |
+| `width` | number in [0.01, 1] or per-sample array | `0.6` |
 | `showmeans` | boolean, draw the sample mean | `false` |
 | `meanline` | boolean, draw a dashed mean line instead of a marker | `false` |
 | `notch` | boolean | `false` |
@@ -925,7 +927,8 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `showfliers` | boolean | `true` |
 | `color`, `label` | series style | palette / no legend entry |
 
-Vertical boxes place categories on x and values on y. Horizontal boxes swap
+`width` may be one scalar or one value per sample. Vertical boxes place
+categories on x and values on y. Horizontal boxes swap
 that mapping, put the category labels on the y axis, and carry
 `data-orientation="horizontal"` on each `series-box` group. Both orientations
 use `whis` (default 1.5×IQR): the lower whisker reaches the smallest sample value
@@ -937,7 +940,7 @@ replaces the box with a `box-notch` polygon narrowed
 around the median by `1.57 * IQR / sqrt(n)`, clamped to the quartiles.
 `showmeans = true` adds a `box-mean-marker` circle at the sample mean;
 combining it with `meanline = true` draws a dashed `box-mean-line` across the
-box instead. The group exposes `data-mean`, `data-showmeans`, and
+box instead. The group exposes `data-width`, `data-mean`, `data-showmeans`, and
 `data-meanline`, `data-notch`, `data-whis`, and `data-showfliers`. `to_scene()` exports `orientation`, `mean`,
 `showmeans`, `meanline`, `notch`, `notch_low`, `notch_high`, `whis`, and
 `showfliers`, and the scene root reports `category_axis = "x"` or `"y"`.
@@ -951,7 +954,7 @@ each sample's extrema and normalized to the widest body.
 | Option | Type | Default |
 | --- | --- | --- |
 | `positions` | numeric array matching the samples | `1, 2, ...` |
-| `width` | number in [0.01, 1], fraction of the minimum position spacing | `0.5` |
+| `width` | number or per-sample array in [0.01, 1], fraction of the minimum position spacing | `0.5` |
 | `points` | integer in [10, 500], KDE samples per body | `50` |
 | `bandwidth` | positive number | Silverman's rule |
 | `showextrema` | boolean | `true` |
@@ -968,7 +971,8 @@ each sample's extrema and normalized to the widest body.
 | `edgecolor` | color string | sample color |
 | `linewidth` | number ≥ 0 | `1` |
 
-Each violin is a separate series with class `series-violin`. Bodies are
+`width` may be one scalar or one fraction per sample. Each violin is a separate
+series with class `series-violin` and exposes `data-width`. Bodies are
 `violin-body` polygons; medians are `violin-median` lines, quartiles are
 `violin-quartile` dashed lines, the center is a `violin-center` line, and
 sample extrema are `violin-extrema` circles. With `showmeans = true`, each
@@ -1487,6 +1491,9 @@ includes, but is not limited to:
   `range`
 - errorbar `ecolor` arrays with wrong lengths or invalid colors
 - non-positive legend font sizes
+- box/violin width arrays with wrong lengths or out-of-range values
+- errorbar markersize/elinewidth arrays with wrong lengths or invalid values
+- eventplot linewidth arrays with wrong lengths or negative values
 - scatter edgecolor arrays whose length does not match the points
 - malformed errorbar y or x limit flags
 - non-boolean step fill flags or alpha values outside [0, 1]
@@ -1719,7 +1726,8 @@ carry `angles`;
 marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markeredgecolor`, and `markeredgewidth`. Scatter styles may include per-point
 `markers`, `alphas`, `edgecolors`, and `linewidths` arrays. Errorbar styles may
-include per-point `ecolors`, and bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
+include per-point `ecolors`, `markersizes`, and `elinewidths`, and eventplot
+styles may include per-row `linewidths`; bar/barh/hist/fill/span styles include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
 export `rotatelabels`, `edgecolor`, `linewidth`, and the slice text sizes/colors.
 Hist2d scenes export `explicit_edges`, `color_norm`, `color_vmin`, and

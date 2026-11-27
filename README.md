@@ -455,6 +455,23 @@ tables (or one edge table plus one count) and computes density with each cell's
 actual area. Errorbar `ecolor` may contain one color per point. Legend
 `fontsize` scales text and frame geometry on Cartesian and polar figures.
 
+Per-sample box/violin widths, per-point errorbar sizes, and per-row event widths
+are additive:
+
+```lua
+fig:boxplot(samples, { width = { 0.45, 0.62, 0.52 } })
+fig:violinplot(samples, { width = { 0.55, 0.68, 0.60 } })
+fig:errorbar(x, y, yerr, {
+  markersize = { 4, 6, 5 },
+  elinewidth = { 1, 2, 3 },
+})
+fig:eventplot(rows, { linewidth = { 2, 3, 4 } })
+```
+
+Box and violin widths accept one value per sample. Errorbar `markersize` and
+`elinewidth` accept one value per point, applied to marker radii and error
+strokes/caps. Eventplot `linewidth` accepts one value per row.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -684,9 +701,9 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional notches, mean
   markers, or mean lines
-- Vertical or horizontal Gaussian-kernel violin plots with configurable
-  bandwidth, positions, quartiles, medians, extrema, optional mean marks, and
-  per-sample colors
+- Vertical or horizontal Gaussian-kernel violin plots with per-sample widths,
+  configurable bandwidth, positions, quartiles, medians, extrema, optional mean
+  marks, and per-sample colors
 - Vertical or horizontal event lanes with per-row offsets, lengths, colors,
   axis labels, line styles, and scene export
 - Horizontal broken bars for schedules and Gantt-style intervals
@@ -699,7 +716,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   at Cartesian or polar data coordinates
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
   and upper extents, optional `errorevery` decimation, configurable caps, and
-  lower/upper and left/right limit arrowheads plus per-point error colors
+  lower/upper and left/right limit arrowheads plus per-point error colors,
+  marker sizes, and error line widths
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
@@ -759,9 +777,10 @@ quiver-uv, tick-style, hist-hatch, violin-horizontal, pie-rotation,
 fill-hatch, span-hatch, title-style, pie-edge, scatter-edge, errorbar-limit,
 step-fill, hist-edges, label/legend styling, errorbar x limits, scatter
 outline widths, log hexbin/hist2d counts, notched/whisker boxplots,
-counterclockwise pie direction, per-arrow/event/error colors, pie text styling,
-legend font sizing, image-alpha, and equal-aspect metadata, and confirms that
-Cartesian examples stay Cartesian.
+counterclockwise pie direction, per-arrow/event/error colors,
+box/violin/error/event size arrays, pie text styling, legend font sizing,
+image-alpha, and equal-aspect metadata, and confirms that Cartesian examples
+stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -840,9 +859,10 @@ rotation/backgrounds, horizontal stems, quiver uv angles, tick/title label
 styling, horizontal violins, rotated pie labels, pie wedge outlines,
 fill/span/step hatches and fills, errorbar x/y limit arrows, explicit
 histogram edges, explicit 2-D edges, log hexbin/hist2d colors, box
-notches/whisker controls, counterclockwise pies, per-arrow/event/error colors,
-pie text styling, axis-label/legend typography, legend spacing, per-point
-scatter outline widths,
+notches/whisker controls, per-sample box/violin widths, counterclockwise pies,
+per-arrow/event/error colors, per-point error marker/line sizes, per-row event
+widths, pie text styling, axis-label/legend typography, legend spacing,
+per-point scatter outline widths,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
 error-bar decimation, complementary ECDFs, per-bar
 multi-series colors, label padding, pie label/pct
@@ -908,7 +928,8 @@ See
   values can still crowd or clip within a fixed canvas. Box notches use the
   normal-approximation interval and clamp to the quartiles for small samples.
   Hidden fliers stay in scene `outliers` but no longer affect automatic
-  ranges.
+  ranges. Per-element widths and marker sizes must match the sample/point/row
+  count, and very large marker sizes can overlap neighboring points.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

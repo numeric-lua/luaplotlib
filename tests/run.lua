@@ -292,6 +292,10 @@ local test_files = {
   "test_hist2d_edges.lua",
   "test_errorbar_ecolors.lua",
   "test_legend_fontsize.lua",
+  "test_boxplot_widths.lua",
+  "test_violin_widths.lua",
+  "test_errorbar_sizes.lua",
+  "test_eventplot_widths.lua",
   "test_export.lua",
 }
 
