@@ -127,20 +127,27 @@
   opacity;
 - `fig:quiver` accepts per-vector `linewidth` arrays, exported as
   `style.linewidths`;
-- `fig:eventplot` accepts per-row `alpha`, exported as `style.alphas`.
-  Existing examples and visual QA cover per-bar colors/outlines, annotation
-  backgrounds/rotation, label padding, pie distances/rotation/edges/text and
-  direction, complete hist2d grids, explicit 2-D edges, log hist2d colors,
-  per-point markers/alpha/edges/widths/error colors/sizes, per-sample
-  box/violin widths, box colors/opacity, violin opacity, per-row event
-  widths/opacity, box visibility, quiver head/line widths, axis-label/legend
-  typography, independent legend title sizes, legend spacing, errorbar/stem
-  marker styling and x/y limits, horizontal stems/violins,
-  notched/whisker boxplots, quiver angle modes and per-vector colors,
-  tick/title styling, event line styles and per-event colors, filled steps,
-  explicit histogram edges, per-bin outlines, log hexbin colors, and
-  fill/span/histogram hatches. The dependency-free suite grows from 410 to 564
-  tests. Existing Cartesian APIs remain compatible, polar rendering is
+- `fig:eventplot` accepts per-row `alpha`, exported as `style.alphas`;
+- `fig:bar` and `fig:barh` accept per-bar `linewidth` arrays, including one list
+  per series for `bar`. Scenes export `style.linewidths`;
+- `fig:hist` accepts per-bin `linewidth` arrays for `histtype = "bar"`;
+- `fig:boxplot` accepts `edgecolors` with one outline color per sample;
+- `fig:violinplot` accepts `edgecolors` with one outline color per sample;
+- `fig:pie`/`fig:donut` accept `alpha` as a number or per-slice array. SVG and
+  pie scenes export the resolved opacity values.
+  Existing examples and visual QA cover per-bar colors/outlines/widths,
+  annotation backgrounds/rotation, label padding, pie distances/rotation/
+  edges/text/opacity and direction, complete hist2d grids, explicit 2-D edges,
+  log hist2d colors, per-point markers/alpha/edges/widths/error colors/sizes,
+  per-sample box/violin widths, box colors/opacity/edges, violin opacity/edges,
+  per-row event widths/opacity, box visibility, quiver head/line widths,
+  axis-label/legend typography, independent legend title sizes, legend
+  spacing, errorbar/stem marker styling and x/y limits, horizontal
+  stems/violins, notched/whisker boxplots, quiver angle modes and per-vector
+  colors, tick/title styling, event line styles and per-event colors, filled
+  steps, explicit histogram edges, per-bin outlines/widths, log hexbin colors,
+  and fill/span/histogram hatches. The dependency-free suite grows from 410 to
+  575 tests. Existing Cartesian APIs remain compatible, polar rendering is
   unchanged, and there are no new runtime dependencies.
 
 ## 4.28.0

@@ -111,6 +111,7 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `inner_radius` | number in [0, 0.95] | `0` (`0.55` for donut) |
 | `explode` | number or per-slice array in [0, 0.5] | `0` |
 | `shadow` | boolean | `false` |
+| `alpha` | number or one value per slice in [0, 1] | `1` |
 | `edgecolor` | color string | `#ffffff` |
 | `linewidth` | number ≥ 0 | `1.5` |
 | `labelsize` / `pctsize` | number > 0 | `12` |
@@ -122,7 +123,7 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `legend` | boolean | `true` |
 
 `counterclock = true` lays slices out in increasing-angle order; the default
-keeps the existing clockwise order. `explode` shifts each wedge outward by that
+keeps the existing clockwise order. `alpha` applies per-slice fill opacity. `explode` shifts each wedge outward by that
 fraction of the radius along its mid-angle, and `shadow` draws a soft offset wedge behind each slice. Exploded
 wedges keep their labels, leader lines, and percentage text attached to the
 shifted slice. `edgecolor`/`linewidth` style each wedge outline, defaulting to
@@ -471,7 +472,8 @@ figure that already has Cartesian series or annotations.
 
 Horizontal bars for a single numeric series. Category labels are placed on the
 y axis; `bar_colors`, `edgecolors` (one outline color per bar), `show_values`,
-`linewidth`, and the one-per-call `hatch` pattern behave like `bar`.
+`linewidth` (one value per bar), and the one-per-call `hatch` pattern behave
+like `bar`.
 
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
@@ -618,7 +620,7 @@ Draw a histogram as adjacent filled rectangles.
 | `range` | `{ min, max }` with `min < max` | data min/max |
 | `orientation` | `"vertical"` or `"horizontal"` | `"vertical"` |
 | `histtype` | `"bar"`, `"step"`, or `"stepfilled"` | `"bar"` |
-| `linewidth` | number ≥ 0, outline stroke | `1` (`1.5` for step) |
+| `linewidth` | number or one value per bin for bar outlines | `1` (`1.5` for step) |
 | `hatch` | shared hatch pattern string | no hatch |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
@@ -637,7 +639,8 @@ baseline, with the data value on y. Horizontal groups carry
 `data-orientation="horizontal"`, and the scene exports `orientation` with the
 axis ranges swapped accordingly.
 
-`edgecolors` supplies one outline color per bin and requires `histtype = "bar"`.
+`edgecolors` and array `linewidth` values supply one outline color/width per bin
+and require `histtype = "bar"`.
 `histtype = "bar"` is the existing adjacent-rectangle rendering. `"step"`
 draws a single stepped outline (`hist-step`) through every bin edge, including
 empty bins, and closes to the zero baseline at both ends. `"stepfilled"` draws
@@ -932,10 +935,12 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `showfliers` | boolean | `true` |
 | `showbox`, `showwhiskers`, `showcaps` | boolean | `true` |
 | `colors` | one color per sample | `color` |
+| `edgecolors` | one outline color per sample | sample color |
 | `alpha` | number or one value per sample in [0, 1] | `1` |
 | `color`, `label` | series style | palette / no legend entry |
 
-`width`, `colors`, and `alpha` may be one scalar or one value per sample;
+`width`, `colors`, `edgecolors`, and `alpha` may be one scalar or one value per
+sample;
 `alpha` scales each filled box body against the normal quarter opacity. Vertical
 boxes place
 categories on x and values on y. Horizontal boxes swap
@@ -981,10 +986,11 @@ each sample's extrema and normalized to the widest body.
 | `label` | shared legend label | no legend entry |
 | `alpha` | number or one value per sample in [0, 1] | `0.65` |
 | `edgecolor` | color string | sample color |
+| `edgecolors` | one outline color per sample | sample color |
 | `linewidth` | number ≥ 0 | `1` |
 
-`width` may be one scalar or one fraction per sample, and `alpha` may be one
-value or one per sample. Each violin is a separate
+`width` may be one scalar or one fraction per sample, and `alpha`/`edgecolors`
+may be one value or one per sample. Each violin is a separate
 series with class `series-violin` and exposes `data-width`. Bodies are
 `violin-body` polygons; medians are `violin-median` lines, quartiles are
 `violin-quartile` dashed lines, the center is a `violin-center` line, and
@@ -1034,7 +1040,7 @@ fig:bar({ "Q1", "Q2" }, {
 | Option | Type | Default |
 | --- | --- | --- |
 | `width` | number in [0.01, 1] | `0.8` |
-| `linewidth` | number ≥ 0, bar outline stroke | `1` |
+| `linewidth` | number or per-bar/array-of-arrays outline widths | `1` |
 | `color` | color string | next palette color |
 | `colors` | table of color strings, one per series | palette colors |
 | `bar_colors` | flat color list (single series) or one list per series | series colors |
@@ -1051,9 +1057,9 @@ fig:bar({ "Q1", "Q2" }, {
 | `capsize` | number ≥ 0, SVG user units | `4` |
 
 `width` is a fraction of the smallest spacing between x positions (or 1 for a
-single bar / categorical position). `linewidth` controls the shared outline
-stroke width of every bar in the call without changing its fill or the
-automatic range. In grouped mode that width is shared by all series in a group,
+single bar / categorical position). `linewidth` may be one value, a flat list
+with one value per bar, or one list per series; each value controls that bar's
+outline stroke without changing its fill or the automatic range. In grouped mode that width is shared by all series in a group,
 so every group stays centered on its category position. In
 stacked mode positive and negative values accumulate separately from zero.
 `stacked = true` and `grouped = true` are mutually exclusive. `label` applies to
@@ -1513,7 +1519,9 @@ includes, but is not limited to:
 - non-boolean box component visibility flags
 - negative quiver head widths, non-positive legend title sizes
 - bar/barh/hist edge-color arrays with wrong lengths or invalid colors
-- box/violin color/alpha arrays with wrong lengths or invalid values
+- box/violin color/alpha/edge-color arrays with wrong lengths or invalid values
+- bar/barh/hist linewidth arrays with wrong lengths or negative values
+- pie alpha arrays with wrong lengths or values outside [0, 1]
 - quiver linewidth arrays with wrong lengths or negative values
 - eventplot alpha arrays with wrong lengths or values outside [0, 1]
 - scatter edgecolor arrays whose length does not match the points
@@ -1752,7 +1760,7 @@ marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markers`, `alphas`, `edgecolors`, and `linewidths` arrays. Errorbar styles may
 include per-point `ecolors`, `markersizes`, and `elinewidths`, and eventplot
 styles may include per-row `linewidths`; bar/barh/hist/fill/span styles may
-include per-bar/bin `edgecolors`; include `hatch` when a pattern is active. Step scenes export `fill` and
+include per-bar/bin `edgecolors` and `linewidths`; include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
 export `rotatelabels`, `edgecolor`, `linewidth`, and the slice text sizes/colors.
 Hist2d scenes export `explicit_edges`, `color_norm`, `color_vmin`, and
@@ -1777,7 +1785,8 @@ limits, and colorbar settings. Image scenes add `extent` and `origin` when the
 image uses explicit field coordinates, plus `colorbar_label`, `colorbar_ticks`,
 and `colorbar_tick_values` when the extended colorbar is active. Pie scenes use
 a separate `pie` block with `radius`, `inner_radius`, `shadow`, `rotatelabels`,
-`counterclock`, `edgecolor`, `linewidth`, the slice text sizes/colors, and
+`counterclock`, `alphas`, `edgecolor`, `linewidth`, the slice text sizes/colors,
+and
 per-slice `value`, `percent`, `start_angle`, `end_angle`, `color`, `label`, and
 `explode` fields. Contour scenes export `x`/`y` coordinate
 arrays when the figure supplied them and keep the per-level `segments`. Aspect

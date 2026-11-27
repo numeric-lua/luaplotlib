@@ -311,6 +311,7 @@ local VIOLIN_OPTIONS = {
   label = true,
   alpha = true,
   edgecolor = true,
+  edgecolors = true,
   linewidth = true,
 }
 
@@ -318,6 +319,7 @@ local PIE_OPTIONS = {
   labels = true,
   colors = true,
   color = true,
+  alpha = true,
   startangle = true,
   counterclock = true,
   autopct = true,
@@ -429,6 +431,7 @@ local BOX_OPTIONS = {
   showwhiskers = true,
   showcaps = true,
   colors = true,
+  edgecolors = true,
   alpha = true,
 }
 
@@ -2514,8 +2517,22 @@ function Figure:hist(values, opts)
   if histtype ~= "bar" and histtype ~= "step" and histtype ~= "stepfilled" then
     fail("hist histtype must be 'bar', 'step', or 'stepfilled'")
   end
+  local linewidths
   local linewidth = histtype == "step" and 1.5 or 1
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    if histtype ~= "bar" then
+      fail("hist linewidth arrays require histtype bar")
+    end
+    if #opts.linewidth ~= bins then
+      fail("hist linewidth must have one value per bin")
+    end
+    linewidths = {}
+    for index = 1, #opts.linewidth do
+      linewidths[index] = util.check_number(opts.linewidth[index],
+        "hist linewidth[" .. index .. "]", 0)
+    end
+    linewidth = linewidths[1]
+  elseif opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "hist linewidth", 0)
   end
   local hatch = opts.hatch
@@ -2579,6 +2596,7 @@ function Figure:hist(values, opts)
   local style = checked_style(self, opts, "hist")
   style.bins = bins
   style.linewidth = linewidth
+  style.linewidths = linewidths
   style.hatch = hatch
   style.edgecolors = edgecolors
 
@@ -3276,8 +3294,42 @@ function Figure:bar(labels_or_x, values, opts, ...)
   if opts.width ~= nil then
     width_fraction = util.check_number(opts.width, "bar width", 0.01, 1)
   end
+  local bar_linewidths_series
   local bar_linewidth = 1
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    local nested = type(opts.linewidth[1]) == "table"
+    bar_linewidths_series = {}
+    if nested then
+      if #opts.linewidth ~= series_count then
+        fail("bar linewidth must have one list per series")
+      end
+      for series_index = 1, series_count do
+        local list = opts.linewidth[series_index]
+        if type(list) ~= "table" or #list ~= #xv then
+          fail("bar linewidth per-series lists must match the number of bars")
+        end
+        local list_values = {}
+        for i = 1, #list do
+          list_values[i] = util.check_number(list[i],
+            string.format("bar linewidth[%d][%d]", series_index, i), 0)
+        end
+        bar_linewidths_series[series_index] = list_values
+      end
+    else
+      if #opts.linewidth ~= #xv then
+        fail("bar linewidth must have one value per bar")
+      end
+      local list_values = {}
+      for i = 1, #opts.linewidth do
+        list_values[i] = util.check_number(opts.linewidth[i],
+          "bar linewidth[" .. i .. "]", 0)
+      end
+      for series_index = 1, series_count do
+        bar_linewidths_series[series_index] = list_values
+      end
+    end
+    bar_linewidth = bar_linewidths_series[1][1]
+  elseif opts.linewidth ~= nil then
     bar_linewidth = util.check_number(opts.linewidth, "bar linewidth", 0)
   end
 
@@ -3477,6 +3529,9 @@ function Figure:bar(labels_or_x, values, opts, ...)
     }, "bar")
     style.width_fraction = width_fraction
     style.linewidth = bar_linewidth
+    if bar_linewidths_series ~= nil then
+      style.linewidths = bar_linewidths_series[i]
+    end
     if bar_edgecolors_series ~= nil then
       style.edgecolors = bar_edgecolors_series[i]
     end
@@ -4084,6 +4139,21 @@ function Figure:pie(values, opts)
   if opts.counterclock ~= nil then
     util.check_boolean(opts.counterclock, "pie counterclock")
   end
+  local alphas
+  if type(opts.alpha) == "table" then
+    if #opts.alpha ~= #values_v then
+      fail("pie alpha array must have one entry per slice")
+    end
+    alphas = {}
+    for index = 1, #opts.alpha do
+      alphas[index] = util.check_alpha(opts.alpha[index],
+        "pie alpha[" .. index .. "]")
+    end
+  elseif opts.alpha ~= nil then
+    local alpha = util.check_alpha(opts.alpha, "pie alpha")
+    alphas = {}
+    for index = 1, #values_v do alphas[index] = alpha end
+  end
   local direction = counterclock and 1 or -1
   local slices = {}
   local angle = startangle
@@ -4108,6 +4178,7 @@ function Figure:pie(values, opts)
     pctsize = pctsize, pctcolor = pctcolor,
     labeldistance = labeldistance, pctdistance = pctdistance,
     rotatelabels = rotatelabels, counterclock = counterclock,
+    alphas = alphas,
   }
   return self
 end
@@ -4143,8 +4214,19 @@ function Figure:barh(labels_or_y, values, opts)
   if opts.height ~= nil then
     height = util.check_number(opts.height, "barh height", 0.01, 1)
   end
+  local linewidths
   local linewidth = 1
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    if #opts.linewidth ~= #values_v then
+      fail("barh linewidth must have one value per bar")
+    end
+    linewidths = {}
+    for i = 1, #opts.linewidth do
+      linewidths[i] = util.check_number(opts.linewidth[i],
+        "barh linewidth[" .. i .. "]", 0)
+    end
+    linewidth = linewidths[1]
+  elseif opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "barh linewidth", 0)
   end
   local hatch = opts.hatch
@@ -4206,7 +4288,7 @@ function Figure:barh(labels_or_y, values, opts)
     bar_colors = bar_colors, show_values = opts.show_values == true,
     style = { color = color, label = opts.label, alpha = alpha,
       edgecolor = edgecolor, edgecolors = edgecolors,
-      linewidth = linewidth, hatch = hatch },
+      linewidth = linewidth, linewidths = linewidths, hatch = hatch },
   }
   return self
 end
@@ -4490,6 +4572,17 @@ function Figure:boxplot(values, opts)
         "boxplot colors[" .. index .. "]")
     end
   end
+  local edge_list
+  if opts.edgecolors ~= nil then
+    if type(opts.edgecolors) ~= "table" or #opts.edgecolors ~= #samples then
+      fail("boxplot edgecolors must have one entry per sample")
+    end
+    edge_list = {}
+    for index = 1, #opts.edgecolors do
+      edge_list[index] = util.check_color(opts.edgecolors[index],
+        "boxplot edgecolors[" .. index .. "]")
+    end
+  end
   local alpha_list
   local alpha_value = 1
   if type(opts.alpha) == "table" then
@@ -4570,6 +4663,7 @@ function Figure:boxplot(values, opts)
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
       style = { color = color_list and color_list[index] or color,
+        edgecolor = edge_list and edge_list[index] or nil,
         label = opts.label,
         alpha = alpha_list and alpha_list[index] or alpha_value },
     }
@@ -4695,6 +4789,16 @@ function Figure:violinplot(values, opts)
     end
   end
 
+  if opts.edgecolors ~= nil then
+    if type(opts.edgecolors) ~= "table" or
+        #opts.edgecolors ~= sample_count then
+      fail("violinplot edgecolors must have one entry per sample")
+    end
+    for index = 1, #opts.edgecolors do
+      util.check_color(opts.edgecolors[index],
+        "violinplot edgecolors[" .. index .. "]")
+    end
+  end
   local alpha_list
   local alpha = opts.alpha
   if type(alpha) == "table" then
@@ -4810,9 +4914,11 @@ function Figure:violinplot(values, opts)
     local color = color_list and color_list[index] or
       colors.next(self._color_serial)
     if color_list == nil then self._color_serial = self._color_serial + 1 end
-    local edgecolor = opts.edgecolor
-    if edgecolor ~= nil then
-      edgecolor = util.check_color(edgecolor, "violinplot edgecolor")
+    local edgecolor
+    if opts.edgecolors ~= nil then
+      edgecolor = opts.edgecolors[index]
+    elseif opts.edgecolor ~= nil then
+      edgecolor = util.check_color(opts.edgecolor, "violinplot edgecolor")
     else
       edgecolor = color
     end

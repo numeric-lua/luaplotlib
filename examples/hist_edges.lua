@@ -33,7 +33,7 @@ fig:hist(values, {
   color = "#7c3aed",
   edgecolor = "#1e1b4b",
   edgecolors = { "#1e1b4b", "#7c3aed", "#0f766e", "#b45309", "#be123c" },
-  linewidth = 1.3,
+  linewidth = { 0.8, 1.2, 1.6, 2.0, 2.4 },
   hatch = ".",
   label = "custom bins",
 })

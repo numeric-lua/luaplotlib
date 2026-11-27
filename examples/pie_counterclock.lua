@@ -27,6 +27,7 @@ fig:pie({ 31, 24, 21, 14, 10 }, {
   counterclock = true,
   radius = 0.25,
   labeldistance = 1.10,
+  alpha = { 0.65, 0.75, 0.85, 0.95, 1 },
   autopct = true,
 })
 fig:title("Counterclockwise pie")

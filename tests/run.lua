@@ -305,6 +305,11 @@ local test_files = {
   "test_violin_alpha.lua",
   "test_quiver_linewidths.lua",
   "test_eventplot_alpha.lua",
+  "test_bar_linewidths.lua",
+  "test_hist_linewidths.lua",
+  "test_box_edgecolors.lua",
+  "test_violin_edgecolors.lua",
+  "test_pie_alpha.lua",
   "test_export.lua",
 }
 

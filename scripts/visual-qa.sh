@@ -523,6 +523,10 @@ hist_edge_colors=$(grep -o 'class="hist-bin"[^>]*stroke="[^"]*"' "$HIST_EDGES" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$hist_edge_colors" -ge 3 ] ||
   fail "$HIST_EDGES should vary per-bin edge colors"
+hist_edge_widths=$(grep -o 'class="hist-bin"[^>]*stroke-width="[^"]*"' "$HIST_EDGES" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$hist_edge_widths" -ge 3 ] ||
+  fail "$HIST_EDGES should vary per-bin outline widths"
 grep -q '<pattern id="hatch-' "$HIST_STYLES" ||
   fail "$HIST_STYLES has no histogram hatch definition"
 grep -q 'class="hist-step-filled"[^>]*fill="url(#hatch-' "$HIST_STYLES" ||
@@ -566,6 +570,10 @@ box_colors=$(grep -o 'class="box box-notch"[^>]*stroke="[^"]*"' "$BOX_H" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$box_colors" -eq 3 ] ||
   fail "$BOX_H should use three box colors"
+box_edges=$(grep -o 'class="box box-notch"[^>]*stroke="[^"]*"' "$BOX_H" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$box_edges" -eq 3 ] ||
+  fail "$BOX_H should use three box edge colors"
 box_alphas=$(grep -o 'class="box box-notch"[^>]*fill-opacity="[^"]*"' "$BOX_H" |
   sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$box_alphas" -eq 3 ] ||
@@ -1001,6 +1009,10 @@ violin_alphas=$(grep -o 'class="violin-body"[^>]*fill-opacity="[^"]*"' "$VIOLIN_
   sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$violin_alphas" -eq 3 ] ||
   fail "$VIOLIN_H should use three violin opacities"
+violin_edges=$(grep -o 'class="violin-body"[^>]*stroke="[^"]*"' "$VIOLIN_H" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$violin_edges" -eq 3 ] ||
+  fail "$VIOLIN_H should use three violin edge colors"
 violin_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN" | wc -l |
   tr -d ' ')
 [ "$violin_means" -eq 3 ] ||
@@ -1036,6 +1048,10 @@ barh_edge_colors=$(grep -o 'class="barh"[^>]*stroke="[^"]*"' "$BARH_HATCH" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$barh_edge_colors" -ge 3 ] ||
   fail "$BARH_HATCH should vary bar edge colors"
+barh_widths=$(grep -o 'class="barh"[^>]*stroke-width="[^"]*"' "$BARH_HATCH" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$barh_widths" -ge 3 ] ||
+  fail "$BARH_HATCH should vary bar outline widths"
 
 # Grouped bars support one color per bar within each series.
 BARS_GROUPED=examples/output/bars-grouped.svg
@@ -1073,10 +1089,13 @@ fi
 
 # Bar outlines use the requested three-pixel stroke.
 BAR_WIDTH=examples/output/bar-linewidth.svg
-bar_width_rects=$(grep -o 'class="bar"[^>]*stroke-width="3"' "$BAR_WIDTH" |
-  wc -l | tr -d ' ')
+bar_width_rects=$(grep -o 'class="bar"' "$BAR_WIDTH" | wc -l | tr -d ' ')
 [ "$bar_width_rects" -eq 8 ] ||
-  fail "$BAR_WIDTH should draw eight bars with a three-pixel outline"
+  fail "$BAR_WIDTH should draw eight bars"
+bar_widths=$(grep -o 'class="bar"[^>]*stroke-width="[^"]*"' "$BAR_WIDTH" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$bar_widths" -ge 4 ] ||
+  fail "$BAR_WIDTH should use per-bar outline widths"
 
 # Broken horizontal bars expose one rectangle per range and an aligned title.
 BROKEN_BARH=examples/output/broken-barh.svg
@@ -1132,6 +1151,12 @@ pie_counter_slices=$(grep -o 'class="pie-slice"' "$PIE_COUNTER" | wc -l |
   tr -d ' ')
 [ "$pie_counter_slices" -eq 5 ] ||
   fail "$PIE_COUNTER should draw all five slices"
+grep -q 'data-alpha="true"' "$PIE_COUNTER" ||
+  fail "$PIE_COUNTER should advertise per-slice alpha"
+pie_alphas=$(grep -o 'class="pie-slice"[^>]*fill-opacity="[^"]*"' "$PIE_COUNTER" |
+  sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$pie_alphas" -ge 3 ] ||
+  fail "$PIE_COUNTER should vary slice opacity"
 grep -q 'data-labeldistance="1.14" data-pctdistance="0.55"' "$PIE_EXPLODE" ||
   fail "$PIE_EXPLODE should expose its label and percentage distances"
 

@@ -227,6 +227,7 @@ function M.from_figure(figure)
       pctsize = figure._pie.pctsize or 12,
       pctcolor = figure._pie.pctcolor or "#ffffff",
       counterclock = figure._pie.counterclock and true or false,
+      alphas = figure._pie.alphas and copy_array(figure._pie.alphas) or nil,
       labeldistance = figure._pie.labeldistance or 1.08,
       pctdistance = figure._pie.pctdistance or 0.64,
       rotatelabels = figure._pie.rotatelabels and true or false,

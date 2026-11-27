@@ -507,6 +507,23 @@ between fully transparent and the normal quarter-opacity fill. Violin
 `alpha` accepts one body opacity per sample. Quiver `linewidth` may contain one
 width per vector, and eventplot `alpha` one opacity per row.
 
+Per-bar/bin outline widths, per-sample box/violin edges, and pie opacity are
+also available:
+
+```lua
+fig:bar(labels, values, { linewidth = { 1, 2, 3, 4 } })
+fig:barh(labels, values, { linewidth = per_bar_widths })
+fig:hist(values, { bins = edges, linewidth = per_bin_widths })
+fig:boxplot(samples, { edgecolors = { "#1e3a8a", "#7c2d12", "#14532d" } })
+fig:violinplot(samples, { edgecolors = per_sample_edges })
+fig:pie(values, { alpha = { 0.65, 0.75, 0.85, 0.95, 1 } })
+```
+
+Bar `linewidth` accepts one value per bar or one list per series, barh and hist
+accept one value per bar/bin, and `hist` restricts width arrays to
+`histtype = "bar"`. Box/violin `edgecolors` accept one outline color per
+sample. Pie `alpha` accepts one value per slice.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -730,15 +747,15 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Vertical and horizontal bars with numeric positions or categorical labels,
   including multi-series grouped and stacked bars, per-bar color lists,
   configurable outline widths and hatches, and symmetric/asymmetric error bars
-- Pie and donut charts with exploded slices, soft shadows, configurable
-  clockwise/counterclockwise direction, wedge outlines, styled/rotated labels,
-  and distance-tuned percentage annotations
+- Pie and donut charts with exploded slices, soft shadows, per-slice opacity,
+  configurable clockwise/counterclockwise direction, wedge outlines,
+  styled/rotated labels, and distance-tuned percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional notches, mean
   markers, or mean lines
 - Vertical or horizontal Gaussian-kernel violin plots with per-sample widths,
-  colors, and opacity, configurable bandwidth, positions, quartiles, medians,
-  extrema, and optional mean marks
+  colors, edge colors, and opacity, configurable bandwidth, positions,
+  quartiles, medians, extrema, and optional mean marks
 - Vertical or horizontal event lanes with per-row offsets, lengths, colors,
   axis labels, line styles, and scene export
 - Horizontal broken bars for schedules and Gantt-style intervals
@@ -764,8 +781,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
   hatch fills, plus hatched `axhspan`/`axvspan` bands
-- Histograms with optional hatch fills, per-bin outline colors, and styled
-  stems with custom bases,
+- Histograms with optional hatch fills, per-bin outline colors/widths, and
+  styled stems with custom bases,
   markers, marker face/edge styling, and vertical or horizontal orientation
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
 - Cartesian quiver vector fields with data-space or screen-space (`uv`) angles,
@@ -815,9 +832,10 @@ step-fill, hist-edges, label/legend styling, errorbar x limits, scatter
 outline widths, log hexbin/hist2d counts, notched/whisker boxplots,
 counterclockwise pie direction, per-arrow/event/error colors,
 box/violin/error/event size arrays, pie text styling, legend title sizing,
-box component visibility/colors/opacity, quiver head/line widths,
-per-bar/bin outline colors, event opacity, image-alpha, and equal-aspect
-metadata, and confirms that Cartesian examples stay Cartesian.
+box component visibility/colors/opacity/edges, violin edges, quiver
+head/line widths, per-bar/bin outline colors/widths, pie opacity, event
+opacity, image-alpha, and equal-aspect metadata, and confirms that Cartesian
+examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -898,8 +916,9 @@ fill/span/step hatches and fills, errorbar x/y limit arrows, explicit
 histogram edges, explicit 2-D edges, log hexbin/hist2d colors, box
 notches/whisker controls, per-sample box/violin widths, counterclockwise pies,
 per-arrow/event/error colors, per-point error marker/line sizes, per-row event
-widths, box colors/opacity and component visibility, violin opacity, quiver
-head widths/line widths, event opacity, bar/bin outline colors,
+widths, box colors/opacity/edges and component visibility, violin
+opacity/edges, quiver head widths/line widths, event opacity, bar/bin outline
+colors/widths, pie opacity,
 pie text styling, axis-label/legend typography, independent legend title sizes,
 legend spacing, per-point scatter outline widths,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
@@ -970,7 +989,8 @@ See
   ranges. Per-element widths, colors, opacity, outlines, and marker sizes must
   match the sample/point/row/bin count, and very large marker sizes can overlap
   neighboring points. Box `alpha` scales the filled body only; outlines and
-  median/whisker marks remain fully opaque.
+  median/whisker marks remain fully opaque. Histogram width arrays are
+  restricted to `histtype = "bar"`.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

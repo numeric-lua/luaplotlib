@@ -28,10 +28,13 @@ fig:bar({ "Q1", "Q2", "Q3", "Q4" }, {
   labels = { "North", "South" },
   colors = { "#4c78a8", "#f58518" },
   edgecolor = "#1f2937",
-  linewidth = 3,
+  linewidth = {
+    { 1, 2, 3, 4 },
+    { 2, 3, 4, 5 },
+  },
   grouped = true,
 })
-fig:title("Bars with a three-pixel outline")
+fig:title("Bars with per-bar outlines")
 fig:ylabel("score")
 fig:ylim(0, 21)
 fig:grid(true, { axis = "y", alpha = 0.35 })

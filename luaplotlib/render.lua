@@ -1494,12 +1494,14 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
             fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
           end
           local point_edge = style.edgecolors and style.edgecolors[i] or edge
+          local point_width = style.linewidths and style.linewidths[i] or
+            style.linewidth or 1
           buf[#buf + 1] = string.format(
             '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(left), util.fmt(top),
             util.fmt(math.abs(value_x - x_baseline)),
             util.fmt(math.abs(y2 - y1)), fill, point_edge,
-            util.fmt(style.linewidth or 1), opacity)
+            util.fmt(point_width), opacity)
         else
           local x1 = map_x(series.edges[i])
           local x2 = map_x(series.edges[i + 1])
@@ -1509,11 +1511,13 @@ local function render_hist(series, map_x, map_y, y_baseline, x_baseline, buf)
             fill = "url(#" .. hatch_id(style.hatch, fill) .. ")"
           end
           local point_edge = style.edgecolors and style.edgecolors[i] or edge
+          local point_width = style.linewidths and style.linewidths[i] or
+            style.linewidth or 1
           buf[#buf + 1] = string.format(
             '   <rect class="hist-bin" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
             util.fmt(x1), util.fmt(top), util.fmt(x2 - x1),
             util.fmt(y_baseline - top), fill, point_edge,
-            util.fmt(style.linewidth or 1), opacity)
+            util.fmt(point_width), opacity)
         end
       end
     end
@@ -1543,10 +1547,12 @@ local function render_barh(series, map_x, map_y, baseline, buf)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
     if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     local point_edge = style.edgecolors and style.edgecolors[i] or edge
+    local point_width = style.linewidths and style.linewidths[i] or
+      style.linewidth or 1
     buf[#buf + 1] = string.format(
       '   <rect class="barh" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(left), util.fmt(top), util.fmt(width), util.fmt(height), fill,
-      point_edge, util.fmt(style.linewidth or 1), opacity)
+      point_edge, util.fmt(point_width), opacity)
     if series.show_values then
       local text_x = value >= 0 and (value_x + 4) or (value_x - 4)
       local anchor = value >= 0 and "start" or "end"
@@ -1946,6 +1952,7 @@ local function render_violin(series, map_x, map_y, buf)
 end
 local function render_box(series, map_x, map_y, buf)
   local color = series.style.color
+  local edge = series.style.edgecolor or color
   local alpha = series.style.alpha or 1
   local body_opacity = 0.25 * alpha
   local horizontal = series.orientation == "horizontal"
@@ -2011,12 +2018,12 @@ local function render_box(series, map_x, map_y, buf)
       }
       buf[#buf + 1] = string.format(
         '   <polygon class="box box-notch" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1.5"/>',
-        table.concat(notch_points, " "), color, util.fmt(body_opacity), color)
+        table.concat(notch_points, " "), color, util.fmt(body_opacity), edge)
     else
       buf[#buf + 1] = string.format(
         '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1.5"/>',
         util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
-        util.fmt(rect_height), color, util.fmt(body_opacity), color)
+        util.fmt(rect_height), color, util.fmt(body_opacity), edge)
     end
   end
 
@@ -2025,52 +2032,52 @@ local function render_box(series, map_x, map_y, buf)
       '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
       util.fmt(median_screen), util.fmt(math.min(position_a, position_b)),
       util.fmt(median_screen), util.fmt(math.max(position_a, position_b)),
-      color)
+      edge)
     if series.showwhiskers ~= false then
       buf[#buf + 1] = string.format(
         '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
         util.fmt(q3_screen), util.fmt(center), util.fmt(high_screen),
-        util.fmt(center), color)
+        util.fmt(center), edge)
       buf[#buf + 1] = string.format(
         '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
         util.fmt(low_screen), util.fmt(center), util.fmt(q1_screen),
-        util.fmt(center), color)
+        util.fmt(center), edge)
     end
     if series.showcaps ~= false then
       buf[#buf + 1] = string.format(
         '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
         util.fmt(high_screen), util.fmt(cap_a), util.fmt(high_screen),
-        util.fmt(cap_b), color)
+        util.fmt(cap_b), edge)
       buf[#buf + 1] = string.format(
         '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
         util.fmt(low_screen), util.fmt(cap_a), util.fmt(low_screen),
-        util.fmt(cap_b), color)
+        util.fmt(cap_b), edge)
     end
   else
     buf[#buf + 1] = string.format(
       '   <line class="box-median" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
       util.fmt(math.min(position_a, position_b)), util.fmt(median_screen),
       util.fmt(math.max(position_a, position_b)), util.fmt(median_screen),
-      color)
+      edge)
     if series.showwhiskers ~= false then
       buf[#buf + 1] = string.format(
         '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
         util.fmt(center), util.fmt(q3_screen), util.fmt(center),
-        util.fmt(high_screen), color)
+        util.fmt(high_screen), edge)
       buf[#buf + 1] = string.format(
         '   <line class="box-whisker" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5"/>',
         util.fmt(center), util.fmt(low_screen), util.fmt(center),
-        util.fmt(q1_screen), color)
+        util.fmt(q1_screen), edge)
     end
     if series.showcaps ~= false then
       buf[#buf + 1] = string.format(
         '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
         util.fmt(cap_a), util.fmt(high_screen), util.fmt(cap_b),
-        util.fmt(high_screen), color)
+        util.fmt(high_screen), edge)
       buf[#buf + 1] = string.format(
         '   <line class="box-cap" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="2"/>',
         util.fmt(cap_a), util.fmt(low_screen), util.fmt(cap_b),
-        util.fmt(low_screen), color)
+        util.fmt(low_screen), edge)
     end
   end
 
@@ -2081,22 +2088,22 @@ local function render_box(series, map_x, map_y, buf)
           '   <line class="box-mean-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5" stroke-dasharray="4 2"/>',
           util.fmt(mean_screen), util.fmt(math.min(position_a, position_b)),
           util.fmt(mean_screen), util.fmt(math.max(position_a, position_b)),
-          color)
+          edge)
       else
         buf[#buf + 1] = string.format(
           '   <line class="box-mean-line" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="1.5" stroke-dasharray="4 2"/>',
           util.fmt(math.min(position_a, position_b)), util.fmt(mean_screen),
           util.fmt(math.max(position_a, position_b)), util.fmt(mean_screen),
-          color)
+          edge)
       end
     elseif horizontal then
       buf[#buf + 1] = string.format(
         '   <circle class="box-mean-marker" cx="%s" cy="%s" r="3" fill="%s"/>',
-        util.fmt(mean_screen), util.fmt(center), color)
+        util.fmt(mean_screen), util.fmt(center), edge)
     else
       buf[#buf + 1] = string.format(
         '   <circle class="box-mean-marker" cx="%s" cy="%s" r="3" fill="%s"/>',
-        util.fmt(center), util.fmt(mean_screen), color)
+        util.fmt(center), util.fmt(mean_screen), edge)
     end
   end
 
@@ -2105,11 +2112,11 @@ local function render_box(series, map_x, map_y, buf)
       if horizontal then
         buf[#buf + 1] = string.format(
           '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
-          util.fmt(map_x(value)), util.fmt(center), color)
+          util.fmt(map_x(value)), util.fmt(center), edge)
       else
         buf[#buf + 1] = string.format(
           '   <circle class="box-outlier" cx="%s" cy="%s" r="3" fill="none" stroke="%s" stroke-width="1.5"/>',
-          util.fmt(center), util.fmt(map_y(value)), color)
+          util.fmt(center), util.fmt(map_y(value)), edge)
       end
     end
   end
@@ -2206,10 +2213,12 @@ local function render_bar(series, map_x, map_y, baseline, yscale, buf)
     local fill = series.bar_colors and series.bar_colors[i] or style.color
     if style.hatch then fill = "url(#" .. hatch_id(style.hatch, fill) .. ")" end
     local point_edge = style.edgecolors and style.edgecolors[i] or edge
+    local point_width = style.linewidths and style.linewidths[i] or
+      style.linewidth or 1
     buf[#buf + 1] = string.format(
       '   <rect class="bar" x="%s" y="%s" width="%s" height="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
       util.fmt(x1), util.fmt(top), util.fmt(x2 - x1), util.fmt(height),
-      fill, point_edge, util.fmt(style.linewidth or 1), opacity)
+      fill, point_edge, util.fmt(point_width), opacity)
     if series.yerr_lower ~= nil then
       local reference = value
       if series.bottom ~= nil then reference = series.bottom[i] + value end
@@ -2367,14 +2376,15 @@ function M.to_pie_svg(fig)
   local buf = {}
   local function add(line) buf[#buf + 1] = line end
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-rotatelabels="%s" data-counterclock="%s">',
+  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-rotatelabels="%s" data-counterclock="%s" data-alpha="%s">',
     util.fmt(width), util.fmt(height), util.fmt(width), util.fmt(height),
     util.fmt(fig.dpi), util.fmt(pie.labeldistance or 1.08),
     util.fmt(pie.pctdistance or 0.64), util.fmt(pie.labelsize or 12),
     pie.labelcolor or "#222222", util.fmt(pie.pctsize or 12),
     pie.pctcolor or "#ffffff",
     pie.rotatelabels and "true" or "false",
-    pie.counterclock and "true" or "false"))
+    pie.counterclock and "true" or "false",
+    pie.alphas and "true" or "false"))
   add(' <desc>Generated by luaplotlib, a pure-Lua SVG plotting library.</desc>')
   add(' <rect class="background" width="' .. util.fmt(width) .. '" height="' ..
     util.fmt(height) .. '" fill="#ffffff"/>')
@@ -2401,6 +2411,12 @@ function M.to_pie_svg(fig)
       local x1, y1 = pie_point(slice_cx, slice_cy, radius, slice.start_angle)
       local x2, y2 = pie_point(slice_cx, slice_cy, radius, slice.end_angle)
       local large = sweep > 180 and 1 or 0
+      local slice_alpha = pie.alphas and pie.alphas[index] or 1
+      local opacity = ""
+      if slice_alpha < 1 then
+        opacity = string.format(' fill-opacity="%s"',
+          util.fmt(slice_alpha))
+      end
       if pie.shadow then
         add(string.format('  <path class="pie-shadow" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="#000000" fill-opacity="0.18"/>',
           util.fmt(slice_cx + 4), util.fmt(slice_cy + 4),
@@ -2408,11 +2424,12 @@ function M.to_pie_svg(fig)
           util.fmt(radius), large, arc_sweep, util.fmt(x2 + 4),
           util.fmt(y2 + 4)))
       end
-      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="%s"/>',
+      add(string.format('  <path class="pie-slice" data-explode="%s" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="%s"%s/>',
         util.fmt(slice.explode or 0), util.fmt(slice_cx), util.fmt(slice_cy),
         util.fmt(x1), util.fmt(y1), util.fmt(radius), util.fmt(radius),
         large, arc_sweep, util.fmt(x2), util.fmt(y2), slice.color,
-        pie.edgecolor or "#ffffff", util.fmt(pie.linewidth or 1.5)))
+        pie.edgecolor or "#ffffff", util.fmt(pie.linewidth or 1.5),
+        opacity))
       if pie.autopct then
         local tx, ty = pie_point(slice_cx, slice_cy, radius * (pie.pctdistance or 0.64), middle)
         local format_string = pie.autopct == true and "%.1f%%" or pie.autopct
