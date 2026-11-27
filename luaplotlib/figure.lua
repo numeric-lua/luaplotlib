@@ -428,6 +428,8 @@ local BOX_OPTIONS = {
   showbox = true,
   showwhiskers = true,
   showcaps = true,
+  colors = true,
+  alpha = true,
 }
 
 local ERRORBAR_OPTIONS = {
@@ -1062,8 +1064,19 @@ function Figure:quiver(x, y, u, v, opts)
       count, #yv, #uv, #vv))
   end
 
+  local point_linewidths
   local linewidth = 1.2
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    if #opts.linewidth ~= count then
+      fail("quiver linewidth array must match the number of vectors")
+    end
+    point_linewidths = {}
+    for index = 1, count do
+      point_linewidths[index] = util.check_number(opts.linewidth[index],
+        "quiver linewidth[" .. index .. "]", 0)
+    end
+    linewidth = point_linewidths[1]
+  elseif opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth, "quiver linewidth", 0)
   end
   local head = 6
@@ -1116,6 +1129,7 @@ function Figure:quiver(x, y, u, v, opts)
   end
   local style = checked_style(self, style_opts, "quiver")
   style.linewidth = linewidth
+  style.linewidths = point_linewidths
   style.head = head
   style.headwidth = headwidth
   style.colors = point_colors
@@ -2338,6 +2352,21 @@ function Figure:eventplot(positions, opts)
     end
   end
   local row_linewidths
+  local row_alphas
+  local alpha_value = 1
+  if type(opts.alpha) == "table" then
+    if #opts.alpha ~= #rows then
+      fail("eventplot alpha array must have one entry per row")
+    end
+    row_alphas = {}
+    for index = 1, #opts.alpha do
+      row_alphas[index] = util.check_alpha(opts.alpha[index],
+        "eventplot alpha[" .. index .. "]")
+    end
+    alpha_value = row_alphas[1]
+  elseif opts.alpha ~= nil then
+    alpha_value = util.check_alpha(opts.alpha, "eventplot alpha")
+  end
   local linewidth = opts.linewidth
   if type(linewidth) == "table" then
     if #linewidth ~= #rows then
@@ -2358,9 +2387,17 @@ function Figure:eventplot(positions, opts)
   if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
     fail("eventplot linestyle must be one of solid, dashed, dotted, or none")
   end
-  local style = checked_style(self, opts, "eventplot")
+  local style_opts = opts
+  if type(opts.alpha) == "table" then
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.alpha = alpha_value
+  end
+  local style = checked_style(self, style_opts, "eventplot")
   style.linewidth = linewidth
   style.linewidths = row_linewidths
+  style.alpha = alpha_value
+  style.alphas = row_alphas
   style.linestyle = linestyle
   if row_colors ~= nil then style.color = row_colors[1] end
   self._series[#self._series + 1] = {
@@ -4442,6 +4479,32 @@ function Figure:boxplot(values, opts)
       fail("boxplot labels must have one entry per sample")
     end
   end
+  local color_list
+  if opts.colors ~= nil then
+    if type(opts.colors) ~= "table" or #opts.colors ~= #samples then
+      fail("boxplot colors must have one entry per sample")
+    end
+    color_list = {}
+    for index = 1, #opts.colors do
+      color_list[index] = util.check_color(opts.colors[index],
+        "boxplot colors[" .. index .. "]")
+    end
+  end
+  local alpha_list
+  local alpha_value = 1
+  if type(opts.alpha) == "table" then
+    if #opts.alpha ~= #samples then
+      fail("boxplot alpha array must have one entry per sample")
+    end
+    alpha_list = {}
+    for index = 1, #opts.alpha do
+      alpha_list[index] = util.check_alpha(opts.alpha[index],
+        "boxplot alpha[" .. index .. "]")
+    end
+    alpha_value = alpha_list[1]
+  elseif opts.alpha ~= nil then
+    alpha_value = util.check_alpha(opts.alpha, "boxplot alpha")
+  end
   local color = opts.color and util.check_color(opts.color, "boxplot color") or
     colors.next(self._color_serial)
   if opts.color == nil then self._color_serial = self._color_serial + 1 end
@@ -4506,7 +4569,9 @@ function Figure:boxplot(values, opts)
       showbox = showbox, showwhiskers = showwhiskers, showcaps = showcaps,
       q1 = q1, median = median, q3 = q3,
       low = whisker_low, high = whisker_high, outliers = outliers,
-      style = { color = color, label = opts.label, alpha = 1 },
+      style = { color = color_list and color_list[index] or color,
+        label = opts.label,
+        alpha = alpha_list and alpha_list[index] or alpha_value },
     }
     ticks[#ticks + 1] = {
       position = index,
@@ -4630,9 +4695,23 @@ function Figure:violinplot(values, opts)
     end
   end
 
+  local alpha_list
   local alpha = opts.alpha
-  if alpha == nil then alpha = 0.65 end
-  alpha = util.check_alpha(alpha, "violinplot alpha")
+  if type(alpha) == "table" then
+    if #alpha ~= sample_count then
+      fail("violinplot alpha array must have one entry per sample")
+    end
+    alpha_list = {}
+    for index = 1, #alpha do
+      alpha_list[index] = util.check_alpha(alpha[index],
+        "violinplot alpha[" .. index .. "]")
+    end
+    alpha = alpha_list[1]
+  elseif alpha == nil then
+    alpha = 0.65
+  else
+    alpha = util.check_alpha(alpha, "violinplot alpha")
+  end
   local linewidth = 1
   if opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth,
@@ -4740,7 +4819,7 @@ function Figure:violinplot(values, opts)
     local style = checked_style(self, {
       color = color,
       label = labels and labels[index] or opts.label,
-      alpha = alpha,
+      alpha = alpha_list and alpha_list[index] or alpha,
       edgecolor = edgecolor,
     }, "violinplot")
     style.linewidth = linewidth

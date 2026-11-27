@@ -301,6 +301,10 @@ local test_files = {
   "test_legend_title_fontsize.lua",
   "test_bar_edgecolors.lua",
   "test_hist_edgecolors.lua",
+  "test_box_colors_alpha.lua",
+  "test_violin_alpha.lua",
+  "test_quiver_linewidths.lua",
+  "test_eventplot_alpha.lua",
   "test_export.lua",
 }
 

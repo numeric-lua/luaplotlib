@@ -35,6 +35,7 @@ end
 
 local x, y, u, v = {}, {}, {}, {}
 local arrow_colors = {}
+local arrow_widths = {}
 local index = 0
 for row = 0, 6 do
   for column = 0, 8 do
@@ -47,6 +48,7 @@ for row = 0, 6 do
     v[index] = px
     arrow_colors[index] = (row + column) % 2 == 0 and
       "#1f77b4" or "#f28e2b"
+    arrow_widths[index] = 0.8 + 0.25 * ((row + column) % 3)
   end
 end
 
@@ -57,6 +59,7 @@ fig:quiver(x, y, u, v, {
   pivot = "middle",
   head = 6,
   headwidth = 1.3,
+  linewidth = arrow_widths,
   max_arrows = 128,
 })
 fig:title("luaplotlib: Cartesian quiver")

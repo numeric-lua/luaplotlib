@@ -1096,6 +1096,8 @@ local function render_quiver(series, map_x, map_y, buf)
 
   for _, entry in ipairs(entries) do
     local color = style.colors and style.colors[entry.index] or style.color
+    local entry_linewidth = style.linewidths and
+      style.linewidths[entry.index] or style.linewidth
     local length = entry.length * scale
     local base_length = entry.length
     local ux, uy = entry.dx / base_length, entry.dy / base_length
@@ -1112,11 +1114,11 @@ local function render_quiver(series, map_x, map_y, buf)
       '   <g class="quiver-arrow" data-index="%d" data-magnitude="%s" data-x="%s" data-y="%s" data-angle="%s">',
       entry.index, util.fmt(entry.magnitude), util.fmt(entry.x),
       util.fmt(entry.y), util.fmt(angle))
-    if style.linewidth > 0 and length - head > 1e-9 then
+    if entry_linewidth > 0 and length - head > 1e-9 then
       buf[#buf + 1] = string.format(
         '    <line class="quiver-shaft" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s" stroke-linecap="round"%s/>',
         util.fmt(tail_x), util.fmt(tail_y), util.fmt(neck_x),
-        util.fmt(neck_y), color, util.fmt(style.linewidth),
+        util.fmt(neck_y), color, util.fmt(entry_linewidth),
         stroke_opacity)
     end
     if head > 1e-9 then
@@ -1944,6 +1946,8 @@ local function render_violin(series, map_x, map_y, buf)
 end
 local function render_box(series, map_x, map_y, buf)
   local color = series.style.color
+  local alpha = series.style.alpha or 1
+  local body_opacity = 0.25 * alpha
   local horizontal = series.orientation == "horizontal"
   local half = series.width / 2
   local low_position = series.position - half
@@ -2006,13 +2010,13 @@ local function render_box(series, map_x, map_y, buf)
         point(low_position, series.notch_high),
       }
       buf[#buf + 1] = string.format(
-        '   <polygon class="box box-notch" points="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
-        table.concat(notch_points, " "), color, color)
+        '   <polygon class="box box-notch" points="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1.5"/>',
+        table.concat(notch_points, " "), color, util.fmt(body_opacity), color)
     else
       buf[#buf + 1] = string.format(
-        '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="0.25" stroke="%s" stroke-width="1.5"/>',
+        '   <rect class="box" x="%s" y="%s" width="%s" height="%s" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1.5"/>',
         util.fmt(rect_left), util.fmt(rect_top), util.fmt(rect_width),
-        util.fmt(rect_height), color, color)
+        util.fmt(rect_height), color, util.fmt(body_opacity), color)
     end
   end
 
@@ -2842,10 +2846,6 @@ function M.to_svg(fig)
       render_fillx(series, map_x, map_y, buf)
     elseif series.kind == "eventplot" then
       local style = series.style
-      local opacity = ""
-      if style.alpha < 1 then
-        opacity = string.format(' stroke-opacity="%s"', util.fmt(style.alpha))
-      end
       local horizontal = series.orientation == "horizontal"
       local label = ""
       if style.label ~= nil then
@@ -2872,6 +2872,12 @@ function M.to_svg(fig)
         local row_color = row_colors and row_colors[row] or style.color
         local row_width = style.linewidths and style.linewidths[row] or
           style.linewidth
+        local row_alpha = style.alphas and style.alphas[row] or style.alpha
+        local opacity = ""
+        if row_alpha < 1 then
+          opacity = string.format(' stroke-opacity="%s"',
+            util.fmt(row_alpha))
+        end
         for _, value in ipairs(events) do
           event_index = event_index + 1
           local event_color = series.eventcolors and

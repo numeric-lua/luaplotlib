@@ -118,18 +118,28 @@
 - `fig:bar` and `fig:barh` accept `edgecolors` with one outline color per bar
   (or one list per series for `bar`);
 - `fig:hist` accepts `edgecolors` with one outline color per bin for
-  `histtype = "bar"`.
+  `histtype = "bar"`;
+- `fig:boxplot` accepts `colors` with one color per sample, exported through
+  each box style;
+- `fig:boxplot` accepts `alpha` as a number or per-sample array. Alpha scales
+  each filled box body against the usual quarter-opacity fill;
+- `fig:violinplot` accepts `alpha` as a number or per-sample array for body
+  opacity;
+- `fig:quiver` accepts per-vector `linewidth` arrays, exported as
+  `style.linewidths`;
+- `fig:eventplot` accepts per-row `alpha`, exported as `style.alphas`.
   Existing examples and visual QA cover per-bar colors/outlines, annotation
   backgrounds/rotation, label padding, pie distances/rotation/edges/text and
   direction, complete hist2d grids, explicit 2-D edges, log hist2d colors,
   per-point markers/alpha/edges/widths/error colors/sizes, per-sample
-  box/violin widths, per-row event widths, box visibility, quiver head widths,
-  axis-label/legend typography, independent legend title sizes, legend
-  spacing, errorbar/stem marker styling and x/y limits, horizontal
-  stems/violins, notched/whisker boxplots, quiver angle modes and per-vector
-  colors, tick/title styling, event line styles and per-event colors, filled
-  steps, explicit histogram edges, per-bin outlines, log hexbin colors, and
-  fill/span/histogram hatches. The dependency-free suite grows from 410 to 556
+  box/violin widths, box colors/opacity, violin opacity, per-row event
+  widths/opacity, box visibility, quiver head/line widths, axis-label/legend
+  typography, independent legend title sizes, legend spacing, errorbar/stem
+  marker styling and x/y limits, horizontal stems/violins,
+  notched/whisker boxplots, quiver angle modes and per-vector colors,
+  tick/title styling, event line styles and per-event colors, filled steps,
+  explicit histogram edges, per-bin outlines, log hexbin colors, and
+  fill/span/histogram hatches. The dependency-free suite grows from 410 to 564
   tests. Existing Cartesian APIs remain compatible, polar rendering is
   unchanged, and there are no new runtime dependencies.
 

@@ -481,6 +481,10 @@ event_widths=$(grep -o '<line class="event"[^>]*stroke-width="[^"]*"' "$EVENT" |
   sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$event_widths" -eq 3 ] ||
   fail "$EVENT should use three distinct row line widths"
+event_alphas=$(grep -o '<line class="event"[^>]*stroke-opacity="[^"]*"' "$EVENT" |
+  sed -E 's/.*stroke-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$event_alphas" -ge 2 ] ||
+  fail "$EVENT should vary row opacity"
 
 # Histogram step styles must render the outline and filled staircase variants.
 HIST_STYLES=examples/output/hist-styles.svg
@@ -558,6 +562,14 @@ grep -q 'data-showcaps="false"' "$BOX_H" ||
 box_caps=$(grep -o 'class="box-cap"' "$BOX_H" | wc -l | tr -d ' ' || true)
 [ "$box_caps" -eq 0 ] ||
   fail "$BOX_H should draw no box caps"
+box_colors=$(grep -o 'class="box box-notch"[^>]*stroke="[^"]*"' "$BOX_H" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$box_colors" -eq 3 ] ||
+  fail "$BOX_H should use three box colors"
+box_alphas=$(grep -o 'class="box box-notch"[^>]*fill-opacity="[^"]*"' "$BOX_H" |
+  sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$box_alphas" -eq 3 ] ||
+  fail "$BOX_H should use three box fill opacities"
 
 # Image colorbars accept a title and explicit tick values.
 IMSHOW=examples/output/imshow-colorbar.svg
@@ -779,6 +791,10 @@ quiver_colors=$(grep -o 'class="quiver-shaft"[^>]*stroke="[^"]*"' "$QUIVER_CART"
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$quiver_colors" -ge 2 ] ||
   fail "$QUIVER_CART should vary colors per arrow"
+quiver_widths=$(grep -o 'class="quiver-shaft"[^>]*stroke-width="[^"]*"' "$QUIVER_CART" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$quiver_widths" -ge 2 ] ||
+  fail "$QUIVER_CART should vary widths per arrow"
 grep -q 'class="legend"' "$QUIVER_CART" ||
   fail "$QUIVER_CART has no legend"
 angled=$(grep -o 'class="quiver-arrow"[^>]*data-angle="[^"]*"' "$QUIVER_CART" |
@@ -981,6 +997,10 @@ violin_widths=$(grep -o 'class="series series-violin"[^>]*data-width="[^"]*"' "$
   sed -E 's/.*data-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$violin_widths" -eq 3 ] ||
   fail "$VIOLIN_H should use three distinct violin widths"
+violin_alphas=$(grep -o 'class="violin-body"[^>]*fill-opacity="[^"]*"' "$VIOLIN_H" |
+  sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$violin_alphas" -eq 3 ] ||
+  fail "$VIOLIN_H should use three violin opacities"
 violin_means=$(grep -o 'class="violin-mean-marker"' "$VIOLIN" | wc -l |
   tr -d ' ')
 [ "$violin_means" -eq 3 ] ||

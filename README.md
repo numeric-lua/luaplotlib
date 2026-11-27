@@ -489,6 +489,24 @@ fig:hist(values, { edgecolors = per_bin_colors })
 `title_fontsize` styles the title independently from `fontsize`. `edgecolors`
 supplies one outline color per bar, per horizontal bar, or per histogram bin.
 
+Per-sample box colors/opacity, violin opacity, quiver widths, and event opacity
+are also available:
+
+```lua
+fig:boxplot(samples, {
+  colors = { "#4c78a8", "#f58518", "#54a24b" },
+  alpha = { 0.75, 0.6, 0.9 },
+})
+fig:violinplot(samples, { alpha = { 0.45, 0.6, 0.75 } })
+fig:quiver(x, y, u, v, { linewidth = arrow_widths })
+fig:eventplot(rows, { alpha = { 0.5, 0.75, 1 } })
+```
+
+Box `colors` accepts one color per sample, and `alpha` scales each box body
+between fully transparent and the normal quarter-opacity fill. Violin
+`alpha` accepts one body opacity per sample. Quiver `linewidth` may contain one
+width per vector, and eventplot `alpha` one opacity per row.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -719,8 +737,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Vertical or horizontal box-and-whisker plots with optional notches, mean
   markers, or mean lines
 - Vertical or horizontal Gaussian-kernel violin plots with per-sample widths,
-  configurable bandwidth, positions, quartiles, medians, extrema, optional mean
-  marks, and per-sample colors
+  colors, and opacity, configurable bandwidth, positions, quartiles, medians,
+  extrema, and optional mean marks
 - Vertical or horizontal event lanes with per-row offsets, lengths, colors,
   axis labels, line styles, and scene export
 - Horizontal broken bars for schedules and Gantt-style intervals
@@ -751,8 +769,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   markers, marker face/edge styling, and vertical or horizontal orientation
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
 - Cartesian quiver vector fields with data-space or screen-space (`uv`) angles,
-  automatic/explicit scaling, pivots, adjustable head width, normalization,
-  deterministic arrow caps, and legend/scene metadata
+  automatic/explicit scaling, pivots, adjustable head width, per-vector line
+  widths, normalization, deterministic arrow caps, and legend/scene metadata
 - Hexagonal and rectangular 2-D binning with minimum counts, value limits,
   explicit or count-based rectangular edges, linear or log count colors,
   explicit or uniform colorbar ticks, and renderer-agnostic cell/count export
@@ -797,9 +815,9 @@ step-fill, hist-edges, label/legend styling, errorbar x limits, scatter
 outline widths, log hexbin/hist2d counts, notched/whisker boxplots,
 counterclockwise pie direction, per-arrow/event/error colors,
 box/violin/error/event size arrays, pie text styling, legend title sizing,
-box component visibility, quiver head widths, per-bar/bin outline colors,
-image-alpha, and equal-aspect metadata, and confirms that Cartesian examples
-stay Cartesian.
+box component visibility/colors/opacity, quiver head/line widths,
+per-bar/bin outline colors, event opacity, image-alpha, and equal-aspect
+metadata, and confirms that Cartesian examples stay Cartesian.
 When
 `rsvg-convert` is installed it also rasterizes the polar SVGs and the affected
 Cartesian examples for manual inspection. Rasterized files stay under the
@@ -880,7 +898,8 @@ fill/span/step hatches and fills, errorbar x/y limit arrows, explicit
 histogram edges, explicit 2-D edges, log hexbin/hist2d colors, box
 notches/whisker controls, per-sample box/violin widths, counterclockwise pies,
 per-arrow/event/error colors, per-point error marker/line sizes, per-row event
-widths, box component visibility, quiver head widths, bar/bin outline colors,
+widths, box colors/opacity and component visibility, violin opacity, quiver
+head widths/line widths, event opacity, bar/bin outline colors,
 pie text styling, axis-label/legend typography, independent legend title sizes,
 legend spacing, per-point scatter outline widths,
 error-bar and stem marker styling, event line styles, barh/hist hatches,
@@ -948,9 +967,10 @@ See
   values can still crowd or clip within a fixed canvas. Box notches use the
   normal-approximation interval and clamp to the quartiles for small samples.
   Hidden fliers stay in scene `outliers` but no longer affect automatic
-  ranges. Per-element widths, outlines, and marker sizes must match the
-  sample/point/row/bin count, and very large marker sizes can overlap
-  neighboring points.
+  ranges. Per-element widths, colors, opacity, outlines, and marker sizes must
+  match the sample/point/row/bin count, and very large marker sizes can overlap
+  neighboring points. Box `alpha` scales the filled body only; outlines and
+  median/whisker marks remain fully opaque.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

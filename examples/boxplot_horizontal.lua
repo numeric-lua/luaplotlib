@@ -28,7 +28,8 @@ fig:boxplot({
 }, {
   labels = { "control", "treatment", "follow-up" },
   orientation = "horizontal",
-  color = "#9467bd",
+  colors = { "#4c78a8", "#f58518", "#54a24b" },
+  alpha = { 0.75, 0.6, 0.9 },
   width = { 0.45, 0.62, 0.52 },
   showmeans = true,
   notch = true,

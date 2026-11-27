@@ -578,7 +578,7 @@ the arrows stay legible on linear and log axes.
 | --- | --- | --- |
 | `color` | color string | next palette color |
 | `label` | string | no legend entry |
-| `linewidth` | number ≥ 0 | `1.2` |
+| `linewidth` | number ≥ 0 or per-vector array | `1.2` |
 | `head` | number ≥ 0 (SVG user units) | `6` |
 | `headwidth` | number ≥ 0, head width relative to `head` | `0.9` |
 | `scale` | positive number | automatic |
@@ -600,7 +600,8 @@ is larger than `max_arrows`, indices are decimated deterministically with
 
 The series group exposes `data-count`, `data-drawn`, `data-stride`,
 `data-max-arrows`, `data-scale`, `data-scale-mode`, `data-pivot`,
-`data-normalize`, `data-headwidth`, and `data-angles`. Per-vector `color` arrays are exported as
+`data-normalize`, `data-headwidth`, and `data-angles`. Per-vector line widths
+are exported as `style.linewidths`. Per-vector `color` arrays are exported as
 `style.colors`. Scenes export `angles`. Each `quiver-arrow` group carries `data-index`,
 `data-magnitude`, `data-x`, `data-y`, and `data-angle`, with `quiver-shaft`
 and `quiver-head` children. Labelled quivers join the regular legend with an
@@ -747,7 +748,8 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `labels` | array with one axis label per row | no labels |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
 | `linewidth` | number ≥ 0 or one value per row | `2` |
-| `color`, `label`, `alpha` | normal series style | palette / `1` |
+| `alpha` | number or one value per row in [0, 1] | `1` |
+| `color`, `label` | normal series style | palette |
 
 In the default vertical orientation each value is an x coordinate and the mark
 is a vertical line centered on its row's offset. With `orientation =
@@ -755,8 +757,8 @@ is a vertical line centered on its row's offset. With `orientation =
 centered on its row's x offset. `lineoffsets` place the lane centers and
 `linelengths` set each lane's span in data units. `colors` gives one stroke
 color per row and cannot be combined with `color`; `eventcolors` overrides row
-colors with one entry per event across all rows. `linewidth` accepts one value
-per row. Offsets and
+colors with one entry per event across all rows. `linewidth` and `alpha` accept
+one value per row. Offsets and
 lengths participate in automatic ranging, and a row's length may differ from
 its neighbors'. Setting `linestyle = "none"` hides event marks while keeping
 the lane group and axis labels. `to_scene()` exports `orientation`, `rows`,
@@ -929,9 +931,13 @@ names the samples; whiskers use 1.5×IQR and outliers are drawn separately.
 | `whis` | number ≥ 0, IQR fence multiplier | `1.5` |
 | `showfliers` | boolean | `true` |
 | `showbox`, `showwhiskers`, `showcaps` | boolean | `true` |
+| `colors` | one color per sample | `color` |
+| `alpha` | number or one value per sample in [0, 1] | `1` |
 | `color`, `label` | series style | palette / no legend entry |
 
-`width` may be one scalar or one value per sample. Vertical boxes place
+`width`, `colors`, and `alpha` may be one scalar or one value per sample;
+`alpha` scales each filled box body against the normal quarter opacity. Vertical
+boxes place
 categories on x and values on y. Horizontal boxes swap
 that mapping, put the category labels on the y axis, and carry
 `data-orientation="horizontal"` on each `series-box` group. Both orientations
@@ -948,7 +954,8 @@ box instead. The group exposes `data-width`, `data-mean`, `data-showmeans`, and
 `data-meanline`, `data-notch`, `data-whis`, `data-showfliers`, `data-showbox`,
 `data-showwhiskers`, and `data-showcaps`. `to_scene()` exports `orientation`, `mean`,
 `showmeans`, `meanline`, `notch`, `notch_low`, `notch_high`, `whis`,
-`showfliers`, `showbox`, `showwhiskers`, and `showcaps`, and the scene root reports `category_axis = "x"` or `"y"`.
+`showfliers`, `showbox`, `showwhiskers`, `showcaps`, and per-sample style
+colors/alpha, and the scene root reports `category_axis = "x"` or `"y"`.
 
 ### `fig:violinplot(samples, opts)`
 
@@ -972,11 +979,12 @@ each sample's extrema and normalized to the widest body.
 | `color` | single color for every sample | palette colors |
 | `labels` | one tick/legend label per sample | `sample N` |
 | `label` | shared legend label | no legend entry |
-| `alpha` | number in [0, 1] | `0.65` |
+| `alpha` | number or one value per sample in [0, 1] | `0.65` |
 | `edgecolor` | color string | sample color |
 | `linewidth` | number ≥ 0 | `1` |
 
-`width` may be one scalar or one fraction per sample. Each violin is a separate
+`width` may be one scalar or one fraction per sample, and `alpha` may be one
+value or one per sample. Each violin is a separate
 series with class `series-violin` and exposes `data-width`. Bodies are
 `violin-body` polygons; medians are `violin-median` lines, quartiles are
 `violin-quartile` dashed lines, the center is a `violin-center` line, and
@@ -1505,6 +1513,9 @@ includes, but is not limited to:
 - non-boolean box component visibility flags
 - negative quiver head widths, non-positive legend title sizes
 - bar/barh/hist edge-color arrays with wrong lengths or invalid colors
+- box/violin color/alpha arrays with wrong lengths or invalid values
+- quiver linewidth arrays with wrong lengths or negative values
+- eventplot alpha arrays with wrong lengths or values outside [0, 1]
 - scatter edgecolor arrays whose length does not match the points
 - malformed errorbar y or x limit flags
 - non-boolean step fill flags or alpha values outside [0, 1]
@@ -1727,7 +1738,7 @@ coordinate plus `xmin`/`xmax` or `ymin`/`ymax`; masked fill scenes carry
 `where`, `interpolate`, and resolved `segments`; histogram scenes carry
 `orientation` and `histtype`; eventplot scenes carry `orientation`, `rows`,
 `lineoffsets`, `linelengths`, and optional `colors`/`eventcolors`/`labels`;
-broken-bar scenes
+eventplot styles may include per-row `alphas`; broken-bar scenes
 carry their `ranges`, `y`, and `height`; box scenes carry `mean`, `showmeans`,
 and `meanline`; violin scenes also carry `orientation`; stem scenes carry
 `base` and `orientation`; and

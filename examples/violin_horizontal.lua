@@ -36,7 +36,7 @@ fig:violinplot(samples, {
   colors = { "#4c78a8", "#f58518", "#54a24b" },
   width = { 0.55, 0.68, 0.60 },
   points = 70,
-  alpha = 0.55,
+  alpha = { 0.45, 0.6, 0.75 },
   edgecolor = "#1f2937",
   linewidth = 1.2,
   showmedians = true,

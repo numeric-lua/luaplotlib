@@ -1,0 +1,21 @@
+local plt = require("luaplotlib")
+
+test("violinplot accepts per-sample alpha", function()
+  local fig = plt.figure()
+  fig:violinplot({ { 1, 2, 3 }, { 2, 3, 4 } },
+    { alpha = { 0.3, 0.9 } })
+  local scene = fig:to_scene()
+  assert_equal(scene.series[1].style.alpha, 0.3)
+  assert_equal(scene.series[2].style.alpha, 0.9)
+  assert_contains(fig:to_svg(), 'fill-opacity="0.3"')
+end)
+
+test("violinplot alpha arrays validate length and values", function()
+  local fig = plt.figure()
+  assert_error("one entry per sample", function()
+    fig:violinplot({ { 1, 2 }, { 2, 3 } }, { alpha = { 0.5 } })
+  end)
+  assert_error("alpha%[2%] must be >= 0", function()
+    fig:violinplot({ { 1, 2 }, { 2, 3 } }, { alpha = { 0.5, -1 } })
+  end)
+end)
