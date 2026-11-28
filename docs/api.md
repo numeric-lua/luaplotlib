@@ -437,7 +437,7 @@ Add a text annotation at a polar `(theta, r)` position. In a polar figure the
 regular `fig:annotate` method dispatches to `polar_annotate`, so the Cartesian
 annotation examples work unchanged. Options match Cartesian annotations:
 `xytext = { theta, r }` places the text at another polar coordinate,
-`align`/`color`/`fontsize` style the text, and `arrow = true` or an arrow
+`align`/`color`/`fontsize`/`fontweight` style the text, and `arrow = true` or an arrow
 options table draws a leader line from the text to the target. `degrees` and
 `theta_unit` apply to the target angle and to `xytext[1]`. Annotation target
 radii extend the automatic radial limit, so an arrow always points at a target
@@ -475,8 +475,8 @@ figure that already has Cartesian series or annotations.
 
 Horizontal bars for a single numeric series. Category labels are placed on the
 y axis; `bar_colors`, `edgecolors` (one outline color per bar), `show_values`,
-`linewidth` (one value per bar), and the one-per-call `hatch` pattern behave
-like `bar`.
+`linewidth` and `height` (one value per bar), and the one-per-call `hatch`
+pattern behave like `bar`.
 
 ### `fig:errorbar(x, y, yerr[, xerr][, opts])`
 
@@ -752,7 +752,7 @@ becomes one lane, and rows are offset at `1, 2, 3, ...` by default.
 | `colors` | array with one color per row | series `color` |
 | `eventcolors` | array with one color per event | row colors |
 | `labels` | array with one axis label per row | no labels |
-| `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
+| `linestyle` | style string or one per row | `"solid"` |
 | `linewidth` | number ≥ 0 or one value per row | `2` |
 | `alpha` | number or one value per row in [0, 1] | `1` |
 | `color`, `label` | normal series style | palette |
@@ -763,8 +763,8 @@ is a vertical line centered on its row's offset. With `orientation =
 centered on its row's x offset. `lineoffsets` place the lane centers and
 `linelengths` set each lane's span in data units. `colors` gives one stroke
 color per row and cannot be combined with `color`; `eventcolors` overrides row
-colors with one entry per event across all rows. `linewidth` and `alpha` accept
-one value per row. Offsets and
+colors with one entry per event across all rows. `linewidth`, `linestyle`, and
+`alpha` accept one value per row; `"none"` hides that row. Offsets and
 lengths participate in automatic ranging, and a row's length may differ from
 its neighbors'. Setting `linestyle = "none"` hides event marks while keeping
 the lane group and axis labels. `to_scene()` exports `orientation`, `rows`,
@@ -1154,12 +1154,13 @@ right/left alignment and pivot around their text anchor. Both settings are
 exported as `xtick_rotation` / `ytick_rotation` in the scene. On figures with a
 twin y axis, `ytick_rotation` applies to both right-hand label columns.
 
-### `fig:ticklabelsize(size)` / `fig:ticklabelcolor(color)`
+### `fig:ticklabelsize(size)` / `fig:ticklabelcolor(color)` / `fig:ticklabelweight(weight)`
 
-Set the Cartesian tick-label font size and color for both axes (including twin
-axes). Defaults remain `11` and `#222222`. Larger sizes expand the left and
-bottom layout margins; SVG roots expose `data-ticklabelsize` and
-`data-ticklabelcolor` when changed, and scenes export both values.
+Set the Cartesian tick-label font size, color, and weight for both axes
+(including twin axes). Defaults remain `11`, `#222222`, and `"normal"`. Larger
+sizes expand the left and bottom layout margins; SVG roots expose
+`data-ticklabelsize`, `data-ticklabelcolor`, and `data-ticklabelweight` when
+changed, and scenes export all three values.
 
 ### Labels and titles
 
@@ -1213,6 +1214,7 @@ Annotations are rendered above the series and clipped to the plot rectangle.
 | `xytext` | `{ x, y }` data coordinates | same as `(x, y)`; offset up-right when `arrow` is set |
 | `color` | color string | `#222222` |
 | `fontsize` | number > 0, in SVG user units | `12` |
+| `fontweight` | `"normal"` or `"bold"` | `"normal"` |
 | `align` | `"left"`, `"center"`, or `"right"` | `"left"` |
 | `arrow` | boolean or options table | no arrow |
 | `backgroundcolor` | color string | no background |
@@ -1367,6 +1369,7 @@ No options are required.
 | `borderpad` | number ≥ 0 | `8` |
 | `handlelength` | number ≥ 0 | `20` |
 | `fontsize` | number > 0 | `11` |
+| `fontweight` | `"normal"` or `"bold"` | `"normal"` |
 | `title_fontsize` | number > 0 | `fontsize` |
 | `title_align` | `"left"`, `"center"`, or `"right"` | `"left"` |
 | `markerfirst` | boolean | `true` |
@@ -1378,7 +1381,8 @@ The accepted locations are the four corners, `"upper center"`,
 `framealpha`, `facecolor`, and `edgecolor` style the frame independently.
 `borderpad` expands the frame around its contents, `handlelength` sets the
 swatch length, and `fontsize` scales labels and frame geometry on Cartesian and
-polar legends. `title_fontsize` styles only the title, independently of labels.
+polar legends. `fontweight` styles entry labels; `title_fontsize` styles only
+the title, independently of labels.
 `markerfirst = false` places the label before its swatch, and `title_align`
 aligns the legend title independently of the entries. Only series with a non-empty
 `label` appear. Swatches reflect the series type
@@ -1529,6 +1533,9 @@ includes, but is not limited to:
 - non-boolean legend markerfirst values or invalid legend title alignment
 - polar bar edge/width/alpha arrays with wrong lengths or invalid values
 - invalid pie labelweight/pctweight values
+- invalid tick/annotation/legend font weights
+- barh height arrays with wrong lengths or values outside [0.01, 1]
+- eventplot linestyle arrays with wrong lengths or invalid styles
 - box/violin width arrays with wrong lengths or out-of-range values
 - errorbar markersize/elinewidth arrays with wrong lengths or invalid values
 - eventplot linewidth arrays with wrong lengths or negative values
@@ -1653,6 +1660,7 @@ Returns a renderer-agnostic scene table:
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
   ticklabelsize = 11, ticklabelcolor = "#222222",
+  ticklabelweight = "normal",
   minorticks = false, minor_tick_axis = "both", minor_subdivisions = 5,
   minor_grid = false,
   xlim = { min, max }, ylim = { min, max },
@@ -1660,8 +1668,9 @@ Returns a renderer-agnostic scene table:
   legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
                    facecolor = "#ffffff", edgecolor = "#bbbbbb",
                    borderpad = 8, handlelength = 20, fontsize = 11,
-                   title_fontsize = 11, title_align = "left",
-                   markerfirst = true, ncol = 1, title = nil },
+                   fontweight = "normal", title_fontsize = 11,
+                   title_align = "left", markerfirst = true,
+                   ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
   minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
@@ -1710,7 +1719,8 @@ Returns a renderer-agnostic scene table:
       lineoffsets = { 1, 4 }, linelengths = { 0.7, 1.0 },
       colors = { "#2ca02c", "#d62728" },
       eventcolors = { "#166534", "#4ade80", "#991b1b", "#f87171" },
-      labels = { "fast", "slow" }, style = {...} },
+      labels = { "fast", "slow" },
+      style = { linestyles = { "dashed", "dotted" }, ... } },
     { kind = "broken_barh",
       ranges = { { 0, 3 }, { 5, 2 } }, y = 2, height = 0.6,
       style = {...} },

@@ -39,7 +39,7 @@ fig:eventplot({
   },
   linewidth = { 2, 3, 4 },
   alpha = { 0.5, 0.75, 1 },
-  linestyle = "dashed",
+  linestyle = { "dashed", "dotted", "solid" },
   label = "events",
 })
 fig:title("Horizontal event lanes")

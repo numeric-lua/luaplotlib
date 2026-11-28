@@ -566,6 +566,22 @@ Polar bars accept one outline color, width, and opacity per bar. Pie
 `labelweight`/`pctweight` style label and percentage text independently. Legend
 `title_align = "left" | "center" | "right"` aligns the title within the frame.
 
+Tick/annotation/legend weights, per-bar heights, and per-row event styles are
+also available:
+
+```lua
+fig:ticklabelweight("bold")
+fig:annotate("peak", 2.5, 4.1, { fontweight = "bold" })
+fig:legend({ fontweight = "bold" })
+fig:barh(labels, values, { height = { 0.5, 0.8, 0.6, 0.9 } })
+fig:eventplot(rows, { linestyle = { "dashed", "dotted", "solid" } })
+```
+
+Cartesian tick labels accept `ticklabelweight = "normal" | "bold"`. Annotations
+accept `fontweight`, and legend labels can be bold independently of the bold
+legend title. `barh` accepts one height per bar, and eventplot accepts one line
+style per row, including hidden rows with `"none"`.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -817,10 +833,11 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
-  titles and axis labels with configurable weight, label padding/size/color,
-  and legends with nine locations, frame alpha/colors, border padding,
-  configurable handle lengths, independent label/title font sizes,
-  marker-first ordering, and left/center/right title alignment
+  titles, axis labels, tick labels, annotations, and legend labels with
+  configurable weight, label padding/size/color, and legends with nine
+  locations, frame alpha/colors, border padding, configurable handle lengths,
+  independent label/title font sizes, marker-first ordering, and
+  left/center/right title alignment
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
@@ -880,7 +897,8 @@ box/violin/error/event size arrays, pie text styling, legend title sizing,
 box component visibility/colors/opacity/edges, violin edges, quiver
 head/line widths, per-bar/bin outline colors/widths, pie opacity, polar error/vector arrays, bold titles/labels,
 legend marker ordering, polar bar outlines/opacity, pie text weight, legend
-title alignment, event
+title alignment, tick/annotation/legend weights, per-bar heights,
+per-row event line styles, event
 opacity, image-alpha, and equal-aspect metadata, and confirms that Cartesian
 examples stay Cartesian.
 When
@@ -1040,7 +1058,8 @@ See
   restricted to `histtype = "bar"`. Font weight supports normal/bold only;
   marker-first reversal uses estimated/measured label widths and can leave
   extra space in sparse columns. Polar bar arrays must match the full bar
-  count, and pie text weights support normal/bold only.
+  count, pie/text weights support normal/bold only, and `barh` height arrays
+  must match the full bar count.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

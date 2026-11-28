@@ -447,6 +447,10 @@ grep -q 'data-xlabel-pad="10" data-ylabel-pad="8"' "$LINE" ||
   fail "$LINE should expose axis label padding"
 grep -q 'data-ticklabelsize="12" data-ticklabelcolor="#334155"' "$LINE" ||
   fail "$LINE should expose tick label styling"
+grep -q 'data-ticklabelweight="bold"' "$LINE" ||
+  fail "$LINE should expose bold tick labels"
+grep -q 'class="tick-label"[^>]*font-weight="bold"' "$LINE" ||
+  fail "$LINE should render bold tick labels"
 grep -q 'class="tick-label"[^>]*font-size="12" fill="#334155"' "$LINE" ||
   fail "$LINE should render styled tick labels"
 grep -q 'class="title" x="[^"]*" y="[^"]*" font-size="20" fill="#0f172a"' \
@@ -467,6 +471,8 @@ grep -q 'data-title-align="center"' "$LINE" ||
   fail "$LINE should center its legend title"
 grep -q 'class="legend-title"[^>]*text-anchor="middle"' "$LINE" ||
   fail "$LINE should anchor its legend title in the center"
+grep -q 'data-fontweight="bold"' "$LINE" ||
+  fail "$LINE should expose bold legend labels"
 grep -q 'class="legend"[^>]*' "$LINE" ||
   fail "$LINE has no legend"
 grep -q 'class="title"[^>]*font-weight="bold"' "$LINE" ||
@@ -525,6 +531,10 @@ grep -q 'data-linestyle="dashed"' "$EVENT" ||
   fail "$EVENT should use dashed event lines"
 grep -q 'stroke-dasharray="6 4"' "$EVENT" ||
   fail "$EVENT is missing its dashed event pattern"
+grep -q 'data-linestyles="true"' "$EVENT" ||
+  fail "$EVENT should expose per-row line styles"
+grep -q 'stroke-dasharray="1.5 3"' "$EVENT" ||
+  fail "$EVENT is missing its dotted event pattern"
 event_colors=$(grep -o '<line class="event"[^>]*stroke="[^"]*"' "$EVENT" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$event_colors" -ge 3 ] ||
@@ -711,6 +721,8 @@ grep -q 'class="legend"' "$ECDF" ||
 ANNOTATIONS=examples/output/annotations.svg
 grep -q 'class="annotation-background"' "$ANNOTATIONS" ||
   fail "$ANNOTATIONS has no annotation background"
+grep -q 'class="annotation-text"[^>]*font-weight="bold"' "$ANNOTATIONS" ||
+  fail "$ANNOTATIONS should render a bold annotation"
 grep -q 'class="annotation-background" x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*" rx="2" fill="#ffffff" fill-opacity="0.9" stroke="#d62728"' \
   "$ANNOTATIONS" || fail "$ANNOTATIONS background styling is incomplete"
 grep -q 'class="annotation-text"[^>]*transform="rotate(-12 ' "$ANNOTATIONS" ||
@@ -1096,6 +1108,10 @@ barh_hatched=$(grep -o 'class="barh"[^>]*fill="url(#hatch-' "$BARH_HATCH" |
   wc -l | tr -d ' ')
 [ "$barh_hatched" -eq 4 ] ||
   fail "$BARH_HATCH should fill four bars with a hatch pattern"
+barh_heights=$(grep -o 'class="barh"[^>]*height="[^"]*"' "$BARH_HATCH" |
+  sed -E 's/.*height="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$barh_heights" -ge 3 ] ||
+  fail "$BARH_HATCH should vary bar heights"
 barh_edge_colors=$(grep -o 'class="barh"[^>]*stroke="[^"]*"' "$BARH_HATCH" |
   sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
 [ "$barh_edge_colors" -ge 3 ] ||

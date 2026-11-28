@@ -1916,10 +1916,14 @@ local function render_annotations(figure, cfg, geom, buf)
       rotation_attr = string.format(' transform="rotate(%s %s %s)"',
         util.fmt(rotation), util.fmt(text_x), util.fmt(text_y))
     end
+    local weight_attr = ""
+    if (annotation.fontweight or "normal") ~= "normal" then
+      weight_attr = string.format(' font-weight="%s"', annotation.fontweight)
+    end
     buf[#buf + 1] = string.format(
-      '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s"%s>%s</text>',
+      '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s"%s%s>%s</text>',
       util.fmt(text_x), util.fmt(text_y), util.fmt(fontsize), color, anchor,
-      align, rotation_attr, util.escape_xml(annotation.text))
+      align, rotation_attr, weight_attr, util.escape_xml(annotation.text))
     buf[#buf + 1] = '   </g>'
   end
   buf[#buf + 1] = '  </g>'
@@ -2444,14 +2448,14 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s" data-title-align="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s" data-title-align="%s" data-fontweight="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
     util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92),
     util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20),
     util.fmt(plan.fontsize or 11), util.fmt(plan.title_fontsize or 11),
     opts.markerfirst == false and "false" or "true",
-    opts.title_align or "left")
+    opts.title_align or "left", opts.fontweight or "normal")
   local framealpha = opts.framealpha or 0.92
   local facecolor = opts.facecolor or "#ffffff"
   local edgecolor = opts.edgecolor or "#bbbbbb"
@@ -2488,21 +2492,25 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
     local entry_y = y + (2 * border - 4) + plan.title_height +
       (row - 1) * (plan.row_height or 20)
     if opts.markerfirst == false then
+      local weight_attr = (opts.fontweight or "normal") ~= "normal" and
+        string.format(' font-weight="%s"', opts.fontweight) or ""
       buf[#buf + 1] = string.format(
-        '   <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        '   <text x="%s" y="%s" font-size="%s" fill="%s"%s>%s</text>',
         util.fmt(entry_x),
         util.fmt(entry_y + (plan.fontsize or 11) * 0.36),
-        util.fmt(plan.fontsize or 11), TEXT_COLOR,
+        util.fmt(plan.fontsize or 11), TEXT_COLOR, weight_attr,
         util.escape_xml(entry.label))
       polar_swatch(entry, entry_x + plan.col_width - handle - 4,
         entry_y, buf, handle)
     else
       polar_swatch(entry, entry_x, entry_y, buf, handle)
+      local weight_attr = (opts.fontweight or "normal") ~= "normal" and
+        string.format(' font-weight="%s"', opts.fontweight) or ""
       buf[#buf + 1] = string.format(
-        '   <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        '   <text x="%s" y="%s" font-size="%s" fill="%s"%s>%s</text>',
         util.fmt(entry_x + handle + 8),
         util.fmt(entry_y + (plan.fontsize or 11) * 0.36),
-        util.fmt(plan.fontsize or 11), TEXT_COLOR,
+        util.fmt(plan.fontsize or 11), TEXT_COLOR, weight_attr,
         util.escape_xml(entry.label))
     end
   end
@@ -2631,6 +2639,7 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    linestyles = style.linestyles and copy_array(style.linestyles) or nil,
     headwidth = style.headwidth,
     markersizes = style.markersizes and copy_array(style.markersizes) or nil,
     elinewidths = style.elinewidths and copy_array(style.elinewidths) or nil,
@@ -2652,11 +2661,13 @@ local function copy_annotation(annotation)
     r = annotation.r,
     color = annotation.color,
     fontsize = annotation.fontsize,
+    fontweight = annotation.fontweight or "normal",
     align = annotation.align,
     rotation = annotation.rotation or 0,
     style = {
       color = annotation.color,
       fontsize = annotation.fontsize,
+      fontweight = annotation.fontweight or "normal",
       align = annotation.align,
       rotation = annotation.rotation or 0,
     },
@@ -2814,6 +2825,7 @@ function M.to_scene(figure)
       handlelength = opts.handlelength or 20,
       fontsize = opts.fontsize or 11,
       title_fontsize = opts.title_fontsize or opts.fontsize or 11,
+      fontweight = opts.fontweight or "normal",
       title_align = opts.title_align or "left",
       markerfirst = opts.markerfirst ~= false,
       title = opts.title,

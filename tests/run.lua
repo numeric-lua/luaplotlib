@@ -319,6 +319,11 @@ local test_files = {
   "test_polar_bar_alpha.lua",
   "test_pie_text_weight.lua",
   "test_legend_title_align.lua",
+  "test_ticklabel_weight.lua",
+  "test_annotation_fontweight.lua",
+  "test_legend_fontweight.lua",
+  "test_barh_heights.lua",
+  "test_eventplot_linestyles.lua",
   "test_export.lua",
 }
 

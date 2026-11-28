@@ -1,0 +1,18 @@
+local plt = require("luaplotlib")
+
+test("tick label weight applies to both axes", function()
+  local fig = plt.figure()
+  fig:plot({ 1, 2 }, { 1, 2 })
+  fig:ticklabelweight("bold")
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-ticklabelweight="bold"')
+  assert_match(svg, 'class="tick%-label"[^>]*font%-weight="bold"')
+  assert_equal(fig:to_scene().ticklabelweight, "bold")
+end)
+
+test("tick label weight validates allowed values", function()
+  local fig = plt.figure()
+  assert_error("ticklabelweight must be 'normal' or 'bold'", function()
+    fig:ticklabelweight("heavy")
+  end)
+end)

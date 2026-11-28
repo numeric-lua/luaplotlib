@@ -34,6 +34,7 @@ local function copy_style(style)
     alphas = style.alphas and copy_array(style.alphas) or nil,
     edgecolors = style.edgecolors and copy_array(style.edgecolors) or nil,
     linewidths = style.linewidths and copy_array(style.linewidths) or nil,
+    linestyles = style.linestyles and copy_array(style.linestyles) or nil,
     headwidth = style.headwidth,
     markersizes = style.markersizes and copy_array(style.markersizes) or nil,
     elinewidths = style.elinewidths and copy_array(style.elinewidths) or nil,
@@ -92,11 +93,13 @@ local function copy_annotation(annotation)
     y = annotation.y,
     color = annotation.color,
     fontsize = annotation.fontsize,
+    fontweight = annotation.fontweight or "normal",
     align = annotation.align,
     rotation = annotation.rotation or 0,
     style = {
       color = annotation.color,
       fontsize = annotation.fontsize,
+      fontweight = annotation.fontweight or "normal",
       align = annotation.align,
       rotation = annotation.rotation or 0,
     },
@@ -164,6 +167,7 @@ function M.from_figure(figure)
     ytick_rotation = figure._ytick_rotation or 0,
     ticklabelsize = figure._ticklabelsize or 11,
     ticklabelcolor = figure._ticklabelcolor or "#222222",
+    ticklabelweight = figure._ticklabelweight or "normal",
     minorticks = figure._minorticks and figure._minorticks.enabled or false,
     minor_tick_axis = figure._minorticks and figure._minorticks.axis or "both",
     minor_subdivisions = figure._minorticks and
@@ -213,6 +217,7 @@ function M.from_figure(figure)
       handlelength = opts.handlelength or 20,
       fontsize = opts.fontsize or 11,
       title_fontsize = opts.title_fontsize or opts.fontsize or 11,
+      fontweight = opts.fontweight or "normal",
       title_align = opts.title_align or "left",
       markerfirst = opts.markerfirst ~= false,
       ncol = opts.ncol or 1,
@@ -623,6 +628,7 @@ function M.from_figure(figure)
       copy.x = copy_array(series.x)
       copy.y = copy_array(series.y)
       copy.height = series.height
+      copy.heights = series.heights and copy_array(series.heights) or nil
       copy.bar_colors = series.bar_colors and copy_array(series.bar_colors) or nil
       copy.show_values = series.show_values and true or false
       if state.xmin == nil or 0 < state.xmin then state.xmin = 0 end
@@ -631,7 +637,9 @@ function M.from_figure(figure)
         local y = copy.y[index]
         if state.xmin == nil or x < state.xmin then state.xmin = x end
         if state.xmax == nil or x > state.xmax then state.xmax = x end
-        local low, high = y - copy.height / 2, y + copy.height / 2
+        local half_height = (copy.heights and copy.heights[index] or
+          copy.height) / 2
+        local low, high = y - half_height, y + half_height
         if state.ymin == nil or low < state.ymin then state.ymin = low end
         if state.ymax == nil or high > state.ymax then state.ymax = high end
       end

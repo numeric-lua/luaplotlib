@@ -46,6 +46,7 @@ fig:annotate("maximum", 2.5, 3.125, {
   xytext = { 3.4, 4.2 },
   align = "center",
   color = "#333333",
+  fontweight = "bold",
   fontsize = 13,
   arrow = { color = "#d62728", linewidth = 1.5, head = 9 },
   backgroundcolor = "#ffffff",

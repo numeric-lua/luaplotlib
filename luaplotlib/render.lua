@@ -314,8 +314,10 @@ local function data_extents(fig, xscale, yscale)
       include_x(0, series_index, 1, "barh baseline")
       for i = 1, #series.x do
         include_x(series.x[i], series_index, i, "barh value")
-        include_y(series.y[i] - series.height / 2, series_index, i, "barh")
-        include_y(series.y[i] + series.height / 2, series_index, i, "barh")
+        local half_height = (series.heights and series.heights[i] or
+          series.height) / 2
+        include_y(series.y[i] - half_height, series_index, i, "barh")
+        include_y(series.y[i] + half_height, series_index, i, "barh")
       end
     elseif series.kind == "broken_barh" then
       for index = 1, #series.ranges do
@@ -663,11 +665,11 @@ local function render_legend(fig, geom, buf)
   local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
   buf[#buf + 1] = string.format(
-    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s" data-title-align="%s"/>',
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s" data-title-align="%s" data-fontweight="%s"/>',
     util.escape_xml(loc), util.fmt(framealpha), util.fmt(border),
     util.fmt(handle), util.fmt(fontsize), util.fmt(title_size),
     opts.markerfirst == false and "false" or "true",
-    opts.title_align or "left")
+    opts.title_align or "left", opts.fontweight or "normal")
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
@@ -697,18 +699,24 @@ local function render_legend(fig, geom, buf)
     local entry_y = y + (2 * border - 4) + title_height +
       (row - 1) * row_height
     if opts.markerfirst == false then
+      local weight_attr = (opts.fontweight or "normal") ~= "normal" and
+        string.format(' font-weight="%s"', opts.fontweight) or ""
       buf[#buf + 1] = string.format(
-        '  <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        '  <text x="%s" y="%s" font-size="%s" fill="%s"%s>%s</text>',
         util.fmt(entry_x), util.fmt(entry_y + fontsize * 0.36),
-        util.fmt(fontsize), TEXT_COLOR, util.escape_xml(entry.label))
+        util.fmt(fontsize), TEXT_COLOR, weight_attr,
+        util.escape_xml(entry.label))
       swatch(buf, entry.kind, entry.color,
         entry_x + col_width - handle - 4, entry_y, handle)
     else
       swatch(buf, entry.kind, entry.color, entry_x, entry_y, handle)
+      local weight_attr = (opts.fontweight or "normal") ~= "normal" and
+        string.format(' font-weight="%s"', opts.fontweight) or ""
       buf[#buf + 1] = string.format(
-        '  <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        '  <text x="%s" y="%s" font-size="%s" fill="%s"%s>%s</text>',
         util.fmt(entry_x + handle + 8), util.fmt(entry_y + fontsize * 0.36),
-        util.fmt(fontsize), TEXT_COLOR, util.escape_xml(entry.label))
+        util.fmt(fontsize), TEXT_COLOR, weight_attr,
+        util.escape_xml(entry.label))
     end
   end
   buf[#buf + 1] = ' </g>'
@@ -1558,10 +1566,11 @@ local function render_barh(series, map_x, map_y, baseline, buf)
   for i = 1, #series.x do
     local value = series.x[i]
     local center = map_y(series.y[i])
-    local top = center - math.abs(map_y(series.y[i] + series.height / 2) -
-      map_y(series.y[i] - series.height / 2)) / 2
-    local height = math.abs(map_y(series.y[i] + series.height / 2) -
-      map_y(series.y[i] - series.height / 2))
+    local bar_height = series.heights and series.heights[i] or series.height
+    local top = center - math.abs(map_y(series.y[i] + bar_height / 2) -
+      map_y(series.y[i] - bar_height / 2)) / 2
+    local height = math.abs(map_y(series.y[i] + bar_height / 2) -
+      map_y(series.y[i] - bar_height / 2))
     local value_x = map_x(value)
     local left = math.min(baseline, value_x)
     local width = math.abs(value_x - baseline)
@@ -2376,10 +2385,14 @@ local function render_annotation(annotation, index, map_x, map_y, xscale, yscale
     rotation_attr = string.format(' transform="rotate(%s %s %s)"',
       util.fmt(rotation), util.fmt(text_x), util.fmt(text_y))
   end
+  local weight_attr = ""
+  if (annotation.fontweight or "normal") ~= "normal" then
+    weight_attr = string.format(' font-weight="%s"', annotation.fontweight)
+  end
   buf[#buf + 1] = string.format(
-    '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s"%s>%s</text>',
+    '    <text class="annotation-text" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s" data-align="%s"%s%s>%s</text>',
     util.fmt(text_x), util.fmt(text_y), util.fmt(fontsize), color, anchor, align,
-    rotation_attr, util.escape_xml(annotation.text))
+    rotation_attr, weight_attr, util.escape_xml(annotation.text))
   buf[#buf + 1] = '   </g>'
 end
 
@@ -2779,11 +2792,13 @@ function M.to_svg(fig)
   end
   local tickstyle_metadata = ""
   if (fig._ticklabelsize or 11) ~= 11 or
-      (fig._ticklabelcolor or "#222222") ~= "#222222" then
+      (fig._ticklabelcolor or "#222222") ~= "#222222" or
+      (fig._ticklabelweight or "normal") ~= "normal" then
     tickstyle_metadata = string.format(
-      ' data-ticklabelsize="%s" data-ticklabelcolor="%s"',
+      ' data-ticklabelsize="%s" data-ticklabelcolor="%s" data-ticklabelweight="%s"',
       util.fmt(fig._ticklabelsize or 11),
-      util.escape_xml(fig._ticklabelcolor or "#222222"))
+      util.escape_xml(fig._ticklabelcolor or "#222222"),
+      fig._ticklabelweight or "normal")
   end
 
   add('<?xml version="1.0" encoding="UTF-8"?>')
@@ -2901,19 +2916,14 @@ function M.to_svg(fig)
         label = string.format(' data-label="%s"', attribute(style.label))
       end
       local row_colors = series.colors
-      local dash = ""
-      if style.linestyle == "dashed" then
-        dash = ' stroke-dasharray="6 4"'
-      elseif style.linestyle == "dotted" then
-        dash = ' stroke-dasharray="1.5 3"'
-      end
       buf[#buf + 1] = string.format(
-        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-eventcolors="%s" data-labels="%s" data-linestyle="%s"%s>',
+        '  <g class="series series-eventplot" data-orientation="%s" data-rows="%d" data-colors="%s" data-eventcolors="%s" data-labels="%s" data-linestyle="%s" data-linestyles="%s"%s>',
         horizontal and "horizontal" or "vertical", #series.rows,
         row_colors ~= nil and "true" or "false",
         series.eventcolors ~= nil and "true" or "false",
         series.labels ~= nil and "true" or "false",
-        style.linestyle or "solid", label)
+        style.linestyle or "solid",
+        style.linestyles ~= nil and "true" or "false", label)
       local event_index = 0
       for row, events in ipairs(series.rows) do
         local offset = series.lineoffsets[row]
@@ -2926,6 +2936,14 @@ function M.to_svg(fig)
         if row_alpha < 1 then
           opacity = string.format(' stroke-opacity="%s"',
             util.fmt(row_alpha))
+        end
+        local row_linestyle = style.linestyles and style.linestyles[row] or
+          style.linestyle
+        local dash = ""
+        if row_linestyle == "dashed" then
+          dash = ' stroke-dasharray="6 4"'
+        elseif row_linestyle == "dotted" then
+          dash = ' stroke-dasharray="1.5 3"'
         end
         for _, value in ipairs(events) do
           event_index = event_index + 1
@@ -2949,7 +2967,7 @@ function M.to_svg(fig)
               util.fmt(x), util.fmt(y1), util.fmt(x), util.fmt(y2),
               event_color, util.fmt(row_width), dash, opacity)
           end
-          if style.linestyle ~= "none" then buf[#buf + 1] = line end
+          if row_linestyle ~= "none" then buf[#buf + 1] = line end
         end
       end
       buf[#buf + 1] = '  </g>'
@@ -3029,10 +3047,10 @@ function M.to_svg(fig)
         transform = string.format(' transform="rotate(%d %s %s)"', rotation,
           util.fmt(geom.right + 9), util.fmt(y + 4))
       end
-      printf('   <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="start"%s>%s</text>',
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="start"%s%s>%s</text>',
         util.fmt(geom.right + 9), util.fmt(y + 4),
         util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
-        transform, util.escape_xml(tick.label))
+        transform, tick_weight_attr, util.escape_xml(tick.label))
     end
     if twin._ylabel ~= nil then
       local center_y = geom.top + geom.plot_height / 2
@@ -3042,6 +3060,12 @@ function M.to_svg(fig)
         util.fmt(center_y), util.escape_xml(twin._ylabel))
     end
     add('  </g>')
+  end
+
+  local tick_weight_attr = ""
+  if (fig._ticklabelweight or "normal") ~= "normal" then
+    tick_weight_attr = string.format(' font-weight="%s"',
+      fig._ticklabelweight)
   end
 
   if twiny ~= nil then
@@ -3055,10 +3079,10 @@ function M.to_svg(fig)
         util.fmt(x), util.fmt(geom.top), util.fmt(x), util.fmt(geom.top - 5),
         AXIS_COLOR)
       local label = format_value(value, twiny._xtick_format)
-      printf('   <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle">%s</text>',
+      printf('   <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle"%s>%s</text>',
         util.fmt(x), util.fmt(geom.top - 9),
         util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
-        util.escape_xml(label))
+        tick_weight_attr, util.escape_xml(label))
     end
     if twiny._xlabel ~= nil then
       printf('   <text class="xlabel" x="%s" y="%s" font-size="13" fill="%s" text-anchor="middle">%s</text>',
@@ -3086,10 +3110,10 @@ function M.to_svg(fig)
         util.fmt(x), util.fmt(geom.bottom + 19))
       anchor = rotation > 0 and "end" or "start"
     end
-    printf('    <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
+    printf('    <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s%s>%s</text>',
       util.fmt(x), util.fmt(geom.bottom + 19),
       util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
-      anchor, transform, util.escape_xml(tick.label))
+      anchor, transform, tick_weight_attr, util.escape_xml(tick.label))
   end
   if minorticks.enabled and minor_axis ~= "y" then
     for _, value in ipairs(x_minor) do
@@ -3112,10 +3136,10 @@ function M.to_svg(fig)
       transform = string.format(' transform="rotate(%d %s %s)"', rotation,
         util.fmt(geom.left - 9), util.fmt(y + 4))
     end
-    printf('    <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="end"%s>%s</text>',
+    printf('    <text class="tick-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="end"%s%s>%s</text>',
       util.fmt(geom.left - 9), util.fmt(y + 4),
       util.fmt(fig._ticklabelsize or 11), fig._ticklabelcolor or TEXT_COLOR,
-      transform, util.escape_xml(tick.label))
+      transform, tick_weight_attr, util.escape_xml(tick.label))
   end
   if minorticks.enabled and minor_axis ~= "x" then
     for _, value in ipairs(y_minor) do

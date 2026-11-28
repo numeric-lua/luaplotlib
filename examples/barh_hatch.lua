@@ -27,6 +27,7 @@ fig:barh({ "Design", "Build", "Verify", "Ship" }, { 8, 14, 9, 5 }, {
   edgecolors = { "#1f2937", "#7c3aed", "#0f766e", "#b45309" },
   linewidth = { 1, 2, 3, 4 },
   hatch = "/",
+  height = { 0.5, 0.8, 0.6, 0.9 },
   label = "effort",
 })
 fig:title("Horizontal bars with hatching")

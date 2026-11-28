@@ -75,6 +75,7 @@ fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
 fig:ticklabelsize(12)
 fig:ticklabelcolor("#334155")
+fig:ticklabelweight("bold")
 fig:minorticks(true)
 fig:grid(true, { minor = true })
 fig:legend({
@@ -89,6 +90,7 @@ fig:legend({
   title_fontsize = 15,
   title_align = "center",
   markerfirst = false,
+  fontweight = "bold",
 })
 
 local path = outdir .. "/line.svg"

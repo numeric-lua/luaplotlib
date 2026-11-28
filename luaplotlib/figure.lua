@@ -69,6 +69,7 @@ local POLAR_ANNOTATE_OPTIONS = {
   xytext = true,
   color = true,
   fontsize = true,
+  fontweight = true,
   align = true,
   arrow = true,
   backgroundcolor = true,
@@ -464,6 +465,7 @@ local ANNOTATE_OPTIONS = {
   xytext = true,
   color = true,
   fontsize = true,
+  fontweight = true,
   align = true,
   arrow = true,
   backgroundcolor = true,
@@ -1008,6 +1010,7 @@ function Figure.new(opts)
     _ytick_rotation = 0,
     _ticklabelsize = 11,
     _ticklabelcolor = "#222222",
+    _ticklabelweight = "normal",
     _xticks = nil,
     _yticks = nil,
     _xtick_format = nil,
@@ -2190,6 +2193,13 @@ function Figure:polar_annotate(text, theta, r, opts)
   if opts.fontsize ~= nil then
     fontsize = util.check_number(opts.fontsize, "polar annotate fontsize", 0.1)
   end
+  local fontweight = "normal"
+  if opts.fontweight ~= nil then
+    if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+      fail("polar annotate fontweight must be 'normal' or 'bold'")
+    end
+    fontweight = opts.fontweight
+  end
   local align = opts.align or "left"
   if type(align) ~= "string" or not ANNOTATION_ALIGNS[align] then
     fail("polar annotate align must be one of left, center, or right")
@@ -2203,6 +2213,7 @@ function Figure:polar_annotate(text, theta, r, opts)
     xytext = xytext,
     color = color,
     fontsize = fontsize,
+    fontweight = fontweight,
     align = align,
     rotation = checked_annotation_rotation(opts, "polar annotate"),
     arrow = checked_arrow(opts.arrow, color),
@@ -2508,15 +2519,30 @@ function Figure:eventplot(positions, opts)
   else
     linewidth = util.check_number(linewidth, "eventplot linewidth", 0)
   end
+  local row_linestyles
   local linestyle = opts.linestyle or "solid"
-  if type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
+  if type(linestyle) == "table" then
+    if #linestyle ~= #rows then
+      fail("eventplot linestyle array must have one entry per row")
+    end
+    row_linestyles = {}
+    for index = 1, #linestyle do
+      local value = linestyle[index]
+      if type(value) ~= "string" or not LINESTYLES[value] then
+        fail("eventplot linestyle must be one of solid, dashed, dotted, or none")
+      end
+      row_linestyles[index] = value
+    end
+    linestyle = row_linestyles[1]
+  elseif type(linestyle) ~= "string" or not LINESTYLES[linestyle] then
     fail("eventplot linestyle must be one of solid, dashed, dotted, or none")
   end
   local style_opts = opts
-  if type(opts.alpha) == "table" then
+  if type(opts.alpha) == "table" or type(opts.linestyle) == "table" then
     style_opts = {}
     for key, value in pairs(opts) do style_opts[key] = value end
-    style_opts.alpha = alpha_value
+    if type(opts.alpha) == "table" then style_opts.alpha = alpha_value end
+    if type(opts.linestyle) == "table" then style_opts.linestyle = linestyle end
   end
   local style = checked_style(self, style_opts, "eventplot")
   style.linewidth = linewidth
@@ -2524,6 +2550,7 @@ function Figure:eventplot(positions, opts)
   style.alpha = alpha_value
   style.alphas = row_alphas
   style.linestyle = linestyle
+  style.linestyles = row_linestyles
   if row_colors ~= nil then style.color = row_colors[1] end
   self._series[#self._series + 1] = {
     kind = "eventplot", rows = rows, orientation = orientation,
@@ -3874,6 +3901,14 @@ function Figure:ticklabelcolor(color)
   return self
 end
 
+function Figure:ticklabelweight(weight)
+  if weight ~= "normal" and weight ~= "bold" then
+    fail("ticklabelweight must be 'normal' or 'bold'")
+  end
+  self._ticklabelweight = weight
+  return self
+end
+
 -- Horizontal bars for a single numeric series.  Category labels are placed on
 -- the y axis; values extend horizontally from zero.
 -- Pie/donut chart.  Values must be non-negative and sum to a positive total.
@@ -4346,8 +4381,19 @@ function Figure:barh(labels_or_y, values, opts)
       "barh labels/y and values must have the same length (%d ~= %d)",
       #labels_or_positions, #values_v))
   end
+  local heights
   local height = 0.7
-  if opts.height ~= nil then
+  if type(opts.height) == "table" then
+    if #opts.height ~= #values_v then
+      fail("barh height array must have one entry per bar")
+    end
+    heights = {}
+    for i = 1, #opts.height do
+      heights[i] = util.check_number(opts.height[i],
+        "barh height[" .. i .. "]", 0.01, 1)
+    end
+    height = heights[1]
+  elseif opts.height ~= nil then
     height = util.check_number(opts.height, "barh height", 0.01, 1)
   end
   local linewidths
@@ -4421,6 +4467,7 @@ function Figure:barh(labels_or_y, values, opts)
   end
   self._series[#self._series + 1] = {
     kind = "barh", x = values_v, y = positions, height = height,
+    heights = heights,
     bar_colors = bar_colors, show_values = opts.show_values == true,
     style = { color = color, label = opts.label, alpha = alpha,
       edgecolor = edgecolor, edgecolors = edgecolors,
@@ -5274,6 +5321,13 @@ function Figure:annotate(text, x, y, opts)
   if opts.fontsize ~= nil then
     fontsize = util.check_number(opts.fontsize, "annotate fontsize", 0.1)
   end
+  local fontweight = "normal"
+  if opts.fontweight ~= nil then
+    if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+      fail("annotate fontweight must be 'normal' or 'bold'")
+    end
+    fontweight = opts.fontweight
+  end
 
   local align = opts.align or "left"
   if type(align) ~= "string" or not ANNOTATION_ALIGNS[align] then
@@ -5287,6 +5341,7 @@ function Figure:annotate(text, x, y, opts)
     xytext = xytext,
     color = color,
     fontsize = fontsize,
+    fontweight = fontweight,
     align = align,
     rotation = checked_annotation_rotation(opts, "annotate"),
     arrow = checked_arrow(opts.arrow, color),
@@ -5732,6 +5787,7 @@ function Figure:legend(opts)
       borderpad = true,
       handlelength = true,
       fontsize = true,
+      fontweight = true,
       title_fontsize = true,
       title_align = true,
       markerfirst = true,
@@ -5784,6 +5840,13 @@ function Figure:legend(opts)
       title_fontsize = util.check_number(opts.title_fontsize,
         "legend title_fontsize", 0.1)
     end
+    local fontweight = self._legend_opts.fontweight or "normal"
+    if opts.fontweight ~= nil then
+      if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+        fail("legend fontweight must be 'normal' or 'bold'")
+      end
+      fontweight = opts.fontweight
+    end
     local title_align = self._legend_opts.title_align or "left"
     if opts.title_align ~= nil then
       if opts.title_align ~= "left" and opts.title_align ~= "center" and
@@ -5808,6 +5871,7 @@ function Figure:legend(opts)
       handlelength = handlelength,
       fontsize = fontsize,
       title_fontsize = title_fontsize,
+      fontweight = fontweight,
       title_align = title_align,
       markerfirst = markerfirst,
       ncol = ncol,
