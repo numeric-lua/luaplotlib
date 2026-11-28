@@ -1,0 +1,31 @@
+local plt = require("luaplotlib")
+
+test("legend title alignment defaults to left and supports center/right", function()
+  local fig = plt.figure()
+  fig:plot({ 1, 2 }, { 1, 2 }, { label = "line" })
+  fig:legend({ title = "series" })
+  assert_contains(fig:to_svg(), 'data-title-align="left"')
+  assert_equal(fig:to_scene().legend_style.title_align, "left")
+
+  fig:legend({ title = "series", title_align = "center" })
+  assert_contains(fig:to_svg(), 'data-title-align="center"')
+  assert_match(fig:to_svg(), 'class="legend%-title"[^>]*text%-anchor="middle"')
+
+  fig:legend({ title = "series", title_align = "right" })
+  assert_match(fig:to_svg(), 'class="legend%-title"[^>]*text%-anchor="end"')
+end)
+
+test("polar legend title alignment is applied and exported", function()
+  local fig = plt.figure({ width = 520, height = 520 })
+  fig:polar({ 0, 1 }, { 1, 1 }, { label = "p" })
+  fig:legend({ title = "polar", title_align = "right" })
+  assert_contains(fig:to_svg(), 'data-title-align="right"')
+  assert_equal(fig:to_scene().polar.legend.title_align, "right")
+end)
+
+test("legend title alignment validates choices", function()
+  local fig = plt.figure()
+  assert_error("title_align must be left, center, or right", function()
+    fig:legend({ title = "x", title_align = "middle" })
+  end)
+end)

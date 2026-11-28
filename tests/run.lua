@@ -315,6 +315,10 @@ local test_files = {
   "test_title_fontweight.lua",
   "test_axis_label_fontweight.lua",
   "test_legend_markerfirst.lua",
+  "test_polar_bar_edges.lua",
+  "test_polar_bar_alpha.lua",
+  "test_pie_text_weight.lua",
+  "test_legend_title_align.lua",
   "test_export.lua",
 }
 

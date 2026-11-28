@@ -87,6 +87,7 @@ fig:legend({
   fontsize = 13,
   title = "series",
   title_fontsize = 15,
+  title_align = "center",
   markerfirst = false,
 })
 

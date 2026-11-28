@@ -596,28 +596,41 @@ local function render_bar(series, figure, cfg, geom, buf)
   local sweep = (figure._polar.theta_direction or 1) < 0 and 1 or 0
 
   buf[#buf + 1] = string.format(
-    '  <g class="series series-polar-bar"%s>', label)
+    '  <g class="series series-polar-bar" data-edgecolors="%s" data-linewidths="%s" data-alphas="%s"%s>',
+    series.style.edgecolors and "true" or "false",
+    series.style.linewidths and "true" or "false",
+    series.style.alphas and "true" or "false", label)
   for index = 1, #series.theta do
     local value = series.r[index]
     if value > 0 then
       local width = series.widths[index] or series.width or 0.8
       local color = series.colors and series.colors[index] or style.color
+      local bar_edge = style.edgecolors and style.edgecolors[index] or edge
+      local bar_width = style.linewidths and style.linewidths[index] or
+        style.linewidth or 1
+      local bar_alpha = style.alphas and style.alphas[index] or style.alpha
+      local bar_opacity = ""
+      if bar_alpha < 1 then
+        local alpha = util.fmt(bar_alpha)
+        bar_opacity = string.format(
+          ' fill-opacity="%s" stroke-opacity="%s"', alpha, alpha)
+      end
       local radius = geom.radius * value / cfg.rmax
       if width >= 2 * math.pi - 1e-9 then
         buf[#buf + 1] = string.format(
-          '   <circle class="polar-bar" cx="%s" cy="%s" r="%s" fill="%s" stroke="%s" stroke-width="1"%s/>',
+          '   <circle class="polar-bar" cx="%s" cy="%s" r="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>',
           util.fmt(geom.cx), util.fmt(geom.cy), util.fmt(radius), color,
-          edge, opacity)
+          bar_edge, util.fmt(bar_width), bar_opacity)
       else
         local x1, y1 = M.point(figure, cfg, geom, series.theta[index], value)
         local x2, y2 = M.point(figure, cfg, geom,
           series.theta[index] + width, value)
         local large = width > math.pi and 1 or 0
         buf[#buf + 1] = string.format(
-          '   <path class="polar-bar" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="1"%s/>',
+          '   <path class="polar-bar" d="M %s %s L %s %s A %s %s 0 %d %d %s %s Z" fill="%s" stroke="%s" stroke-width="%s"%s/>',
           util.fmt(geom.cx), util.fmt(geom.cy), util.fmt(x1), util.fmt(y1),
           util.fmt(radius), util.fmt(radius), large, sweep, util.fmt(x2),
-          util.fmt(y2), color, edge, opacity)
+          util.fmt(y2), color, bar_edge, util.fmt(bar_width), bar_opacity)
       end
     end
   end
@@ -2431,13 +2444,14 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s" data-title-align="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
     util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92),
     util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20),
     util.fmt(plan.fontsize or 11), util.fmt(plan.title_fontsize or 11),
-    opts.markerfirst == false and "false" or "true")
+    opts.markerfirst == false and "false" or "true",
+    opts.title_align or "left")
   local framealpha = opts.framealpha or 0.92
   local facecolor = opts.facecolor or "#ffffff"
   local edgecolor = opts.edgecolor or "#bbbbbb"
@@ -2448,11 +2462,21 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
       facecolor, util.fmt(framealpha), edgecolor)
   end
   if opts.title then
+    local border = plan.borderpad or 8
+    local title_x, title_anchor = x + border, "start"
+    local align = opts.title_align or "left"
+    if align == "center" then
+      title_x = x + plan.width / 2
+      title_anchor = "middle"
+    elseif align == "right" then
+      title_x = x + plan.width - border
+      title_anchor = "end"
+    end
     buf[#buf + 1] = string.format(
-      '   <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s">%s</text>',
-      util.fmt(x + (plan.borderpad or 8)),
-      util.fmt(y + (plan.borderpad or 8) + (plan.title_fontsize or 11) + 3),
-      util.fmt(plan.title_fontsize or 11), TEXT_COLOR,
+      '   <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s" text-anchor="%s">%s</text>',
+      util.fmt(title_x),
+      util.fmt(y + border + (plan.title_fontsize or 11) + 3),
+      util.fmt(plan.title_fontsize or 11), TEXT_COLOR, title_anchor,
       util.escape_xml(opts.title))
   end
   for index, entry in ipairs(plan.entries) do
@@ -2790,6 +2814,7 @@ function M.to_scene(figure)
       handlelength = opts.handlelength or 20,
       fontsize = opts.fontsize or 11,
       title_fontsize = opts.title_fontsize or opts.fontsize or 11,
+      title_align = opts.title_align or "left",
       markerfirst = opts.markerfirst ~= false,
       title = opts.title,
       ncol = opts.ncol or 1,

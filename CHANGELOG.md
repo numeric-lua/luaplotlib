@@ -143,21 +143,27 @@
 - `fig:xlabel`/`fig:ylabel` accept `fontweight = "normal" | "bold"`. Scenes
   export the resolved weights;
 - `fig:legend` accepts `markerfirst = false` to place labels before swatches on
-  Cartesian and polar figures.
+  Cartesian and polar figures;
+- `fig:polar_bar` accepts per-bar `edgecolors`, `linewidth`, and `alpha` arrays.
+  SVG groups and polar scenes expose the resolved arrays;
+- `fig:pie`/`fig:donut` accept `labelweight`/`pctweight` for normal or bold slice
+  and percentage text;
+- `fig:legend` accepts `title_align = "left" | "center" | "right"` on Cartesian
+  and polar figures. Scenes export the alignment.
   Existing examples and visual QA cover per-bar colors/outlines/widths,
   annotation backgrounds/rotation, label padding, pie distances/rotation/
-  edges/text/opacity and direction, complete hist2d grids, explicit 2-D edges,
-  log hist2d colors, per-point markers/alpha/edges/widths/error colors/sizes,
-  per-sample box/violin widths, box colors/opacity/edges, violin opacity/edges,
-  per-row event widths/opacity, box visibility, quiver head/line widths, polar
-  error/vector arrays, axis-label/legend typography and weight, independent
-  legend title sizes, marker-first ordering, legend spacing, errorbar/stem
-  marker styling and x/y limits, horizontal stems/violins,
-  notched/whisker boxplots, quiver angle modes and per-vector colors,
-  tick/title styling, event line styles and per-event colors, filled steps,
-  explicit histogram edges, per-bin outlines/widths, log hexbin colors, and
-  fill/span/histogram hatches. The dependency-free suite grows from 410 to 587
-  tests. Existing Cartesian APIs remain compatible, polar rendering is
+  edges/text/opacity/weight and direction, complete hist2d grids, explicit 2-D
+  edges, log hist2d colors, per-point markers/alpha/edges/widths/error
+  colors/sizes, per-sample box/violin widths, box colors/opacity/edges, violin
+  opacity/edges, per-row event widths/opacity, box visibility, quiver
+  head/line widths, polar error/vector/bar arrays, axis-label/legend typography
+  and weight, independent legend title sizes/alignment, marker-first ordering,
+  legend spacing, errorbar/stem marker styling and x/y limits, horizontal
+  stems/violins, notched/whisker boxplots, quiver angle modes and per-vector
+  colors, tick/title styling, event line styles and per-event colors, filled
+  steps, explicit histogram edges, per-bin outlines/widths, log hexbin colors,
+  and fill/span/histogram hatches. The dependency-free suite grows from 410 to
+  596 tests. Existing Cartesian APIs remain compatible, polar rendering is
   unchanged, and there are no new runtime dependencies.
 
 ## 4.28.0

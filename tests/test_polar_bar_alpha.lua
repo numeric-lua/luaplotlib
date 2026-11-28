@@ -1,0 +1,22 @@
+local plt = require("luaplotlib")
+
+test("polar bar accepts per-bar alpha", function()
+  local fig = plt.figure({ width = 520, height = 520 })
+  fig:polar_bar({ 0, 1, 2 }, { 1, 2, 3 }, { alpha = { 0.3, 0.6, 1 } })
+  local svg = fig:to_svg()
+  assert_contains(svg, 'data-alphas="true"')
+  assert_contains(svg, 'fill-opacity="0.3"')
+  assert_contains(svg, 'fill-opacity="0.6"')
+  local style = fig:to_scene().polar.series[1].style
+  assert_equal(style.alphas[2], 0.6)
+end)
+
+test("polar bar alpha arrays validate length and values", function()
+  local fig = plt.figure({ width = 520, height = 520 })
+  assert_error("match the number of bars", function()
+    fig:polar_bar({ 0, 1 }, { 1, 2 }, { alpha = { 0.5 } })
+  end)
+  assert_error("alpha%[2%] must be <= 1", function()
+    fig:polar_bar({ 0, 1 }, { 1, 2 }, { alpha = { 0.5, 2 } })
+  end)
+end)

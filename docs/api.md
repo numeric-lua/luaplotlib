@@ -116,6 +116,7 @@ Pie and donut charts. Values must be non-negative with a positive total.
 | `linewidth` | number ≥ 0 | `1.5` |
 | `labelsize` / `pctsize` | number > 0 | `12` |
 | `labelcolor` / `pctcolor` | color string | `#222222` / `#ffffff` |
+| `labelweight` / `pctweight` | `"normal"` or `"bold"` | `"normal"` |
 | `labeldistance` | number in [0.01, 2], radius multiplier | `1.08` |
 | `pctdistance` | number in [0.01, 2], radius multiplier | `0.64` |
 | `rotatelabels` | boolean | `false` |
@@ -129,6 +130,7 @@ wedges keep their labels, leader lines, and percentage text attached to the
 shifted slice. `edgecolor`/`linewidth` style each wedge outline, defaulting to
 the existing white 1.5-pixel stroke. `labelsize`/`labelcolor` style slice
 labels, while `pctsize`/`pctcolor` style percentage annotations independently.
+`labelweight`/`pctweight` select normal or bold text.
 `labeldistance`/`pctdistance` place the slice labels and percentage text as
 radius multipliers. `rotatelabels = true` rotates each label
 to its slice angle while keeping left-half labels upright. `to_scene()` exports
@@ -185,9 +187,10 @@ Draw radial bar wedges. `theta` and `r` must be the same length; `r` values must
 be non-negative. `width` is the angular span of each bar in radians and defaults
 to `0.8`; it may be a single number or an array with one width per bar. Widths
 must be greater than zero and at most `2*pi`; a full-turn bar is rendered as a
-disk. `colors` may provide one fill color per bar, while `color`, `alpha`,
-`edgecolor`, and `label` behave like Cartesian bars. `color` and `colors` cannot
-be combined. `degrees`/`theta_unit` are accepted as in `fig:polar`.
+disk. `colors` may provide one fill color per bar, while `color` and `label`
+behave like Cartesian bars. `edgecolors`, `linewidth`, and `alpha` may be one
+value or one per bar; `color` and `colors` cannot be combined.
+`degrees`/`theta_unit` are accepted as in `fig:polar`.
 
 ### `fig:polar_heatmap(values, opts)` / `fig:polar_pcolormesh(values, opts)`
 
@@ -1365,6 +1368,7 @@ No options are required.
 | `handlelength` | number ≥ 0 | `20` |
 | `fontsize` | number > 0 | `11` |
 | `title_fontsize` | number > 0 | `fontsize` |
+| `title_align` | `"left"`, `"center"`, or `"right"` | `"left"` |
 | `markerfirst` | boolean | `true` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
@@ -1375,7 +1379,8 @@ The accepted locations are the four corners, `"upper center"`,
 `borderpad` expands the frame around its contents, `handlelength` sets the
 swatch length, and `fontsize` scales labels and frame geometry on Cartesian and
 polar legends. `title_fontsize` styles only the title, independently of labels.
-`markerfirst = false` places the label before its swatch. Only series with a non-empty
+`markerfirst = false` places the label before its swatch, and `title_align`
+aligns the legend title independently of the entries. Only series with a non-empty
 `label` appear. Swatches reflect the series type
 (line, point, bar, or error bar). Calling `legend()` with no labeled series
 produces no legend box. In polar figures `"best"` searches for the placement
@@ -1521,7 +1526,9 @@ includes, but is not limited to:
 - non-positive legend font sizes or invalid title/axis-label font weights
 - polar errorbar style arrays with wrong lengths or invalid values
 - polar quiver color/linewidth arrays with wrong lengths or invalid values
-- non-boolean legend markerfirst values
+- non-boolean legend markerfirst values or invalid legend title alignment
+- polar bar edge/width/alpha arrays with wrong lengths or invalid values
+- invalid pie labelweight/pctweight values
 - box/violin width arrays with wrong lengths or out-of-range values
 - errorbar markersize/elinewidth arrays with wrong lengths or invalid values
 - eventplot linewidth arrays with wrong lengths or negative values
@@ -1653,8 +1660,8 @@ Returns a renderer-agnostic scene table:
   legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
                    facecolor = "#ffffff", edgecolor = "#bbbbbb",
                    borderpad = 8, handlelength = 20, fontsize = 11,
-                   title_fontsize = 11, markerfirst = true,
-                   ncol = 1, title = nil },
+                   title_fontsize = 11, title_align = "left",
+                   markerfirst = true, ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
   minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
@@ -1798,8 +1805,8 @@ limits, and colorbar settings. Image scenes add `extent` and `origin` when the
 image uses explicit field coordinates, plus `colorbar_label`, `colorbar_ticks`,
 and `colorbar_tick_values` when the extended colorbar is active. Pie scenes use
 a separate `pie` block with `radius`, `inner_radius`, `shadow`, `rotatelabels`,
-`counterclock`, `alphas`, `edgecolor`, `linewidth`, the slice text sizes/colors,
-and
+`counterclock`, `alphas`, `edgecolor`, `linewidth`, the slice text
+sizes/colors/weights, and
 per-slice `value`, `percent`, `start_angle`, `end_angle`, `color`, `label`, and
 `explode` fields. Contour scenes export `x`/`y` coordinate
 arrays when the figure supplied them and keep the per-level `segments`. Aspect

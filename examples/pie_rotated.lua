@@ -31,8 +31,10 @@ fig:pie({ 31, 24, 21, 14, 10 }, {
   linewidth = 1.2,
   labelsize = 14,
   labelcolor = "#1f2937",
+  labelweight = "bold",
   pctsize = 11,
   pctcolor = "#f8fafc",
+  pctweight = "bold",
   rotatelabels = true,
   autopct = true,
 })

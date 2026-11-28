@@ -35,11 +35,16 @@ end
 
 local sectors = 12
 local theta, radius, colors = {}, {}, {}
+local edge_colors, line_widths, alphas = {}, {}, {}
 local palette = { "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728" }
+local edges = { "#0c4a6e", "#7c2d12", "#14532d", "#7f1d1d" }
 for i = 1, sectors do
   theta[i] = (i - 1) * 2 * math.pi / sectors
   radius[i] = 2 + 2 * math.abs(math.sin(2 * theta[i]))
   colors[i] = palette[(i - 1) % #palette + 1]
+  edge_colors[i] = edges[(i - 1) % #edges + 1]
+  line_widths[i] = 1 + ((i - 1) % 3)
+  alphas[i] = 0.65 + 0.35 * ((i - 1) % 4) / 3
 end
 
 local fig = plt.figure({ width = 620, height = 620, dpi = 100 })
@@ -47,7 +52,9 @@ fig:polar_bar(theta, radius, {
   width = 2 * math.pi / sectors * 0.9,
   colors = colors,
   label = "radial bars",
-  edgecolor = "#ffffff",
+  edgecolors = edge_colors,
+  linewidth = line_widths,
+  alpha = alphas,
 })
 fig:title("luaplotlib: polar bars")
 fig:savefig(outdir .. "/polar-bars.svg")

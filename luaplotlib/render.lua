@@ -663,10 +663,11 @@ local function render_legend(fig, geom, buf)
   local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
   buf[#buf + 1] = string.format(
-    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s"/>',
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s" data-title-align="%s"/>',
     util.escape_xml(loc), util.fmt(framealpha), util.fmt(border),
     util.fmt(handle), util.fmt(fontsize), util.fmt(title_size),
-    opts.markerfirst == false and "false" or "true")
+    opts.markerfirst == false and "false" or "true",
+    opts.title_align or "left")
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
@@ -674,10 +675,20 @@ local function render_legend(fig, geom, buf)
       facecolor, util.fmt(framealpha), edgecolor)
   end
   if opts.title then
+    local title_x, title_anchor = x + border, "start"
+    local align = opts.title_align or "left"
+    if align == "center" then
+      title_x = x + box_width / 2
+      title_anchor = "middle"
+    elseif align == "right" then
+      title_x = x + box_width - border
+      title_anchor = "end"
+    end
     buf[#buf + 1] = string.format(
-      '  <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s">%s</text>',
-      util.fmt(x + border), util.fmt(y + border + title_size + 3),
-      util.fmt(title_size), TEXT_COLOR, util.escape_xml(opts.title))
+      '  <text class="legend-title" x="%s" y="%s" font-size="%s" font-weight="bold" fill="%s" text-anchor="%s">%s</text>',
+      util.fmt(title_x), util.fmt(y + border + title_size + 3),
+      util.fmt(title_size), TEXT_COLOR, title_anchor,
+      util.escape_xml(opts.title))
   end
   for i, entry in ipairs(entries) do
     local column = math.floor((i - 1) / rows) + 1
@@ -2386,12 +2397,13 @@ function M.to_pie_svg(fig)
   local buf = {}
   local function add(line) buf[#buf + 1] = line end
   add('<?xml version="1.0" encoding="UTF-8"?>')
-  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-rotatelabels="%s" data-counterclock="%s" data-alpha="%s">',
+  add(string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" version="1.1" data-dpi="%s" data-pie="true" data-labeldistance="%s" data-pctdistance="%s" data-labelsize="%s" data-labelcolor="%s" data-pctsize="%s" data-pctcolor="%s" data-labelweight="%s" data-pctweight="%s" data-rotatelabels="%s" data-counterclock="%s" data-alpha="%s">',
     util.fmt(width), util.fmt(height), util.fmt(width), util.fmt(height),
     util.fmt(fig.dpi), util.fmt(pie.labeldistance or 1.08),
     util.fmt(pie.pctdistance or 0.64), util.fmt(pie.labelsize or 12),
     pie.labelcolor or "#222222", util.fmt(pie.pctsize or 12),
-    pie.pctcolor or "#ffffff",
+    pie.pctcolor or "#ffffff", pie.labelweight or "normal",
+    pie.pctweight or "normal",
     pie.rotatelabels and "true" or "false",
     pie.counterclock and "true" or "false",
     pie.alphas and "true" or "false"))
@@ -2448,9 +2460,13 @@ function M.to_pie_svg(fig)
         local format_string = pie.autopct == true and "%.1f%%" or pie.autopct
         local ok, text = pcall(string.format, format_string, slice.percent)
         if not ok then text = string.format("%.1f%%", slice.percent) end
-        add(string.format('  <text class="pie-percent" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle">%s</text>',
+        local pct_weight = pie.pctweight or "normal"
+        local pct_weight_attr = pct_weight ~= "normal" and
+          string.format(' font-weight="%s"', pct_weight) or ""
+        add(string.format('  <text class="pie-percent" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle"%s>%s</text>',
           util.fmt(tx), util.fmt(ty + 4), util.fmt(pie.pctsize or 12),
-          pie.pctcolor or "#ffffff", util.escape_xml(text)))
+          pie.pctcolor or "#ffffff", pct_weight_attr,
+          util.escape_xml(text)))
       end
       local lx, ly = pie_point(slice_cx, slice_cy, radius * (pie.labeldistance or 1.08), middle)
       local edge_x, edge_y = pie_point(slice_cx, slice_cy, radius, middle)
@@ -2471,9 +2487,12 @@ function M.to_pie_svg(fig)
         transform = string.format(' transform="rotate(%s %s %s)"',
           util.fmt(rotation), util.fmt(lx), util.fmt(ly + 4))
       end
-      add(string.format('  <text class="pie-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
+      local label_weight = pie.labelweight or "normal"
+      local label_weight_attr = label_weight ~= "normal" and
+        string.format(' font-weight="%s"', label_weight) or ""
+      add(string.format('  <text class="pie-label" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s%s>%s</text>',
         util.fmt(lx), util.fmt(ly + 4), util.fmt(pie.labelsize or 12),
-        pie.labelcolor or "#222222", anchor, transform,
+        pie.labelcolor or "#222222", anchor, label_weight_attr, transform,
         util.escape_xml(slice.label)))
     end
   end

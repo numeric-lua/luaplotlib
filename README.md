@@ -546,6 +546,26 @@ and axis labels accept `fontweight = "normal" | "bold"`, including pie, polar,
 and subplot titles. Legend `markerfirst = false` places labels before swatches
 on Cartesian and polar figures.
 
+Polar bar outlines/opacity, pie text weights, and legend title alignment are
+also available:
+
+```lua
+fig:polar_bar(theta, r, {
+  edgecolors = per_bar_edges,
+  linewidth = per_bar_widths,
+  alpha = per_bar_alphas,
+})
+fig:pie(values, {
+  labels = names, autopct = true,
+  labelweight = "bold", pctweight = "bold",
+})
+fig:legend({ title = "series", title_align = "center" })
+```
+
+Polar bars accept one outline color, width, and opacity per bar. Pie
+`labelweight`/`pctweight` style label and percentage text independently. Legend
+`title_align = "left" | "center" | "right"` aligns the title within the frame.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -771,7 +791,7 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   configurable outline widths and hatches, and symmetric/asymmetric error bars
 - Pie and donut charts with exploded slices, soft shadows, per-slice opacity,
   configurable clockwise/counterclockwise direction, wedge outlines,
-  styled/rotated labels, and distance-tuned percentage annotations
+  styled/weighted/rotated labels, and distance-tuned percentage annotations
 - Empirical CDFs with post-step rendering and an optional complementary curve
 - Vertical or horizontal box-and-whisker plots with optional notches, mean
   markers, or mean lines
@@ -799,8 +819,8 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
   titles and axis labels with configurable weight, label padding/size/color,
   and legends with nine locations, frame alpha/colors, border padding,
-  configurable handle lengths, independent label/title font sizes, and
-  marker-first ordering
+  configurable handle lengths, independent label/title font sizes,
+  marker-first ordering, and left/center/right title alignment
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
@@ -859,7 +879,8 @@ counterclockwise pie direction, per-arrow/event/error colors,
 box/violin/error/event size arrays, pie text styling, legend title sizing,
 box component visibility/colors/opacity/edges, violin edges, quiver
 head/line widths, per-bar/bin outline colors/widths, pie opacity, polar error/vector arrays, bold titles/labels,
-legend marker ordering, event
+legend marker ordering, polar bar outlines/opacity, pie text weight, legend
+title alignment, event
 opacity, image-alpha, and equal-aspect metadata, and confirms that Cartesian
 examples stay Cartesian.
 When
@@ -1018,7 +1039,8 @@ See
   median/whisker marks remain fully opaque. Histogram width arrays are
   restricted to `histtype = "bar"`. Font weight supports normal/bold only;
   marker-first reversal uses estimated/measured label widths and can leave
-  extra space in sparse columns.
+  extra space in sparse columns. Polar bar arrays must match the full bar
+  count, and pie text weights support normal/bold only.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

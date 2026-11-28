@@ -77,6 +77,23 @@ for svg in examples/output/polar-heatmap.svg "$CONTOUR"; do
 done
 
 # The quiver example must keep one arrow group per drawn vector, each with a
+# Polar bars expose per-bar outlines, widths, and opacity.
+POLAR_BARS=examples/output/polar-bars.svg
+grep -q 'class="series series-polar-bar" data-edgecolors="true" data-linewidths="true" data-alphas="true"' \
+  "$POLAR_BARS" || fail "$POLAR_BARS should expose per-bar style arrays"
+polar_bar_edges=$(grep -o 'class="polar-bar"[^>]*stroke="[^"]*"' "$POLAR_BARS" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$polar_bar_edges" -ge 3 ] ||
+  fail "$POLAR_BARS should vary bar edge colors"
+polar_bar_widths=$(grep -o 'class="polar-bar"[^>]*stroke-width="[^"]*"' "$POLAR_BARS" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$polar_bar_widths" -ge 2 ] ||
+  fail "$POLAR_BARS should vary bar outline widths"
+polar_bar_alphas=$(grep -o 'class="polar-bar"[^>]*fill-opacity="[^"]*"' "$POLAR_BARS" |
+  sed -E 's/.*fill-opacity="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$polar_bar_alphas" -ge 3 ] ||
+  fail "$POLAR_BARS should vary bar opacity"
+
 # direction and magnitude, while staying under the configured field cap.
 QUIVER=examples/output/polar-quiver.svg
 grep -q 'class="series series-polar-quiver"' "$QUIVER" ||
@@ -446,6 +463,10 @@ grep -q 'data-title-fontsize="15"' "$LINE" ||
   fail "$LINE should render the legend title font size"
 grep -q 'class="legend-title"[^>]*font-size="15"' "$LINE" ||
   fail "$LINE should style its legend title"
+grep -q 'data-title-align="center"' "$LINE" ||
+  fail "$LINE should center its legend title"
+grep -q 'class="legend-title"[^>]*text-anchor="middle"' "$LINE" ||
+  fail "$LINE should anchor its legend title in the center"
 grep -q 'class="legend"[^>]*' "$LINE" ||
   fail "$LINE has no legend"
 grep -q 'class="title"[^>]*font-weight="bold"' "$LINE" ||
@@ -1173,6 +1194,10 @@ grep -q 'class="pie-label"[^>]*font-size="14" fill="#1f2937"' "$PIE_ROTATED" ||
   fail "$PIE_ROTATED should style its slice labels"
 grep -q 'class="pie-percent"[^>]*font-size="11" fill="#f8fafc"' "$PIE_ROTATED" ||
   fail "$PIE_ROTATED should style its percentage labels"
+grep -q 'class="pie-label"[^>]*font-weight="bold"' "$PIE_ROTATED" ||
+  fail "$PIE_ROTATED should render bold slice labels"
+grep -q 'class="pie-percent"[^>]*font-weight="bold"' "$PIE_ROTATED" ||
+  fail "$PIE_ROTATED should render bold percentage labels"
 
 # Counterclockwise pies keep every slice and advance angles upward.
 PIE_COUNTER=examples/output/pie-counterclock.svg

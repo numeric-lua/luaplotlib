@@ -59,6 +59,8 @@ local POLAR_BAR_OPTIONS = {
   width = true,
   alpha = true,
   edgecolor = true,
+  edgecolors = true,
+  linewidth = true,
   degrees = true,
   theta_unit = true,
 }
@@ -331,8 +333,10 @@ local PIE_OPTIONS = {
   linewidth = true,
   labelsize = true,
   labelcolor = true,
+  labelweight = true,
   pctsize = true,
   pctcolor = true,
+  pctweight = true,
   labeldistance = true,
   pctdistance = true,
   rotatelabels = true,
@@ -1466,13 +1470,60 @@ function Figure:polar_bar(theta, r, opts)
     end
   end
 
+  local edgecolors
+  if opts.edgecolors ~= nil then
+    if type(opts.edgecolors) ~= "table" or #opts.edgecolors ~= #tv then
+      fail("polar bar edgecolors must have one entry per bar")
+    end
+    edgecolors = {}
+    for index = 1, #tv do
+      edgecolors[index] = util.check_color(opts.edgecolors[index],
+        "polar bar edgecolors[" .. index .. "]")
+    end
+  end
+  local linewidths
+  local linewidth = 1
+  if type(opts.linewidth) == "table" then
+    if #opts.linewidth ~= #tv then
+      fail("polar bar linewidth array must match the number of bars")
+    end
+    linewidths = {}
+    for index = 1, #tv do
+      linewidths[index] = util.check_number(opts.linewidth[index],
+        "polar bar linewidth[" .. index .. "]", 0)
+    end
+    linewidth = linewidths[1]
+  elseif opts.linewidth ~= nil then
+    linewidth = util.check_number(opts.linewidth, "polar bar linewidth", 0)
+  end
+  local alphas
+  local alpha = 1
+  if type(opts.alpha) == "table" then
+    if #opts.alpha ~= #tv then
+      fail("polar bar alpha array must match the number of bars")
+    end
+    alphas = {}
+    for index = 1, #tv do
+      alphas[index] = util.check_alpha(opts.alpha[index],
+        "polar bar alpha[" .. index .. "]")
+    end
+    alpha = alphas[1]
+  elseif opts.alpha ~= nil then
+    alpha = util.check_alpha(opts.alpha, "polar bar alpha")
+  end
   local style_opts = opts
-  if bar_colors ~= nil then
+  if bar_colors ~= nil or type(opts.alpha) == "table" then
     style_opts = {}
     for key, value in pairs(opts) do style_opts[key] = value end
-    style_opts.color = bar_colors[1]
+    if bar_colors ~= nil then style_opts.color = bar_colors[1] end
+    if type(opts.alpha) == "table" then style_opts.alpha = alpha end
   end
   local style = checked_style(self, style_opts, "polar bar")
+  style.linewidth = linewidth
+  style.linewidths = linewidths
+  style.edgecolors = edgecolors
+  style.alpha = alpha
+  style.alphas = alphas
 
   local state = ensure_polar_state(self)
   state.series[#state.series + 1] = {
@@ -4186,12 +4237,26 @@ function Figure:pie(values, opts)
   end
   local labelcolor = opts.labelcolor and
     util.check_color(opts.labelcolor, "pie labelcolor") or "#222222"
+  local labelweight = "normal"
+  if opts.labelweight ~= nil then
+    if opts.labelweight ~= "normal" and opts.labelweight ~= "bold" then
+      fail("pie labelweight must be 'normal' or 'bold'")
+    end
+    labelweight = opts.labelweight
+  end
   local pctsize = 12
   if opts.pctsize ~= nil then
     pctsize = util.check_number(opts.pctsize, "pie pctsize", 0.1)
   end
   local pctcolor = opts.pctcolor and
     util.check_color(opts.pctcolor, "pie pctcolor") or "#ffffff"
+  local pctweight = "normal"
+  if opts.pctweight ~= nil then
+    if opts.pctweight ~= "normal" and opts.pctweight ~= "bold" then
+      fail("pie pctweight must be 'normal' or 'bold'")
+    end
+    pctweight = opts.pctweight
+  end
   local labeldistance = 1.08
   if opts.labeldistance ~= nil then
     labeldistance = util.check_number(opts.labeldistance,
@@ -4245,8 +4310,8 @@ function Figure:pie(values, opts)
     slices = slices, radius = radius, inner_radius = inner,
     autopct = autopct, shadow = shadow, legend = legend,
     edgecolor = edgecolor, linewidth = linewidth,
-    labelsize = labelsize, labelcolor = labelcolor,
-    pctsize = pctsize, pctcolor = pctcolor,
+    labelsize = labelsize, labelcolor = labelcolor, labelweight = labelweight,
+    pctsize = pctsize, pctcolor = pctcolor, pctweight = pctweight,
     labeldistance = labeldistance, pctdistance = pctdistance,
     rotatelabels = rotatelabels, counterclock = counterclock,
     alphas = alphas,
@@ -5668,6 +5733,7 @@ function Figure:legend(opts)
       handlelength = true,
       fontsize = true,
       title_fontsize = true,
+      title_align = true,
       markerfirst = true,
       ncol = true,
       title = true,
@@ -5718,6 +5784,14 @@ function Figure:legend(opts)
       title_fontsize = util.check_number(opts.title_fontsize,
         "legend title_fontsize", 0.1)
     end
+    local title_align = self._legend_opts.title_align or "left"
+    if opts.title_align ~= nil then
+      if opts.title_align ~= "left" and opts.title_align ~= "center" and
+          opts.title_align ~= "right" then
+        fail("legend title_align must be left, center, or right")
+      end
+      title_align = opts.title_align
+    end
     local markerfirst = self._legend_opts.markerfirst
     if markerfirst == nil then markerfirst = true end
     if opts.markerfirst ~= nil then
@@ -5734,6 +5808,7 @@ function Figure:legend(opts)
       handlelength = handlelength,
       fontsize = fontsize,
       title_fontsize = title_fontsize,
+      title_align = title_align,
       markerfirst = markerfirst,
       ncol = ncol,
       title = opts.title == nil and self._legend_opts.title or opts.title,
