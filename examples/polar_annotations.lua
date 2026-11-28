@@ -48,7 +48,9 @@ local marks = { 0, math.pi / 4, math.pi / 2 }
 local values = { 3.5, 3.8, 4.2 }
 fig:polar_errorbar(marks, values, { 0.35, 0.4, 0.3 }, {
   thetaerr = { 0.12, 0.1, 0.15 },
-  ecolor = "#555555",
+  ecolor = { "#555555", "#7c3aed", "#0f766e" },
+  markersize = { 3, 5, 7 },
+  elinewidth = { 1, 2, 3 },
   capsize = 5,
   label = "uncertainty",
 })

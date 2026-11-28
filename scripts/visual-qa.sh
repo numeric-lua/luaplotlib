@@ -107,6 +107,29 @@ angled=$(grep -o 'class="polar-quiver-arrow"[^>]*data-angle="[^"]*"' \
   fail "$QUIVER arrow groups are missing data-angle metadata"
 grep -q 'class="polar-legend"' "$QUIVER" ||
   fail "$QUIVER has no polar legend"
+quiver_field_colors=$(grep -o 'class="polar-quiver-shaft"[^>]*stroke="[^"]*"' "$QUIVER" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$quiver_field_colors" -ge 2 ] ||
+  fail "$QUIVER should vary colors per arrow"
+quiver_field_widths=$(grep -o 'class="polar-quiver-shaft"[^>]*stroke-width="[^"]*"' "$QUIVER" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$quiver_field_widths" -ge 2 ] ||
+  fail "$QUIVER should vary widths per arrow"
+
+# Polar errorbars use Cartesian-parity per-point styling arrays.
+POLAR_ANNOT=examples/output/polar-annotations.svg
+polar_err_colors=$(grep -o 'class="polar-errorbar[^"]*"[^>]*stroke="[^"]*"' "$POLAR_ANNOT" |
+  sed -E 's/.*stroke="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$polar_err_colors" -ge 2 ] ||
+  fail "$POLAR_ANNOT should vary polar error colors"
+polar_err_widths=$(grep -o 'class="polar-errorbar[^"]*"[^>]*stroke-width="[^"]*"' "$POLAR_ANNOT" |
+  sed -E 's/.*stroke-width="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$polar_err_widths" -ge 2 ] ||
+  fail "$POLAR_ANNOT should vary polar error widths"
+polar_err_sizes=$(grep -o 'class="marker"[^>]*r="[^"]*"' "$POLAR_ANNOT" |
+  sed -E 's/.*r="([^"]*)"/\1/' | sort -u | wc -l | tr -d ' ')
+[ "$polar_err_sizes" -ge 2 ] ||
+  fail "$POLAR_ANNOT should vary polar marker sizes"
 
 # Streamplot examples must keep their integrated line groups, stay inside the
 # configured caps, and expose arc-length, seed, closed-orbit, arrow-anchor, and
@@ -425,6 +448,14 @@ grep -q 'class="legend-title"[^>]*font-size="15"' "$LINE" ||
   fail "$LINE should style its legend title"
 grep -q 'class="legend"[^>]*' "$LINE" ||
   fail "$LINE has no legend"
+grep -q 'class="title"[^>]*font-weight="bold"' "$LINE" ||
+  fail "$LINE should render a bold title"
+grep -q 'class="xlabel"[^>]*font-weight="bold"' "$LINE" ||
+  fail "$LINE should render a bold x label"
+grep -q 'class="ylabel"[^>]*font-weight="bold"' "$LINE" ||
+  fail "$LINE should render a bold y label"
+grep -q 'data-markerfirst="false"' "$LINE" ||
+  fail "$LINE should place labels before legend swatches"
 
 # Configurable minor ticks must subdivide each major interval into four parts.
 MINOR_SUB=examples/output/minor-subdivisions.svg

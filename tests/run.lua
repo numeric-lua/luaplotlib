@@ -310,6 +310,11 @@ local test_files = {
   "test_box_edgecolors.lua",
   "test_violin_edgecolors.lua",
   "test_pie_alpha.lua",
+  "test_polar_errorbar_arrays.lua",
+  "test_polar_quiver_arrays.lua",
+  "test_title_fontweight.lua",
+  "test_axis_label_fontweight.lua",
+  "test_legend_markerfirst.lua",
   "test_export.lua",
 }
 

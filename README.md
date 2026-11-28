@@ -524,6 +524,28 @@ accept one value per bar/bin, and `hist` restricts width arrays to
 `histtype = "bar"`. Box/violin `edgecolors` accept one outline color per
 sample. Pie `alpha` accepts one value per slice.
 
+Polar error/vector arrays, bold titles/labels, and legend layout controls are
+also available:
+
+```lua
+fig:polar_errorbar(theta, r, rerr, {
+  ecolor = per_point_colors, markersize = sizes, elinewidth = widths,
+})
+fig:polar_quiver(theta, r, u, v, {
+  color = arrow_colors, linewidth = arrow_widths,
+})
+fig:title("Bold title", { fontweight = "bold" })
+fig:xlabel("x", { fontweight = "bold" })
+fig:ylabel("y", { fontweight = "bold" })
+fig:legend({ markerfirst = false })
+```
+
+Polar errorbars accept per-point `ecolor`, `markersize`, and `elinewidth`
+arrays; polar quiver accepts per-vector `color` and `linewidth` arrays. Titles
+and axis labels accept `fontweight = "normal" | "bold"`, including pie, polar,
+and subplot titles. Legend `markerfirst = false` places labels before swatches
+on Cartesian and polar figures.
+
 Cartesian vector fields, hexagonal binning, explicit field coordinates, and
 aspect constraints are also additive:
 
@@ -769,14 +791,16 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
 - Symmetric or asymmetric vertical/horizontal error bars with independent lower
   and upper extents, optional `errorevery` decimation, configurable caps, and
   lower/upper and left/right limit arrowheads plus per-point error colors,
-  marker sizes, and error line widths
+  marker sizes, and error line widths; polar errorbars support the same
+  per-point arrays
 - Linear or base-10 logarithmic `xscale` / `yscale` with automatic decade ticks
   and optional minor tick marks
 - Auto-ranging, 5% data margins, and "nice" 1/2/2.5/5 based linear ticks
 - Explicit `xlim` / `ylim`, optional major/minor grid, aligned and styled
-  titles, label-padded/styled axis labels, and legends with nine locations,
-  frame alpha/colors, border padding, configurable handle lengths, and
-  independent label/title font sizes
+  titles and axis labels with configurable weight, label padding/size/color,
+  and legends with nine locations, frame alpha/colors, border padding,
+  configurable handle lengths, independent label/title font sizes, and
+  marker-first ordering
 - Clipped infinite `axline` reference lines, full or fractional
   `axhline`/`axvline` spans, and marker decimation through `markevery`
 - Masked or interpolated `fill_between`/`fill_betweenx` bands with optional
@@ -785,9 +809,10 @@ series. Series descriptors can also set `color`, `edgecolor`, and `alpha`.
   styled stems with custom bases,
   markers, marker face/edge styling, and vertical or horizontal orientation
 - Stacked areas with `zero`, `sym`, and `wiggle` baselines
-- Cartesian quiver vector fields with data-space or screen-space (`uv`) angles,
-  automatic/explicit scaling, pivots, adjustable head width, per-vector line
-  widths, normalization, deterministic arrow caps, and legend/scene metadata
+- Cartesian and polar quiver vector fields with data-space or screen-space
+  (`uv`) angles, automatic/explicit scaling, pivots, adjustable head width,
+  per-vector colors/line widths, normalization, deterministic arrow caps, and
+  legend/scene metadata
 - Hexagonal and rectangular 2-D binning with minimum counts, value limits,
   explicit or count-based rectangular edges, linear or log count colors,
   explicit or uniform colorbar ticks, and renderer-agnostic cell/count export
@@ -833,7 +858,8 @@ outline widths, log hexbin/hist2d counts, notched/whisker boxplots,
 counterclockwise pie direction, per-arrow/event/error colors,
 box/violin/error/event size arrays, pie text styling, legend title sizing,
 box component visibility/colors/opacity/edges, violin edges, quiver
-head/line widths, per-bar/bin outline colors/widths, pie opacity, event
+head/line widths, per-bar/bin outline colors/widths, pie opacity, polar error/vector arrays, bold titles/labels,
+legend marker ordering, event
 opacity, image-alpha, and equal-aspect metadata, and confirms that Cartesian
 examples stay Cartesian.
 When
@@ -990,7 +1016,9 @@ See
   match the sample/point/row/bin count, and very large marker sizes can overlap
   neighboring points. Box `alpha` scales the filled body only; outlines and
   median/whisker marks remain fully opaque. Histogram width arrays are
-  restricted to `histtype = "bar"`.
+  restricted to `histtype = "bar"`. Font weight supports normal/bold only;
+  marker-first reversal uses estimated/measured label widths and can leave
+  extra space in sparse columns.
 - **Hexbin uses a regular x-grid.** `gridsize` is a single integer across x and
   rows are derived to keep regular cells; tuple grids, log-count normalization,
   and callback reductions are not supported.

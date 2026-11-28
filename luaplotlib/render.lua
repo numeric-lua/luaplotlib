@@ -663,9 +663,10 @@ local function render_legend(fig, geom, buf)
   local edgecolor = opts.edgecolor or "#bbbbbb"
   buf[#buf + 1] = ' <g class="legend">'
   buf[#buf + 1] = string.format(
-    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s"/>',
+    '  <g class="legend-meta" data-loc="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s"/>',
     util.escape_xml(loc), util.fmt(framealpha), util.fmt(border),
-    util.fmt(handle), util.fmt(fontsize), util.fmt(title_size))
+    util.fmt(handle), util.fmt(fontsize), util.fmt(title_size),
+    opts.markerfirst == false and "false" or "true")
   if opts.frame ~= false then
     buf[#buf + 1] = string.format(
       '  <rect class="legend-frame" x="%s" y="%s" width="%s" height="%s" rx="3" fill="%s" fill-opacity="%s" stroke="%s" stroke-width="1"/>',
@@ -684,11 +685,20 @@ local function render_legend(fig, geom, buf)
     local entry_x = x + border + (column - 1) * (col_width + border)
     local entry_y = y + (2 * border - 4) + title_height +
       (row - 1) * row_height
-    swatch(buf, entry.kind, entry.color, entry_x, entry_y, handle)
-    buf[#buf + 1] = string.format(
-      '  <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
-      util.fmt(entry_x + handle + 8), util.fmt(entry_y + fontsize * 0.36),
-      util.fmt(fontsize), TEXT_COLOR, util.escape_xml(entry.label))
+    if opts.markerfirst == false then
+      buf[#buf + 1] = string.format(
+        '  <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        util.fmt(entry_x), util.fmt(entry_y + fontsize * 0.36),
+        util.fmt(fontsize), TEXT_COLOR, util.escape_xml(entry.label))
+      swatch(buf, entry.kind, entry.color,
+        entry_x + col_width - handle - 4, entry_y, handle)
+    else
+      swatch(buf, entry.kind, entry.color, entry_x, entry_y, handle)
+      buf[#buf + 1] = string.format(
+        '  <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        util.fmt(entry_x + handle + 8), util.fmt(entry_y + fontsize * 0.36),
+        util.fmt(fontsize), TEXT_COLOR, util.escape_xml(entry.label))
+    end
   end
   buf[#buf + 1] = ' </g>'
 end
@@ -2395,9 +2405,12 @@ function M.to_pie_svg(fig)
     elseif fig._title_loc == "right" then
       title_x, title_anchor = width * 0.95, "end"
     end
-    add(string.format(' <text class="title" x="%s" y="28" font-size="%s" fill="%s" text-anchor="%s">%s</text>',
+    local weight = fig._title_fontweight or "normal"
+    local weight_attr = weight ~= "normal" and
+      string.format(' font-weight="%s"', weight) or ""
+    add(string.format(' <text class="title" x="%s" y="28" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
       util.fmt(title_x), util.fmt(fig._title_fontsize or 18),
-      fig._title_color or "#222222", title_anchor,
+      fig._title_color or "#222222", title_anchor, weight_attr,
       util.escape_xml(fig._title)))
   end
   add(' <g class="pie" font-family="Helvetica, Arial, sans-serif">')
@@ -3096,19 +3109,27 @@ function M.to_svg(fig)
   add('   </g>')
 
   if fig._xlabel ~= nil then
-    printf('   <text class="xlabel" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle">%s</text>',
+    local weight = fig._xlabel_fontweight or "normal"
+    local weight_attr = weight ~= "normal" and
+      string.format(' font-weight="%s"', weight) or ""
+    printf('   <text class="xlabel" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle"%s>%s</text>',
       util.fmt(geom.left + geom.plot_width / 2), util.fmt(geom.height - 14),
       util.fmt(fig._xlabel_fontsize or 13),
-      fig._xlabel_color or TEXT_COLOR, util.escape_xml(fig._xlabel))
+      fig._xlabel_color or TEXT_COLOR, weight_attr,
+      util.escape_xml(fig._xlabel))
   end
 
   if fig._ylabel ~= nil then
     local center_y = geom.top + geom.plot_height / 2
     local x = 18
-    printf('   <text class="ylabel" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle" transform="rotate(-90 %s %s)">%s</text>',
+    local weight = fig._ylabel_fontweight or "normal"
+    local weight_attr = weight ~= "normal" and
+      string.format(' font-weight="%s"', weight) or ""
+    printf('   <text class="ylabel" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="middle" transform="rotate(-90 %s %s)"%s>%s</text>',
       util.fmt(x), util.fmt(center_y),
       util.fmt(fig._ylabel_fontsize or 13), fig._ylabel_color or TEXT_COLOR,
-      util.fmt(x), util.fmt(center_y), util.escape_xml(fig._ylabel))
+      util.fmt(x), util.fmt(center_y), weight_attr,
+      util.escape_xml(fig._ylabel))
   end
 
   if fig._title ~= nil then
@@ -3118,10 +3139,13 @@ function M.to_svg(fig)
     elseif fig._title_loc == "right" then
       title_x, title_anchor = geom.right, "end"
     end
-    printf('   <text class="title" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s">%s</text>',
+    local weight = fig._title_fontweight or "normal"
+    local weight_attr = weight ~= "normal" and
+      string.format(' font-weight="%s"', weight) or ""
+    printf('   <text class="title" x="%s" y="%s" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
       util.fmt(title_x), util.fmt(math.max(16, geom.top - 22)),
       util.fmt(fig._title_fontsize or 18),
-      fig._title_color or TEXT_COLOR, title_anchor,
+      fig._title_color or TEXT_COLOR, title_anchor, weight_attr,
       util.escape_xml(fig._title))
   end
   add('  </g>')

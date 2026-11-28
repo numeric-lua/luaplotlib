@@ -40,6 +40,7 @@ end
 -- center of the axes clear so the arrows do not crowd the radial tick labels.
 local rings, sectors = 8, 20
 local theta, r, u, v = {}, {}, {}, {}
+local arrow_colors, arrow_widths = {}, {}
 for ring = 1, rings do
   local radius = 1.5 + (5.2 - 1.5) * (ring - 1) / (rings - 1)
   for sector = 1, sectors do
@@ -49,6 +50,8 @@ for ring = 1, rings do
     r[index] = radius
     u[index] = 0.55 + 0.3 * math.sin(3 * angle)
     v[index] = 0.4 * math.cos(2 * angle) * (radius / 6)
+    arrow_colors[index] = sector % 2 == 0 and "#1f77b4" or "#f28e2b"
+    arrow_widths[index] = 0.8 + 0.15 * (ring % 3)
   end
 end
 
@@ -56,8 +59,8 @@ local fig = plt.figure({ width = 640, height = 640, dpi = 100 })
 fig:polar_config({ rmax = 6 })
 fig:polar_quiver(theta, r, u, v, {
   label = "swirling vector field",
-  color = "#1f77b4",
-  linewidth = 1.2,
+  color = arrow_colors,
+  linewidth = arrow_widths,
   head = 5,
 })
 fig:title("luaplotlib: polar quiver vector field")

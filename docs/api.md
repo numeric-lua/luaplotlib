@@ -287,15 +287,15 @@ circle around the data point. `capsize = 0` suppresses the end caps.
 | --- | --- | --- |
 | `rerr` | number ≥ 0 or array (required) | — |
 | `thetaerr` | number ≥ 0 or array, ≤ `2*pi` radians | no angular error |
-| `color` | color string or per-vector array | next palette color |
+| `color` | color string | next palette color |
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 | `1.5` |
 | `linestyle` | `"solid"`, `"dashed"`, `"dotted"`, or `"none"` | `"solid"` |
 | `marker` | marker name, `true`, or `false` | `"circle"` |
-| `markersize` | number > 0 | `4` |
+| `markersize` | number > 0 or per-point array | `4` |
 | `alpha` | number in [0, 1] | `1` |
 | `capsize` | number ≥ 0 | `4` |
-| `elinewidth` | number ≥ 0 | `1` |
+| `elinewidth` | number ≥ 0 or per-point array | `1` |
 | `ecolor` | color string or per-point array | same as `color` |
 | `lolims` / `uplims` | boolean or one boolean per point | `false` |
 | `xlolims` / `xuplims` | boolean or one boolean per point | `false` |
@@ -333,9 +333,9 @@ direction fields. `pivot` chooses the data point within the glyph:
 | `normalize` | boolean | `false` |
 | `pivot` | `"tail"`, `"middle"`, or `"tip"` | `"tail"` |
 | `max_arrows` | integer in [1, 4096] | `512` |
-| `color` | color string | next palette color |
+| `color` | color string or per-vector array | next palette color |
 | `label` | string | no legend entry |
-| `linewidth` | number ≥ 0 | `1.2` |
+| `linewidth` | number ≥ 0 or per-vector array | `1.2` |
 | `head` | number ≥ 0, SVG user units | `5` |
 | `alpha` | number in [0, 1] | `1` |
 | `degrees` / `theta_unit` | boolean / `"radians"` or `"degrees"` | radians |
@@ -578,7 +578,7 @@ the arrows stay legible on linear and log axes.
 
 | Option | Type | Default |
 | --- | --- | --- |
-| `color` | color string | next palette color |
+| `color` | color string or per-vector array | next palette color |
 | `label` | string | no legend entry |
 | `linewidth` | number ≥ 0 or per-vector array | `1.2` |
 | `head` | number ≥ 0 (SVG user units) | `6` |
@@ -1165,20 +1165,24 @@ fig:title("text")
 fig:title("left aligned", { loc = "left" })
 fig:title("right aligned", { loc = "right" })
 fig:title("styled", { fontsize = 20, color = "#0f172a" })
+fig:title("bold", { fontweight = "bold" })
 fig:xlabel("text")
-fig:xlabel("x", { labelpad = 10, fontsize = 15, color = "#334155" })
-fig:ylabel("y", { labelpad = 8, fontsize = 15, color = "#334155" })
+fig:xlabel("x", { labelpad = 10, fontsize = 15, color = "#334155",
+  fontweight = "bold" })
+fig:ylabel("y", { labelpad = 8, fontsize = 15, color = "#334155",
+  fontweight = "bold" })
 ```
 
 Arguments must be strings (empty strings are allowed). `xlabel` and `ylabel`
 accept `labelpad` (number ≥ 0, default `0`) to increase the corresponding layout
 margin and move the axis label away from the plot box; `fontsize` (number >
-0) and `color` style the label text. Root SVG metadata and scenes report
+0), `color`, and `fontweight = "normal" | "bold"` style the label text. Root SVG metadata and scenes report
 `xlabel_pad`/`ylabel_pad`, plus the resolved `*_fontsize`/`*_color` values. `title` accepts
 `loc = "left"`, `"center"` (default), or `"right"` and aligns the title to the
 axes box (Cartesian), canvas (pie/polar), or outer grid (subplots). Calling
 `title(text)` without options keeps the last alignment. Scenes export the
-resolved `title_align`. `fontsize` (number > 0) and `color` style the title;
+resolved `title_align`. `fontsize` (number > 0), `color`, and `fontweight = "normal" | "bold"` style
+the title;
 the resolved values are exported as `title_fontsize`/`title_color`, including
 pie, polar, and subplot scenes. Text is XML-escaped and invalid XML control
 characters are replaced. The y label is rotated -90°.
@@ -1361,6 +1365,7 @@ No options are required.
 | `handlelength` | number ≥ 0 | `20` |
 | `fontsize` | number > 0 | `11` |
 | `title_fontsize` | number > 0 | `fontsize` |
+| `markerfirst` | boolean | `true` |
 | `ncol` | integer in [1, 6] | `1` |
 | `title` | string | none |
 
@@ -1369,7 +1374,8 @@ The accepted locations are the four corners, `"upper center"`,
 `framealpha`, `facecolor`, and `edgecolor` style the frame independently.
 `borderpad` expands the frame around its contents, `handlelength` sets the
 swatch length, and `fontsize` scales labels and frame geometry on Cartesian and
-polar legends. `title_fontsize` styles only the title, independently of labels. Only series with a non-empty
+polar legends. `title_fontsize` styles only the title, independently of labels.
+`markerfirst = false` places the label before its swatch. Only series with a non-empty
 `label` appear. Swatches reflect the series type
 (line, point, bar, or error bar). Calling `legend()` with no labeled series
 produces no legend box. In polar figures `"best"` searches for the placement
@@ -1512,7 +1518,10 @@ includes, but is not limited to:
 - hist2d edge tables that are too short, non-increasing, or combined with
   `range`
 - errorbar `ecolor` arrays with wrong lengths or invalid colors
-- non-positive legend font sizes
+- non-positive legend font sizes or invalid title/axis-label font weights
+- polar errorbar style arrays with wrong lengths or invalid values
+- polar quiver color/linewidth arrays with wrong lengths or invalid values
+- non-boolean legend markerfirst values
 - box/violin width arrays with wrong lengths or out-of-range values
 - errorbar markersize/elinewidth arrays with wrong lengths or invalid values
 - eventplot linewidth arrays with wrong lengths or negative values
@@ -1628,10 +1637,12 @@ Returns a renderer-agnostic scene table:
   width = 640, height = 480, dpi = 100,
   title = "...", title_align = "center",
   title_fontsize = 18, title_color = "#222222",
+  title_fontweight = "normal",
   xlabel = "...", ylabel = "...",
   xlabel_pad = 0, ylabel_pad = 0,
   xlabel_fontsize = 13, ylabel_fontsize = 13,
   xlabel_color = "#222222", ylabel_color = "#222222",
+  xlabel_fontweight = "normal", ylabel_fontweight = "normal",
   xscale = "linear", yscale = "linear",
   xtick_rotation = 0, ytick_rotation = 0,
   ticklabelsize = 11, ticklabelcolor = "#222222",
@@ -1642,7 +1653,8 @@ Returns a renderer-agnostic scene table:
   legend_style = { loc = "upper right", frame = true, framealpha = 0.92,
                    facecolor = "#ffffff", edgecolor = "#bbbbbb",
                    borderpad = 8, handlelength = 20, fontsize = 11,
-                   title_fontsize = 11, ncol = 1, title = nil },
+                   title_fontsize = 11, markerfirst = true,
+                   ncol = 1, title = nil },
   grid_style = { color = "#d9d9d9", linewidth = 1, linestyle = "solid",
                  alpha = 1, axis = "both" },
   minor_grid_style = { color = "#d9d9d9", linewidth = 0.65,
@@ -1758,8 +1770,9 @@ carry `angles`;
 marker-capable line, errorbar, and stem styles may include `markerfacecolor`,
 `markeredgecolor`, and `markeredgewidth`. Scatter styles may include per-point
 `markers`, `alphas`, `edgecolors`, and `linewidths` arrays. Errorbar styles may
-include per-point `ecolors`, `markersizes`, and `elinewidths`, and eventplot
-styles may include per-row `linewidths`; bar/barh/hist/fill/span styles may
+include per-point `ecolors`, `markersizes`, and `elinewidths`, polar errorbar
+styles use the same arrays, and eventplot styles may include per-row
+`linewidths`; bar/barh/hist/fill/span styles may
 include per-bar/bin `edgecolors` and `linewidths`; include `hatch` when a pattern is active. Step scenes export `fill` and
 `fillalpha`; scene roots export `title_fontsize`/`title_color`, and pie scenes
 export `rotatelabels`, `edgecolor`, `linewidth`, and the slice text sizes/colors.

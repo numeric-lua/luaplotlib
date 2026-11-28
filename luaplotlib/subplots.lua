@@ -120,6 +120,7 @@ function SubplotFigure.new(rows, cols, opts)
     _title_loc = "center",
     _title_fontsize = 20,
     _title_color = "#222222",
+    _title_fontweight = "normal",
     _gap = gap, _margin = margin, _top = top,
     _cell_width = col_widths[1], _cell_height = row_heights[1],
     _x_positions = x_positions, _y_positions = y_positions,
@@ -134,9 +135,11 @@ function SubplotFigure:title(text, opts)
   local loc = self._title_loc or "center"
   local fontsize = self._title_fontsize or 20
   local color = self._title_color or "#222222"
+  local fontweight = self._title_fontweight or "normal"
   if opts ~= nil then
     opts = util.check_options(opts,
-      { loc = true, fontsize = true, color = true }, "subplots title")
+      { loc = true, fontsize = true, color = true, fontweight = true },
+      "subplots title")
     if opts.loc ~= nil then
       if opts.loc ~= "left" and opts.loc ~= "center" and
           opts.loc ~= "right" then
@@ -152,11 +155,19 @@ function SubplotFigure:title(text, opts)
     if opts.color ~= nil then
       color = util.check_color(opts.color, "subplots title color")
     end
+    if opts.fontweight ~= nil then
+      if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+        error("luaplotlib: subplots title fontweight must be normal or bold",
+          3)
+      end
+      fontweight = opts.fontweight
+    end
   end
   self._title = text
   self._title_loc = loc
   self._title_fontsize = fontsize
   self._title_color = color
+  self._title_fontweight = fontweight
   return self
 end
 
@@ -291,11 +302,14 @@ function SubplotFigure:to_svg()
     elseif self._title_loc == "right" then
       title_x, title_anchor = self.width - self._margin, "end"
     end
+    local weight = self._title_fontweight or "normal"
+    local weight_attr = weight ~= "normal" and
+      string.format(' font-weight="%s"', weight) or ""
     buffers[#buffers + 1] = string.format(
-      ' <text class="suptitle" x="%s" y="%s" font-size="%s" fill="%s" ' ..
-      'text-anchor="%s">%s</text>', util.fmt(title_x),
+      ' <text class="suptitle" x="%s" y="%s" font-size="%s" fill="%s"' ..
+      ' text-anchor="%s"%s>%s</text>', util.fmt(title_x),
       util.fmt(self._margin + 26), util.fmt(self._title_fontsize or 20),
-      self._title_color or "#222222", title_anchor,
+      self._title_color or "#222222", title_anchor, weight_attr,
       util.escape_xml(self._title))
   end
   for row = 1, self.rows do
@@ -358,7 +372,8 @@ function SubplotFigure:to_scene()
     height = self.height, dpi = self.dpi, title = self._title,
     title_align = self._title_loc or "center",
     title_fontsize = self._title_fontsize or 20,
-    title_color = self._title_color or "#222222", axes = axes,
+    title_color = self._title_color or "#222222",
+    title_fontweight = self._title_fontweight or "normal", axes = axes,
   }
 end
 

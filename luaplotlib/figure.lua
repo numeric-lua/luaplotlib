@@ -965,6 +965,7 @@ function Figure.new(opts)
     _title_loc = "center",
     _title_fontsize = 18,
     _title_color = "#222222",
+    _title_fontweight = "normal",
     _twin = nil,
     _twiny = nil,
     _xlabel = nil,
@@ -975,6 +976,8 @@ function Figure.new(opts)
     _ylabel_fontsize = 13,
     _xlabel_color = "#222222",
     _ylabel_color = "#222222",
+    _xlabel_fontweight = "normal",
+    _ylabel_fontweight = "normal",
     _xlim = nil,
     _ylim = nil,
     _xscale = checked_scale(opts.xscale, "figure xscale", true),
@@ -991,7 +994,7 @@ function Figure.new(opts)
     _legend_opts = {
       loc = "upper right", frame = true, framealpha = 0.92,
       facecolor = "#ffffff", edgecolor = "#bbbbbb",
-      borderpad = 8, handlelength = 20, fontsize = 11,
+      borderpad = 8, handlelength = 20, fontsize = 11, markerfirst = true,
     },
     _category_ticks = nil,
     _category_axis = "x",
@@ -1549,29 +1552,69 @@ function Figure:polar_errorbar(theta, r, rerr, opts)
   end
   local marker = checked_marker(opts.marker == nil and "circle" or opts.marker,
     "polar errorbar")
+  local markersizes
   local markersize = 4
-  if opts.markersize ~= nil then
+  if type(opts.markersize) == "table" then
+    if #opts.markersize ~= #tv then
+      fail("polar errorbar markersize array must match the number of points")
+    end
+    markersizes = {}
+    for index = 1, #opts.markersize do
+      markersizes[index] = util.check_number(opts.markersize[index],
+        "polar errorbar markersize[" .. index .. "]", 0.1)
+    end
+    markersize = markersizes[1]
+  elseif opts.markersize ~= nil then
     markersize = util.check_number(opts.markersize, "polar errorbar markersize", 0.1)
   end
   local capsize = 4
   if opts.capsize ~= nil then
     capsize = util.check_number(opts.capsize, "polar errorbar capsize", 0)
   end
+  local elinewidths
   local elinewidth = 1
-  if opts.elinewidth ~= nil then
+  if type(opts.elinewidth) == "table" then
+    if #opts.elinewidth ~= #tv then
+      fail("polar errorbar elinewidth array must match the number of points")
+    end
+    elinewidths = {}
+    for index = 1, #opts.elinewidth do
+      elinewidths[index] = util.check_number(opts.elinewidth[index],
+        "polar errorbar elinewidth[" .. index .. "]", 0)
+    end
+    elinewidth = elinewidths[1]
+  elseif opts.elinewidth ~= nil then
     elinewidth = util.check_number(opts.elinewidth, "polar errorbar elinewidth", 0)
   end
+  local style_opts = opts
+  local ecolors
+  if type(opts.ecolor) == "table" then
+    if #opts.ecolor ~= #tv then
+      fail("polar errorbar ecolor array must match the number of points")
+    end
+    ecolors = {}
+    for index = 1, #opts.ecolor do
+      ecolors[index] = util.check_color(opts.ecolor[index],
+        "polar errorbar ecolor[" .. index .. "]")
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.ecolor = ecolors[1]
+  end
 
-  local style = checked_style(self, opts, "polar errorbar")
+  local style = checked_style(self, style_opts, "polar errorbar")
   style.linewidth = linewidth
   style.linestyle = linestyle
   style.marker = marker
   style.markersize = markersize
-  checked_marker_style(opts, "errorbar", style)
+  style.markersizes = markersizes
+  checked_marker_style(style_opts, "errorbar", style)
   style.capsize = capsize
   style.elinewidth = elinewidth
-  if opts.ecolor ~= nil then
-    style.ecolor = util.check_color(opts.ecolor, "polar errorbar ecolor")
+  style.elinewidths = elinewidths
+  style.ecolors = ecolors
+  if style_opts.ecolor ~= nil then
+    style.ecolor = util.check_color(style_opts.ecolor, "polar errorbar ecolor")
   else
     style.ecolor = style.color
   end
@@ -1607,8 +1650,19 @@ function Figure:polar_quiver(theta, r, u, v, opts)
       "(%d, %d, %d, %d)", count, #rv, #uv, #vv))
   end
 
+  local linewidths
   local linewidth = 1.2
-  if opts.linewidth ~= nil then
+  if type(opts.linewidth) == "table" then
+    if #opts.linewidth ~= count then
+      fail("polar quiver linewidth array must match the number of vectors")
+    end
+    linewidths = {}
+    for index = 1, count do
+      linewidths[index] = util.check_number(opts.linewidth[index],
+        "polar quiver linewidth[" .. index .. "]", 0)
+    end
+    linewidth = linewidths[1]
+  elseif opts.linewidth ~= nil then
     linewidth = util.check_number(opts.linewidth,
       "polar quiver linewidth", 0)
   end
@@ -1638,8 +1692,25 @@ function Figure:polar_quiver(theta, r, u, v, opts)
       "polar quiver normalize")
   end
 
-  local style = checked_style(self, opts, "polar quiver")
+  local style_opts = opts
+  local point_colors
+  if type(opts.color) == "table" then
+    if #opts.color ~= count then
+      fail("polar quiver color array must match the number of vectors")
+    end
+    point_colors = {}
+    for index = 1, count do
+      point_colors[index] = util.check_color(opts.color[index],
+        "polar quiver color[" .. index .. "]")
+    end
+    style_opts = {}
+    for key, value in pairs(opts) do style_opts[key] = value end
+    style_opts.color = point_colors[1]
+  end
+  local style = checked_style(self, style_opts, "polar quiver")
   style.linewidth = linewidth
+  style.linewidths = linewidths
+  style.colors = point_colors
   style.head = head
 
   local state = ensure_polar_state(self)
@@ -3668,7 +3739,7 @@ function Figure:twinx()
     _legend_opts = {
       loc = "upper right", frame = true, framealpha = 0.92,
       facecolor = "#ffffff", edgecolor = "#bbbbbb",
-      borderpad = 8, handlelength = 20, fontsize = 11,
+      borderpad = 8, handlelength = 20, fontsize = 11, markerfirst = true,
     },
   }, Figure)
   self._twin = twin
@@ -5164,9 +5235,11 @@ function Figure:title(text, opts)
   local loc = self._title_loc or "center"
   local fontsize = self._title_fontsize or 18
   local color = self._title_color or "#222222"
+  local fontweight = self._title_fontweight or "normal"
   if opts ~= nil then
     opts = util.check_options(opts,
-      { loc = true, fontsize = true, color = true }, "title")
+      { loc = true, fontsize = true, color = true, fontweight = true },
+      "title")
     if opts.loc ~= nil then
       if type(opts.loc) ~= "string" or not TITLE_LOCATIONS[opts.loc] then
         fail("title loc must be left, center, or right")
@@ -5179,11 +5252,18 @@ function Figure:title(text, opts)
     if opts.color ~= nil then
       color = util.check_color(opts.color, "title color")
     end
+    if opts.fontweight ~= nil then
+      if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+        fail("title fontweight must be 'normal' or 'bold'")
+      end
+      fontweight = opts.fontweight
+    end
   end
   self._title = text
   self._title_loc = loc
   self._title_fontsize = fontsize
   self._title_color = color
+  self._title_fontweight = fontweight
   return self
 end
 
@@ -5192,9 +5272,11 @@ function Figure:xlabel(text, opts)
   local pad = self._xlabel_pad or 0
   local fontsize = self._xlabel_fontsize or 13
   local color = self._xlabel_color or "#222222"
+  local fontweight = self._xlabel_fontweight or "normal"
   if opts ~= nil then
     opts = util.check_options(opts,
-      { labelpad = true, fontsize = true, color = true }, "xlabel")
+      { labelpad = true, fontsize = true, color = true,
+        fontweight = true }, "xlabel")
     if opts.labelpad ~= nil then
       pad = util.check_number(opts.labelpad, "xlabel labelpad", 0)
     end
@@ -5204,11 +5286,18 @@ function Figure:xlabel(text, opts)
     if opts.color ~= nil then
       color = util.check_color(opts.color, "xlabel color")
     end
+    if opts.fontweight ~= nil then
+      if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+        fail("xlabel fontweight must be 'normal' or 'bold'")
+      end
+      fontweight = opts.fontweight
+    end
   end
   self._xlabel = text
   self._xlabel_pad = pad
   self._xlabel_fontsize = fontsize
   self._xlabel_color = color
+  self._xlabel_fontweight = fontweight
   return self
 end
 
@@ -5217,9 +5306,11 @@ function Figure:ylabel(text, opts)
   local pad = self._ylabel_pad or 0
   local fontsize = self._ylabel_fontsize or 13
   local color = self._ylabel_color or "#222222"
+  local fontweight = self._ylabel_fontweight or "normal"
   if opts ~= nil then
     opts = util.check_options(opts,
-      { labelpad = true, fontsize = true, color = true }, "ylabel")
+      { labelpad = true, fontsize = true, color = true,
+        fontweight = true }, "ylabel")
     if opts.labelpad ~= nil then
       pad = util.check_number(opts.labelpad, "ylabel labelpad", 0)
     end
@@ -5229,11 +5320,18 @@ function Figure:ylabel(text, opts)
     if opts.color ~= nil then
       color = util.check_color(opts.color, "ylabel color")
     end
+    if opts.fontweight ~= nil then
+      if opts.fontweight ~= "normal" and opts.fontweight ~= "bold" then
+        fail("ylabel fontweight must be 'normal' or 'bold'")
+      end
+      fontweight = opts.fontweight
+    end
   end
   self._ylabel = text
   self._ylabel_pad = pad
   self._ylabel_fontsize = fontsize
   self._ylabel_color = color
+  self._ylabel_fontweight = fontweight
   return self
 end
 
@@ -5570,6 +5668,7 @@ function Figure:legend(opts)
       handlelength = true,
       fontsize = true,
       title_fontsize = true,
+      markerfirst = true,
       ncol = true,
       title = true,
     }, "legend")
@@ -5619,6 +5718,12 @@ function Figure:legend(opts)
       title_fontsize = util.check_number(opts.title_fontsize,
         "legend title_fontsize", 0.1)
     end
+    local markerfirst = self._legend_opts.markerfirst
+    if markerfirst == nil then markerfirst = true end
+    if opts.markerfirst ~= nil then
+      util.check_boolean(opts.markerfirst, "legend markerfirst")
+      markerfirst = opts.markerfirst
+    end
     self._legend_opts = {
       loc = opts.loc or self._legend_opts.loc,
       frame = opts.frame == nil and self._legend_opts.frame or opts.frame,
@@ -5629,6 +5734,7 @@ function Figure:legend(opts)
       handlelength = handlelength,
       fontsize = fontsize,
       title_fontsize = title_fontsize,
+      markerfirst = markerfirst,
       ncol = ncol,
       title = opts.title == nil and self._legend_opts.title or opts.title,
     }

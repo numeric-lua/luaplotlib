@@ -61,12 +61,15 @@ fig:plot(x, cos_x, {
 fig:title("luaplotlib: line plot", {
   fontsize = 20,
   color = "#0f172a",
+  fontweight = "bold",
 })
 fig:xlabel("x (radians)", {
   labelpad = 10, fontsize = 15, color = "#334155",
+  fontweight = "bold",
 })
 fig:ylabel("value", {
   labelpad = 8, fontsize = 15, color = "#334155",
+  fontweight = "bold",
 })
 fig:xlim(0, 2 * math.pi)
 fig:ylim(-1.25, 1.25)
@@ -84,6 +87,7 @@ fig:legend({
   fontsize = 13,
   title = "series",
   title_fontsize = 15,
+  markerfirst = false,
 })
 
 local path = outdir .. "/line.svg"

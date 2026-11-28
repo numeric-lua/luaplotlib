@@ -528,8 +528,10 @@ local function render_line(series, figure, cfg, geom, buf)
     for index = 1, #series.theta do
       local x, y = M.point(figure, cfg, geom, series.theta[index],
         series.r[index])
+      local marker_size = style.markersizes and style.markersizes[index] or
+        style.markersize or 4
       buf[#buf + 1] = markers.svg(style.marker, "marker", x, y,
-        style.markersize or 4, style.color, marker_opacity, "")
+        marker_size, style.color, marker_opacity, "")
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -695,6 +697,9 @@ local function render_quiver(series, figure, cfg, geom, buf)
     series.normalize and "true" or "false", label)
 
   for _, index in ipairs(indices) do
+    local entry_color = style.colors and style.colors[index] or style.color
+    local entry_width = style.linewidths and style.linewidths[index] or
+      style.linewidth
     local u, v = series.u[index], series.v[index]
     local raw = math.sqrt(u * u + v * v)
     if raw > 1e-12 then
@@ -722,11 +727,11 @@ local function render_quiver(series, figure, cfg, geom, buf)
         '   <g class="polar-quiver-arrow" data-index="%d" data-magnitude="%s" data-theta="%s" data-r="%s" data-angle="%s">',
         index, util.fmt(magnitude), util.fmt(theta), util.fmt(r),
         util.fmt(angle))
-      if style.linewidth > 0 and length - head > 1e-9 then
+      if entry_width > 0 and length - head > 1e-9 then
         buf[#buf + 1] = string.format(
           '    <line class="polar-quiver-shaft" x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" stroke-width="%s" stroke-linecap="round"%s/>',
           util.fmt(tail_x), util.fmt(tail_y), util.fmt(neck_x),
-          util.fmt(neck_y), style.color, util.fmt(style.linewidth),
+          util.fmt(neck_y), entry_color, util.fmt(entry_width),
           stroke_opacity)
       end
       if head > 1e-9 then
@@ -737,7 +742,7 @@ local function render_quiver(series, figure, cfg, geom, buf)
           util.fmt(tip_x), util.fmt(tip_y),
           util.fmt(neck_x + px), util.fmt(neck_y + py),
           util.fmt(neck_x - px), util.fmt(neck_y - py),
-          style.color, fill_opacity)
+          entry_color, fill_opacity)
       end
       buf[#buf + 1] = '   </g>'
     end
@@ -1537,8 +1542,8 @@ end
 local function render_errorbar(series, figure, cfg, geom, buf)
   local style = series.style
   local cap = style.capsize or 4
-  local width = style.elinewidth or 1
-  local color = style.ecolor or style.color
+  local base_width = style.elinewidth or 1
+  local base_color = style.ecolor or style.color
   local opacity = ""
   if style.alpha < 1 then
     opacity = string.format(' stroke-opacity="%s"', util.fmt(style.alpha))
@@ -1552,6 +1557,8 @@ local function render_errorbar(series, figure, cfg, geom, buf)
   buf[#buf + 1] = string.format(
     '  <g class="series series-polar-errorbar"%s>', label)
   for index = 1, #series.theta do
+    local width = style.elinewidths and style.elinewidths[index] or base_width
+    local color = style.ecolors and style.ecolors[index] or base_color
     local theta = series.theta[index]
     local value = series.r[index]
     local radial = series.rerr and series.rerr[index] or 0
@@ -1638,8 +1645,10 @@ local function render_errorbar(series, figure, cfg, geom, buf)
     for index = 1, #series.theta do
       local x, y = M.point(figure, cfg, geom, series.theta[index],
         series.r[index])
+      local marker_size = style.markersizes and style.markersizes[index] or
+        style.markersize or 4
       buf[#buf + 1] = markers.svg(style.marker, "marker", x, y,
-        style.markersize or 4, style.color, marker_opacity, "")
+        marker_size, style.color, marker_opacity, "")
     end
   end
   buf[#buf + 1] = '  </g>'
@@ -1913,10 +1922,13 @@ end
 local function render_title(figure, geom, buf)
   if figure._title == nil then return end
   local x, anchor = title_geometry(figure, geom)
+  local weight = figure._title_fontweight or "normal"
+  local weight_attr = weight ~= "normal" and
+    string.format(' font-weight="%s"', weight) or ""
   buf[#buf + 1] = string.format(
-    '  <text class="title" x="%s" y="30" font-size="%s" fill="%s" text-anchor="%s">%s</text>',
+    '  <text class="title" x="%s" y="30" font-size="%s" fill="%s" text-anchor="%s"%s>%s</text>',
     util.fmt(x), util.fmt(figure._title_fontsize or 18),
-    figure._title_color or TEXT_COLOR, anchor,
+    figure._title_color or TEXT_COLOR, anchor, weight_attr,
     util.escape_xml(figure._title))
 end
 
@@ -2419,12 +2431,13 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
   local opts = plan.opts
 
   buf[#buf + 1] = string.format(
-    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s">',
+    '  <g class="polar-legend" data-loc="%s" data-placement="%s" data-x="%s" data-y="%s" data-width="%s" data-height="%s" data-text-width="%s" data-framealpha="%s" data-borderpad="%s" data-handlelength="%s" data-fontsize="%s" data-title-fontsize="%s" data-markerfirst="%s">',
     util.escape_xml(plan.loc), plan.placement, util.fmt(x), util.fmt(y),
     util.fmt(plan.width), util.fmt(plan.height),
     util.fmt(plan.text_width or 0), util.fmt(opts.framealpha or 0.92),
     util.fmt(plan.borderpad or 8), util.fmt(plan.handlelength or 20),
-    util.fmt(plan.fontsize or 11), util.fmt(plan.title_fontsize or 11))
+    util.fmt(plan.fontsize or 11), util.fmt(plan.title_fontsize or 11),
+    opts.markerfirst == false and "false" or "true")
   local framealpha = opts.framealpha or 0.92
   local facecolor = opts.facecolor or "#ffffff"
   local edgecolor = opts.edgecolor or "#bbbbbb"
@@ -2450,13 +2463,24 @@ local function render_legend(figure, cfg, geom, buf, extra_boxes)
     local entry_x = x + border + (column - 1) * (plan.col_width + border)
     local entry_y = y + (2 * border - 4) + plan.title_height +
       (row - 1) * (plan.row_height or 20)
-    polar_swatch(entry, entry_x, entry_y, buf, handle)
-    buf[#buf + 1] = string.format(
-      '   <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
-      util.fmt(entry_x + handle + 8),
-      util.fmt(entry_y + (plan.fontsize or 11) * 0.36),
-      util.fmt(plan.fontsize or 11), TEXT_COLOR,
-      util.escape_xml(entry.label))
+    if opts.markerfirst == false then
+      buf[#buf + 1] = string.format(
+        '   <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        util.fmt(entry_x),
+        util.fmt(entry_y + (plan.fontsize or 11) * 0.36),
+        util.fmt(plan.fontsize or 11), TEXT_COLOR,
+        util.escape_xml(entry.label))
+      polar_swatch(entry, entry_x + plan.col_width - handle - 4,
+        entry_y, buf, handle)
+    else
+      polar_swatch(entry, entry_x, entry_y, buf, handle)
+      buf[#buf + 1] = string.format(
+        '   <text x="%s" y="%s" font-size="%s" fill="%s">%s</text>',
+        util.fmt(entry_x + handle + 8),
+        util.fmt(entry_y + (plan.fontsize or 11) * 0.36),
+        util.fmt(plan.fontsize or 11), TEXT_COLOR,
+        util.escape_xml(entry.label))
+    end
   end
   buf[#buf + 1] = '  </g>'
 end
@@ -2717,6 +2741,7 @@ function M.to_scene(figure)
     title_align = figure._title_loc or "center",
     title_fontsize = figure._title_fontsize or 18,
     title_color = figure._title_color or "#222222",
+    title_fontweight = figure._title_fontweight or "normal",
     grid = true,
     legend = figure._legend_requested and true or false,
     series = {},
@@ -2765,6 +2790,7 @@ function M.to_scene(figure)
       handlelength = opts.handlelength or 20,
       fontsize = opts.fontsize or 11,
       title_fontsize = opts.title_fontsize or opts.fontsize or 11,
+      markerfirst = opts.markerfirst ~= false,
       title = opts.title,
       ncol = opts.ncol or 1,
       entries = {},
